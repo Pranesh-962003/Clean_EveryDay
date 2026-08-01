@@ -194,6 +194,7 @@ const Checkout: React.FC = () => {
   // Address Form States (for Add & Edit address modes)
   const [addressFormOpen, setAddressFormOpen] = useState(false);
   const [editingAddressId, setEditingAddressId] = useState<string | null>(null);
+  const [isSavingAddress, setIsSavingAddress] = useState(false);
   
   const [formName, setFormName] = useState('');
   const [formPhone, setFormPhone] = useState('');
@@ -338,6 +339,8 @@ const Checkout: React.FC = () => {
       return;
     }
 
+    setIsSavingAddress(true);
+
     const payload = {
       tag: formType || "Home",
       fullName: formName.trim(),
@@ -353,6 +356,8 @@ const Checkout: React.FC = () => {
       isDefault: addresses.length === 0
     };
 
+    let serverSaved = false;
+
     try {
       if (!auth.currentUser) {
         await auth.authStateReady();
@@ -361,7 +366,7 @@ const Checkout: React.FC = () => {
       if (firebaseUser) {
         const token = await firebaseUser.getIdToken();
         if (token) {
-          await axios.post(
+          const apiRes = await axios.post(
             `${import.meta.env.VITE_BACKEND_URI}/users/address`,
             payload,
             {
@@ -369,52 +374,82 @@ const Checkout: React.FC = () => {
               withCredentials: true
             }
           );
+          if (apiRes.data && apiRes.data.success && Array.isArray(apiRes.data.addresses)) {
+            serverSaved = true;
+            const updatedList = apiRes.data.addresses.map((item: any, idx: number) => ({
+              id: item._id || `addr-user-${idx}`,
+              name: item.fullName || curUser?.name || 'Valued Customer',
+              phone: item.phoneNumber || curUser?.phoneNumber || '',
+              alternatePhone: item.alternatePhone || '',
+              addressLine1: item.addressLine1 || '',
+              addressLine2: item.addressLine2 || '',
+              landmark: item.landmark || '',
+              city: item.city || '',
+              state: item.state || '',
+              pincode: item.postalCode || '',
+              country: item.country || 'India',
+              type: item.tag || 'Home',
+              isDefault: item.isDefault ?? idx === 0,
+              instructions: ''
+            }));
+            setAddresses(updatedList);
+            const latest = updatedList[updatedList.length - 1];
+            if (latest) {
+              setSelectedAddressId(latest.id);
+            }
+          }
         }
       }
     } catch (error) {
       console.warn("Could not sync address to server:", error);
     }
 
-    if (editingAddressId) {
-      // Update
-      setAddresses(prev => prev.map(a => a.id === editingAddressId ? {
-        ...a,
-        name: formName.trim(),
-        phone: formPhone.trim(),
-        alternatePhone: formAltPhone.trim(),
-        addressLine1: formLine1.trim(),
-        addressLine2: formLine2.trim(),
-        landmark: formLandmark.trim(),
-        city: formCity.trim(),
-        state: formState.trim(),
-        pincode: formPincode.trim(),
-        country: formCountry,
-        type: formType,
-        instructions: formInstructions.trim()
-      } : a));
-      showToast('Delivery address updated.');
+    if (!serverSaved) {
+      if (editingAddressId) {
+        // Update
+        setAddresses(prev => prev.map(a => a.id === editingAddressId ? {
+          ...a,
+          name: formName.trim(),
+          phone: formPhone.trim(),
+          alternatePhone: formAltPhone.trim(),
+          addressLine1: formLine1.trim(),
+          addressLine2: formLine2.trim(),
+          landmark: formLandmark.trim(),
+          city: formCity.trim(),
+          state: formState.trim(),
+          pincode: formPincode.trim(),
+          country: formCountry,
+          type: formType,
+          instructions: formInstructions.trim()
+        } : a));
+        showToast('Delivery address updated.');
+      } else {
+        // Create new
+        const newAddr = {
+          id: `addr-${Date.now()}`,
+          name: formName.trim(),
+          phone: formPhone.trim(),
+          alternatePhone: formAltPhone.trim(),
+          addressLine1: formLine1.trim(),
+          addressLine2: formLine2.trim(),
+          landmark: formLandmark.trim(),
+          city: formCity.trim(),
+          state: formState.trim(),
+          pincode: formPincode.trim(),
+          country: formCountry,
+          type: formType,
+          isDefault: addresses.length === 0,
+          instructions: formInstructions.trim()
+        };
+        setAddresses(prev => [...prev, newAddr]);
+        setSelectedAddressId(newAddr.id);
+        showToast('New address registered.');
+      }
     } else {
-      // Create new
-      const newAddr = {
-        id: `addr-${Date.now()}`,
-        name: formName.trim(),
-        phone: formPhone.trim(),
-        alternatePhone: formAltPhone.trim(),
-        addressLine1: formLine1.trim(),
-        addressLine2: formLine2.trim(),
-        landmark: formLandmark.trim(),
-        city: formCity.trim(),
-        state: formState.trim(),
-        pincode: formPincode.trim(),
-        country: formCountry,
-        type: formType,
-        isDefault: addresses.length === 0,
-        instructions: formInstructions.trim()
-      };
-      setAddresses(prev => [...prev, newAddr]);
-      setSelectedAddressId(newAddr.id);
-      showToast('New address registered.');
+      showToast(editingAddressId ? 'Delivery address updated.' : 'New address registered.');
     }
+
+    setIsSavingAddress(false);
 
     // Reset Form
     resetAddressForm();
@@ -605,7 +640,18 @@ const Checkout: React.FC = () => {
   }
 
   return (
-    <div className="max-w-[1200px] mx-auto px-4 md:px-7 py-10 pb-24 animate-fadeIn">
+    <div className="max-w-[1200px] mx-auto px-4 md:px-7 py-10 pb-24 animate-fadeIn relative">
+
+      {/* Address Processing Loading Overlay */}
+      {isSavingAddress && (
+        <div className="fixed inset-0 bg-blk/50 backdrop-blur-sm z-50 flex flex-col items-center justify-center animate-fadeIn">
+          <div className="bg-wht p-6 rounded-2xl shadow-premium flex flex-col items-center gap-3 border border-bdr max-w-xs w-full text-center">
+            <Loader2 size={36} className="text-primary animate-spin" />
+            <h4 className="text-sm font-bold text-blk">Registering Address</h4>
+            <p className="text-xs text-mut font-medium">Please wait while your delivery coordinates are being registered to your profile...</p>
+          </div>
+        </div>
+      )}
       
       {/* 6-Step Header Progress */}
       <WizardHeader currentStep={checkoutStep} onNavigateBack={handleWizardBack} />
@@ -860,8 +906,25 @@ const Checkout: React.FC = () => {
                     )}
                   </div>
 
+                  {/* If no addresses present */}
+                  {!addressFormOpen && addresses.length === 0 && (
+                    <div className="border border-dashed border-bdr rounded-xl p-8 text-center flex flex-col items-center justify-center my-2">
+                      <div className="w-12 h-12 rounded-full bg-primary-soft/30 flex items-center justify-center mb-3">
+                        <MapPin size={22} className="text-primary" />
+                      </div>
+                      <h4 className="text-xs font-bold text-blk">No Address Registered</h4>
+                      <p className="text-[11px] text-mut max-w-sm mt-1 mb-4">You have no saved delivery coordinates on your account. Register a new address to continue with your order.</p>
+                      <button
+                        onClick={() => setAddressFormOpen(true)}
+                        className="btn-primary text-xs py-2 px-4 flex items-center gap-1.5 shadow-premium-sm"
+                      >
+                        <Plus size={14} /> Register Address
+                      </button>
+                    </div>
+                  )}
+
                   {/* Saved Addresses list */}
-                  {!addressFormOpen && (
+                  {!addressFormOpen && addresses.length > 0 && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {addresses.map(addr => {
                         const isSelected = selectedAddressId === addr.id;
@@ -1027,8 +1090,14 @@ const Checkout: React.FC = () => {
                         <button type="button" onClick={resetAddressForm} className="btn-secondary text-xs">
                           Cancel
                         </button>
-                        <button type="submit" className="btn-primary text-xs shadow-premium-sm">
-                          Save Coordinates
+                        <button type="submit" disabled={isSavingAddress} className="btn-primary text-xs shadow-premium-sm flex items-center gap-1.5 disabled:opacity-50">
+                          {isSavingAddress ? (
+                            <>
+                              <Loader2 size={13} className="animate-spin" /> Registering Address...
+                            </>
+                          ) : (
+                            'Save Coordinates'
+                          )}
                         </button>
                       </div>
                     </form>
