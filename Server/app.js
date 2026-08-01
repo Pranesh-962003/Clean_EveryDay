@@ -27,6 +27,9 @@ import cartRouter from "./src/routes/cartRoutes.js";
 
 const app = express();
 
+// Trust proxy for Vercel deployment
+app.set("trust proxy", 1);
+
 // Ensure Database connection for serverless function invocations
 app.use(async (req, res, next) => {
   await connectDb();
@@ -74,6 +77,7 @@ app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 200,
+    validate: { trustProxy: false },
     message: {
       success: false,
       message: "Too many requests. Please try again later.",
