@@ -35,12 +35,20 @@ app.use(async (req, res, next) => {
 
 // =========================
 // Security Middleware
-// =========================
-app.use(helmet());
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
+  })
+);
 
 const allowedOrigins = [
   process.env.FRONTEND_URL ? process.env.FRONTEND_URL.trim().replace(/\/$/, '') : null,
   process.env.ADMIN_FRONTEND_URL ? process.env.ADMIN_FRONTEND_URL.trim().replace(/\/$/, '') : null,
+  "http://localhost:5173",
+  "http://localhost:5174",
+  "http://127.0.0.1:5173",
+  "http://127.0.0.1:5174",
 ].filter(Boolean);
 
 app.use(
@@ -48,11 +56,15 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       const cleanOrigin = origin.replace(/\/$/, '');
-      if (allowedOrigins.includes(cleanOrigin)) {
-        callback(null, true);
-      } else {
-        callback(null, true);
+      if (
+        cleanOrigin.startsWith("http://localhost:") ||
+        cleanOrigin.startsWith("http://127.0.0.1:") ||
+        allowedOrigins.includes(cleanOrigin) ||
+        allowedOrigins.length === 0
+      ) {
+        return callback(null, cleanOrigin);
       }
+      return callback(null, cleanOrigin);
     },
     credentials: true,
   })
