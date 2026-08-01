@@ -287,8 +287,10 @@ const ProductDetail: React.FC = () => {
     e.preventDefault();
     if (rStars === 0) { setRatingError(true); return; }
     if (!rBody.trim()) return;
-    await submitReview(curUser!.name, rStars, rBody.trim(), product.name, product._id || String(product.id));
-    setRStars(0); setRBody(''); setRatingError(false);
+    const res = await submitReview(curUser!.name, rStars, rBody.trim(), product.name, product._id || String(product.id));
+    if (res?.success) {
+      setRStars(0); setRBody(''); setRatingError(false);
+    }
   };
 
   // Guest review modal submit
