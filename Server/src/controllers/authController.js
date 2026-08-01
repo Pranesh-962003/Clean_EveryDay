@@ -49,10 +49,11 @@ export const register = async (req, res) => {
                         { expiresIn: 1000 * 60 * 60 * 24 * 5 }
                     );
 
+                    const isProduction = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
                     res.cookie("session", sessionCookie, {
                         httpOnly: true,
-                        secure: process.env.NODE_ENV === "production",
-                        sameSite: "lax",
+                        secure: isProduction,
+                        sameSite: isProduction ? "none" : "lax",
                         maxAge: 1000 * 60 * 60 * 24 * 5,
                         path: "/"
                     });
@@ -86,10 +87,11 @@ export const register = async (req, res) => {
                 { expiresIn: 1000 * 60 * 60 * 24 * 5 }
             );
 
+            const isProduction = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
             res.cookie("session", sessionCookie, {
                 httpOnly: true,
-                secure: process.env.NODE_ENV === "production",
-                sameSite: "lax",
+                secure: isProduction,
+                sameSite: isProduction ? "none" : "lax",
                 maxAge: 1000 * 60 * 60 * 24 * 5,
                 path: "/"
             });
@@ -148,11 +150,13 @@ export const login = async (req, res) => {
             }
         );
 
+        const isProduction = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
         res.cookie("session", sessionCookie, {
             httpOnly: true,
-            secure: false, // change to true in production
-            sameSite: "lax",
-            maxAge: 1000 * 60 * 60 * 24 * 5
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
+            maxAge: 1000 * 60 * 60 * 24 * 5,
+            path: "/"
         });
 
         return res.status(200).json({
@@ -181,16 +185,17 @@ export const login = async (req, res) => {
 export const logout = async (req, res) => {
     try {
 
+        const isProduction = process.env.NODE_ENV === "production" || !!process.env.VERCEL;
         res.clearCookie("session", {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
             path: "/"
         });
         res.clearCookie("token", {
             httpOnly: true,
-            secure: process.env.NODE_ENV === "production",
-            sameSite: "lax",
+            secure: isProduction,
+            sameSite: isProduction ? "none" : "lax",
             path: "/"
         });
 
