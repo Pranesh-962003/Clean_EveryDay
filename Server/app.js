@@ -27,7 +27,11 @@ import cartRouter from "./src/routes/cartRoutes.js";
 
 const app = express();
 
-connectDb()
+// Ensure Database connection for serverless function invocations
+app.use(async (req, res, next) => {
+  await connectDb();
+  next();
+});
 
 // =========================
 // Security Middleware
@@ -95,7 +99,13 @@ app.get("/", (req, res) => {
   });
 });
 
-console.log(getApp().name);
+try {
+  if (getApps().length > 0) {
+    console.log("Firebase App Name:", getApp().name);
+  }
+} catch (err) {
+  console.warn("Firebase not initialized:", err.message);
+}
 
 // Routes
 // =========================
