@@ -107,25 +107,32 @@ try {
   console.warn("Firebase not initialized:", err.message);
 }
 
-// Routes
+// Routes (Supported with and without /api prefix for Vercel rewrites)
 // =========================
 
 app.use("/api/auth", authRouter);
-app.use('/api/auth/admin',adminRouter)
+app.use("/auth", authRouter);
+
+app.use("/api/auth/admin", adminRouter);
+app.use("/auth/admin", adminRouter);
+
 app.use("/api/users", userRouter);
-app.use("/api/admin",productRouter);
+app.use("/users", userRouter);
+
+app.use("/api/admin", productRouter);
+app.use("/admin", productRouter);
+
 app.use("/api/products", pubilcProductRouter);
+app.use("/products", pubilcProductRouter);
 
+app.use("/api/orders", orderRouter);
+app.use("/orders", orderRouter);
 
-//Order routes
-app.use("/api/orders",orderRouter)
+app.use("/api/carts", cartRouter);
+app.use("/carts", cartRouter);
 
-
-//cart Routes
-app.use("/api/carts",cartRouter)
-
-//Review Router
-app.use("/api/reviews",reviewRouter)
+app.use("/api/reviews", reviewRouter);
+app.use("/reviews", reviewRouter);
 // console.log(Cloudinary.api);
 
 // =========================
