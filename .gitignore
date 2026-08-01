@@ -1,0 +1,31 @@
+# Dependencies
+**/node_modules/
+
+# Production build outputs
+**/dist/
+**/dist-ssr/
+
+# Logs
+*.log
+**/*.log
+
+# Environment & Secrets
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+!**/.env.example
+**/*firebase-adminsdk-*.json
+**/*credentials*.json
+**/*.pem
+
+# Vercel
+.vercel/
+**/.vercel/
+
+# System and Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

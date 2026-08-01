@@ -1,0 +1,731 @@
+Folder Structure
+
+backend/
+│
+├── config/
+│   ├── db.js
+│   ├── firebase.js
+│   └── cloudinary.js
+│
+├── controllers/
+│   ├── authController.js
+│   ├── productController.js
+│   ├── reviewController.js
+│   ├── orderController.js
+│   ├── cartController.js
+│   └── userController.js
+│
+├── middleware/
+│   ├── auth.js
+│   ├── admin.js
+│   ├── errorMiddleware.js
+│   └── notFound.js
+│
+├── models/
+│   ├── User.js
+│   ├── Product.js
+│   ├── Review.js
+│   ├── Order.js
+│   └── Cart.js
+│
+├── routes/
+│   ├── authRoutes.js
+│   ├── productRoutes.js
+│   ├── reviewRoutes.js
+│   ├── orderRoutes.js
+│   ├── cartRoutes.js
+│   └── userRoutes.js
+│
+├── utils/
+│   ├── ApiError.js
+│   └── ApiResponse.js
+│
+├── app.js
+├── server.js
+├── .env
+├── .gitignore
+└── package.json
+
+
+Dotenv keys
+
+PORT=5000
+
+MONGO_URI=
+
+FRONTEND_URL=http://localhost:5173
+
+FIREBASE_PROJECT_ID=
+
+FIREBASE_PRIVATE_KEY=
+
+FIREBASE_CLIENT_EMAIL=
+
+CLOUDINARY_CLOUD_NAME=
+
+CLOUDINARY_API_KEY=
+
+CLOUDINARY_API_SECRET=
+
+
+
+
+Phase 1 — Authentication (Complete First)
+✅ Step 1 (Done)
+Node.js setup
+Express setup
+MongoDB connection
+Firebase Admin SDK initialization
+Environment variables
+✅ Step 2 (Done)
+User Model
+✅ Step 3 (Next)
+
+Create the authentication system.
+
+controllers/
+    authController.js
+
+routes/
+    authRoutes.js
+
+middleware/
+    authMiddleware.js
+
+Endpoints:
+
+POST /api/auth/login
+POST /api/auth/logout
+GET  /api/auth/me
+
+These three endpoints are enough.
+
+Step 4
+
+User logs in using Firebase on React.
+
+Firebase Login
+        ↓
+Get ID Token
+        ↓
+POST /api/auth/login
+
+Backend will
+
+Verify Firebase Token
+Create user if first login
+Update last login
+Set HttpOnly Cookie
+Return user
+Step 5
+
+Create
+
+GET /api/auth/me
+
+Purpose:
+
+Instead of checking Firebase every page refresh,
+
+Frontend simply calls
+
+GET /api/auth/me
+
+Backend reads the cookie and returns
+
+{
+   "user":{
+      ...
+   }
+}
+Step 6
+
+Create
+
+POST /api/auth/logout
+
+It simply clears the cookie.
+
+Phase 2 — Authorization
+
+Create middleware
+
+verifyUser
+
+and
+
+verifyAdmin
+
+Every admin API uses
+
+verifyUser
+↓
+
+verifyAdmin
+↓
+
+Controller
+Phase 3 — Products
+
+Then we'll build
+
+Product Model
+
+After that
+
+Product Controller
+
+Then
+
+Product Routes
+
+CRUD APIs
+
+GET Products
+
+GET Product
+
+POST Product
+
+PATCH Product
+
+DELETE Product
+Phase 4
+
+Orders
+
+Phase 5
+
+Reviews
+
+Phase 6
+
+Leads CRM
+
+Phase 7
+
+Dashboard Analytics
+
+Phase 8
+
+Banner Management
+
+Phase 9
+
+Staff Management
+
+Phase 10
+
+Security Hardening
+
+Helmet
+Rate Limiter
+CORS
+Cookie Security
+Request Validation
+Mongo Sanitization
+HPP
+Audit Logs
+Error Handler
+Logger
+I recommend one small improvement before we continue
+
+Earlier we created verifyToken middleware that expected the frontend to send the Firebase token on every request.
+
+Since you've decided to use secure HttpOnly cookies, I'd like to replace that with a cookie-based session flow from the start. It's cleaner, more secure, and avoids refactoring later.
+
+So the next thing we'll build is:
+
+POST /api/auth/login (creates the session cookie)
+GET /api/auth/me (reads the cookie)
+POST /api/auth/logout (clears the cookie)
+
+This is the architecture I'd use for a production Firebase + MongoDB application.
+
+
+
+
+
+Your Project Modules (Based on Your Existing Frontend)
+Module 1 — Project Foundation ✅
+
+Already started.
+
+Frontend already has
+
+React + Vite
+Context API
+Routing
+Axios
+
+Backend
+
+Express
+MongoDB
+Folder structure
+Environment variables
+CORS
+Basic server
+Module 2 — Authentication 🔄 (Current)
+Frontend Already Exists
+Login Modal
+Signup Modal
+Google Login Button
+Logout
+Protected Admin
+Backend
+Firebase
+Email/Password Login
+Google Login
+Verify Firebase Token
+MongoDB Collection
+Users
+
+Fields
+
+_id
+firebaseUid
+name
+email
+photo
+phone
+role
+createdAt
+updatedAt
+APIs
+POST /api/auth/login
+POST /api/auth/signup
+POST /api/auth/google
+GET  /api/auth/me
+POST /api/auth/logout
+
+After this module
+
+✅ Login
+✅ Signup
+✅ Google Login
+✅ User stored in MongoDB
+
+Module 3 — Customer Profile
+
+Your frontend already has
+
+Current User
+
+We'll connect it.
+
+Collection
+Users
+
+Add
+
+Phone
+
+Address
+
+City
+
+State
+
+Pincode
+
+Photo
+APIs
+GET /api/user/profile
+
+PUT /api/user/profile
+
+PUT /api/user/address
+Module 4 — Products
+
+Your frontend already contains
+
+Products
+
+Categories
+
+Search
+
+Filter
+
+Product Details
+
+We'll replace dummy data.
+
+Collection
+Products
+APIs
+GET Products
+
+GET Product
+
+POST Product
+
+PUT Product
+
+DELETE Product
+
+Duplicate Product
+Module 5 — Product Images
+
+You already have
+
+updateProductImages()
+
+Backend
+
+Cloudinary
+
+MongoDB
+
+Collection
+
+Products
+
+Store
+
+imgs:[]
+Module 6 — Reviews
+
+Already exists
+
+submitReview()
+
+approveReview()
+
+replyReview()
+
+Collection
+
+Reviews
+
+APIs
+
+POST Review
+
+GET Reviews
+
+PUT Review
+
+DELETE Review
+Module 7 — Homepage Banner CMS
+
+Already exists
+
+Banner[]
+
+updateBanners()
+
+Collection
+
+Banners
+
+APIs
+
+GET Banner
+
+PUT Banner
+Module 8 — Shopping Cart
+
+Already exists
+
+addToCart()
+
+removeCart()
+
+updateQty()
+
+Instead of localStorage
+
+↓
+
+MongoDB
+
+Collection
+
+Cart
+
+APIs
+
+GET Cart
+
+POST Cart
+
+DELETE Cart
+
+PUT Cart
+Module 9 — Checkout
+
+Already exists
+
+Address
+
+Payment
+
+Shipping
+
+Checkout
+
+Backend
+
+Validate
+
+Calculate
+
+Create Order
+
+Module 10 — Orders
+
+Already exists
+
+Orders
+
+Invoice
+
+Timeline
+
+Tracking
+
+Status
+
+Collection
+
+Orders
+
+APIs
+
+Create Order
+
+Get Orders
+
+Update Order
+
+Cancel Order
+
+Track Order
+Module 11 — Leads CRM
+
+Already exists
+
+Lead
+
+Comment
+
+Reminder
+
+Task
+
+Activity
+
+Status
+
+Collection
+
+Leads
+
+APIs
+
+Create Lead
+
+Update Lead
+
+Delete Lead
+
+Comment
+
+Reminder
+
+Task
+Module 12 — Staff Management
+
+Already exists
+
+Invite Staff
+
+Deactivate
+
+Reset Password
+
+Delete
+
+Collection
+
+Staff
+Module 13 — Admin Dashboard
+
+Uses
+
+Products
+
+Orders
+
+Users
+
+Reviews
+
+Leads
+
+Backend returns
+
+Dashboard Statistics
+
+Module 14 — Invoice
+
+Already exists
+
+invoiceOrder
+
+Backend
+
+Invoice Data
+
+Download PDF
+
+GST Details
+
+Module 15 — Search & Filter
+
+Already exists
+
+Search
+
+Category
+
+Filter
+
+Backend
+
+Search API
+
+Pagination
+
+Sorting
+Module 16 — Notifications
+
+Already exists as
+
+Toast
+
+We'll connect
+
+Email
+
+Order Update
+
+Lead Update
+Module 17 — Admin Security
+
+Already partially exists
+
+Admin Check
+
+Session
+
+Token
+
+We'll finish
+
+Firebase Verify
+
+Role Middleware
+
+Protected Routes
+Module 18 — Deployment
+
+Frontend
+
+Backend
+
+Mongo Atlas
+
+Firebase
+
+Render/VPS
+
+Domain
+
+SSL
+
+Collections (Exactly matching your frontend)
+Users
+Products
+Reviews
+Orders
+Leads
+Staff
+Banners
+Cart
+
+Total Collections = 8
+
+Backend API Groups
+Auth
+Users
+Products
+Reviews
+Cart
+Orders
+Leads
+Staff
+Dashboard
+Banners
+
+Total API Groups = 10
+
+Development Order (Recommended)
+Module	Status
+1. Foundation	✅ Done
+2. Authentication	🔄 Current
+3. Customer Profile	⏳
+4. Products	⏳
+5. Product Images	⏳
+6. Reviews	⏳
+7. Homepage Banner CMS	⏳
+8. Shopping Cart	⏳
+9. Checkout	⏳
+10. Orders	⏳
+11. Leads CRM	⏳
+12. Staff Management	⏳
+13. Admin Dashboard	⏳
+14. Invoice	⏳
+15. Search & Filter	⏳
+16. Notifications	⏳
+17. Admin Security	⏳
+18. Deployment	⏳
+
+
+ODER MODULE_____________________________________
+POST    /api/orders/place-order
+GET     /api/orders/my-orders
+GET     /api/orders/:id
+PUT     /api/orders/cancel/:id
+
+
+Customer APIs
+placeOrder()
+
+Creates an order.
+
+getMyOrders()
+
+Customer's order history.
+
+getOrderById()
+
+Single order details.
+
+cancelOrder()
+
+Customer can cancel before shipment.
+
+trackOrder()
+
+
+
+paths
+address 
+POST /user/address → Add a new address.
+GET /user/address → Get all addresses.
+PUT /user/address/:id → Edit an address.
+DELETE /user/address/:id → Delete an address.
+PATCH /user/address/default/:id

@@ -1,0 +1,347 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+@import "tailwindcss";
+
+@theme {
+  /* Luxury Jade Green & Organic Sand Theme */
+  --color-primary: hsl(150, 48%, 24%);
+  --color-primary-hover: hsl(150, 52%, 16%);
+  --color-primary-deep: hsl(150, 60%, 10%);
+  --color-primary-light: hsl(150, 24%, 80%);
+  --color-primary-xlight: hsl(150, 20%, 92%);
+  --color-primary-soft: hsl(150, 20%, 96%);
+
+  /* Warm organic brass accent */
+  --color-accent: hsl(38, 24%, 60%);
+  --color-accent-hover: hsl(38, 30%, 50%);
+  --color-accent-light: hsl(38, 30%, 90%);
+
+  /* High-end Neutrals (Linen sheets & Charcoal inks) */
+  --color-blk: hsl(150, 15%, 8%);
+  --color-ink: hsl(150, 12%, 14%);
+  --color-mid: hsl(150, 8%, 32%);
+  --color-mut: hsl(150, 6%, 50%);
+  --color-fnt: hsl(150, 6%, 74%);
+  --color-bdr: hsl(150, 10%, 88%);
+  --color-bdrl: hsl(150, 10%, 93%);
+  --color-sur: hsl(38, 20%, 98%);
+  --color-wht: hsl(0, 0%, 100%);
+
+  /* Semantics */
+  --color-red: hsl(354, 76%, 56%);
+  --color-red-bg: hsl(354, 100%, 98%);
+  --color-gold: hsl(38, 92%, 50%);
+
+  /* Premium Typography */
+  --font-display: "Inter", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "DM Mono", monospace;
+
+  /* Elevations */
+  --shadow-premium-sm: 0 1px 3px rgba(20, 36, 28, 0.03), 0 1px 2px rgba(20, 36, 28, 0.02);
+  --shadow-premium-md: 0 4px 20px rgba(20, 36, 28, 0.04), 0 2px 8px rgba(20, 36, 28, 0.01);
+  --shadow-premium-lg: 0 12px 32px rgba(20, 36, 28, 0.06), 0 4px 16px rgba(20, 36, 28, 0.02);
+  --shadow-premium-xl: 0 24px 60px rgba(20, 36, 28, 0.09), 0 8px 24px rgba(20, 36, 28, 0.03);
+
+  /* Border Radii */
+  --radius-r-sm: 4px;
+  --radius-r-md: 8px;
+  --radius-r-lg: 12px;
+  --radius-r-xl: 20px;
+}
+
+/* Base resets & typography styles */
+@layer base {
+  body {
+    @apply bg-sur text-ink font-body antialiased;
+    line-height: 1.62;
+  }
+  
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* Editorial head formatting */
+  h1, h2, h3, h4 {
+    @apply font-display tracking-tight text-blk font-medium;
+  }
+
+  /* Scrollbar override */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    @apply bg-sur;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    @apply bg-mut/30 rounded-full border border-sur;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-mut/50;
+  }
+
+  /* Consistent focus-visible ring for accessibility */
+  :focus-visible {
+    outline: 2px solid hsl(150, 48%, 24%);
+    outline-offset: 2px;
+  }
+}
+
+/* ─── Standardized Component Utilities ─── */
+@layer components {
+
+  /* ── Card System ── */
+  /* Standard surface card — use for all primary containers */
+  .card {
+    @apply bg-wht border border-bdr rounded-xl shadow-premium-sm;
+  }
+
+  .card:hover {
+    @apply shadow-premium-md;
+  }
+
+  /* Sunken/inner panel — use for nested content blocks */
+  .card-inner {
+    @apply bg-sur/60 border border-bdrl rounded-lg;
+  }
+
+  /* ── Button System ── */
+  /* Primary action button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 bg-primary text-wht 
+           rounded-md px-5 py-2.5 text-sm font-semibold
+           hover:bg-primary-hover transition-all duration-200 cursor-pointer
+           focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Secondary/outline button */
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 bg-wht text-mid
+           border border-bdr rounded-md px-5 py-2.5 text-sm font-semibold
+           hover:border-primary hover:text-primary hover:bg-primary-soft/30
+           transition-all duration-200 cursor-pointer shadow-premium-sm
+           focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-1
+           disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 text-mid
+           rounded-md px-4 py-2 text-sm font-semibold
+           hover:text-primary hover:bg-primary-soft/40
+           transition-all duration-200 cursor-pointer
+           focus-visible:ring-2 focus-visible:ring-primary/20 focus-visible:ring-offset-1;
+  }
+
+  /* Large CTA button variant */
+  .btn-primary-lg {
+    @apply inline-flex items-center justify-center gap-2 bg-primary text-wht
+           rounded-lg px-8 py-3.5 text-sm font-bold
+           hover:bg-primary-hover transition-all duration-200 cursor-pointer
+           shadow-premium-md hover:shadow-premium-lg hover:-translate-y-0.5 active:translate-y-0
+           focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-1;
+  }
+
+  /* ── Input System ── */
+  /* Standard bordered input */
+  .input-field {
+    @apply w-full border border-bdr rounded-lg px-3.5 py-2.5 text-sm text-ink
+           bg-sur/50 focus:bg-wht outline-none
+           focus:border-primary focus:ring-2 focus:ring-primary/10
+           transition-all duration-200 placeholder:text-mut;
+  }
+
+  .input-field:disabled {
+    @apply opacity-70 cursor-not-allowed bg-sur text-fnt;
+  }
+
+  /* Textarea variant */
+  .textarea-field {
+    @apply w-full border border-bdr rounded-lg px-3.5 py-3 text-sm text-ink
+           bg-sur/50 focus:bg-wht outline-none
+           focus:border-primary focus:ring-2 focus:ring-primary/10
+           transition-all duration-200 placeholder:text-mut resize-y;
+  }
+
+  /* Select variant */
+  .select-field {
+    @apply w-full border border-bdr rounded-lg px-3.5 py-2.5 text-sm text-ink
+           bg-sur/50 focus:bg-wht outline-none
+           focus:border-primary focus:ring-2 focus:ring-primary/10
+           transition-all duration-200 cursor-pointer;
+  }
+
+  /* ── Badge System ── */
+  /* Status badge pill — e.g. "Delivered", "Pending" */
+  .badge-status {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full 
+           border text-xs font-semibold;
+  }
+
+  /* Category tag — e.g. "Floor Care", "New" */
+  .badge-tag {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full 
+           text-[10px] font-bold uppercase tracking-wide;
+  }
+
+  /* ── Section Header ── */
+  .section-label {
+    @apply text-xs font-semibold text-accent block;
+  }
+
+  .section-title {
+    @apply font-display text-2xl font-semibold text-blk leading-tight;
+  }
+
+  /* ── Page Header ── */
+  .page-title {
+    @apply font-display text-2xl font-bold text-blk;
+  }
+
+  /* ── Empty State ── */
+  .empty-state {
+    @apply text-center py-16 px-6;
+    animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  }
+
+  .empty-state-icon {
+    @apply w-16 h-16 rounded-full bg-primary-soft border border-primary-light 
+           flex items-center justify-center mx-auto mb-5 text-primary/50;
+  }
+
+  /* ── Divider ── */
+  .divider {
+    @apply border-t border-bdrl;
+  }
+}
+
+/* Animation utilities */
+@keyframes tickerLoop {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@keyframes toastSlideUp {
+  from { transform: translateY(40px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { transform: translateY(16px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes slideRight {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes checkmarkDraw {
+  from { stroke-dashoffset: 100; }
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes pulseRing {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(40, 120, 80, 0.25); }
+  70% { transform: scale(1); box-shadow: 0 0 0 18px rgba(40, 120, 80, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(40, 120, 80, 0); }
+}
+
+@keyframes confettiFall {
+  0% { transform: translateY(-20px) rotate(0deg); opacity: 1; }
+  100% { transform: translateY(120px) rotate(360deg); opacity: 0; }
+}
+
+@keyframes shimmer {
+  0% { background-position: -400px 0; }
+  100% { background-position: 400px 0; }
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+}
+
+@keyframes progressFill {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+
+@keyframes bounceIn {
+  0% { opacity: 0; transform: scale(0.3); }
+  50% { opacity: 1; transform: scale(1.08); }
+  70% { scale: 0.95; }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.animate-tickerLoop {
+  animation: tickerLoop 26s linear infinite;
+}
+
+.animate-toastSlideUp {
+  animation: toastSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-slideRight {
+  animation: slideRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.animate-pulseRing {
+  animation: pulseRing 2s cubic-bezier(0.455, 0.03, 0.515, 0.955) infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+.animate-bounceIn {
+  animation: bounceIn 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
+}
+
+.animate-checkmarkDraw {
+  stroke-dasharray: 100;
+  stroke-dashoffset: 100;
+  animation: checkmarkDraw 0.6s 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.shimmer-bg {
+  background: linear-gradient(90deg, hsl(38, 20%, 95%) 25%, hsl(38, 20%, 90%) 50%, hsl(38, 20%, 95%) 75%);
+  background-size: 800px 100%;
+  animation: shimmer 1.5s infinite;
+}
+
+@keyframes slideLeft {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.animate-slideLeft {
+  animation: slideLeft 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
