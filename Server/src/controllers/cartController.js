@@ -1,6 +1,7 @@
 import { Cart } from "../models/Cart.js";
 import { Product } from "../models/Product.js";
 import { User } from "../models/User.js";
+import { emitToUser } from "../socket/index.js";
 
 //add cart
 export const addToCart = async (req, res) => {
@@ -186,6 +187,9 @@ export const addToCart = async (req, res) => {
             .populate({
                 path: "items.product"
             });
+
+        // Real-time synchronization
+        emitToUser(user._id, "cart:updated", { cart: updatedCart });
 
         return res.status(200).json({
 
@@ -453,6 +457,9 @@ export const removeCartItem = async (req, res) => {
 
         await cart.save();
 
+        // Real-time synchronization
+        emitToUser(user._id, "cart:updated", { cart });
+
         return res.status(200).json({
 
             success: true,
@@ -656,6 +663,9 @@ export const updateCartQuantity = async (req, res) => {
                     category
                 `
             });
+
+        // Real-time synchronization
+        emitToUser(user._id, "cart:updated", { cart: updatedCart });
 
         return res.status(200).json({
 

@@ -3,6 +3,7 @@ import { uploadToCloudinary } from "../utils/cloudinaryUpload.js";
 import cloudinary from "../config/cloudinary.js";
 import { Banner } from "../models/Banner.js";
 import mongoose from "mongoose";
+import { emitToUser } from "../socket/index.js";
 
 //add address
 
@@ -117,6 +118,9 @@ export const addAddress = async (req, res) => {
 
         await user.save();
 
+        // Real-time synchronization
+        emitToUser(user._id, "user:updated", { user });
+
         return res.status(201).json({
 
             success: true,
@@ -186,6 +190,9 @@ export const setDefaultAddress = async (req, res) => {
         selectedAddress.isDefault = true;
 
         await user.save();
+
+        // Real-time synchronization
+        emitToUser(user._id, "user:updated", { user });
 
         return res.status(200).json({
             success: true,
@@ -280,6 +287,9 @@ export const updateAddress = async (req, res) => {
             address.country = country ?? address.country;
         await user.save();
 
+        // Real-time synchronization
+        emitToUser(user._id, "user:updated", { user });
+
         return res.status(200).json({
             success: true,
             message: "Address updated successfully.",
@@ -335,6 +345,9 @@ export const deleteAddress = async (req, res) => {
         user.addresses.splice(addressIndex, 1);
 
         await user.save();
+
+        // Real-time synchronization
+        emitToUser(user._id, "user:updated", { user });
 
         res.status(200).json({
             success: true,
@@ -512,6 +525,9 @@ export const updateProfile = async (req, res) => {
         // =====================================
 
         await user.save();
+
+        // Real-time synchronization
+        emitToUser(user._id, "user:updated", { user });
 
         return res.status(200).json({
             success: true,

@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useCallback } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { AppProvider, useApp } from './core/context/AppContext';
 import Navigation from './features/webpage/components/Navigation';
 import Footer from './features/webpage/components/Footer';
 import AuthModal from './components/shared/AuthModal';
 import Toast from './components/shared/Toast';
+import InvoiceModal from './components/shared/InvoiceModal';
 import Home from './features/webpage/pages/Home';
 import Products from './features/webpage/pages/Products';
 import ProductDetail from './features/webpage/pages/ProductDetail';
@@ -39,7 +40,11 @@ const pathToPage = (pathname: string): string => {
 
 const HomeCareApp: React.FC = () => {
   const { curPage, setCurPage } = useApp();
-  const isNavigating = useRef(false);
+  const curPageRef = useRef(curPage);
+
+  useEffect(() => {
+    curPageRef.current = curPage;
+  }, [curPage]);
 
   // Scroll to top on page transition
   useEffect(() => {
@@ -51,36 +56,29 @@ const HomeCareApp: React.FC = () => {
     if (!curPage) return;
     const targetPath = PAGE_TO_PATH[curPage] || '/';
     if (window.location.pathname !== targetPath) {
-      isNavigating.current = true;
       window.history.pushState({ page: curPage }, '', targetPath);
-      // Reset guard after browser processes the state change
-      const t = setTimeout(() => { isNavigating.current = false; }, 0);
-      return () => clearTimeout(t);
     }
   }, [curPage]);
 
   // Listen for browser back/forward (popstate)
-  const handlePopState = useCallback((e: PopStateEvent) => {
-    if (isNavigating.current) return;
-    const page = e.state?.page || pathToPage(window.location.pathname);
-    if (page && VALID_PAGES.includes(page) && page !== curPage) {
-      setCurPage(page);
-    }
-  }, [curPage, setCurPage]);
-
   useEffect(() => {
+    const handlePopState = (e: PopStateEvent) => {
+      const page = e.state?.page || pathToPage(window.location.pathname);
+      if (page && VALID_PAGES.includes(page) && page !== curPageRef.current) {
+        setCurPage(page);
+      }
+    };
+
     // On first load, resolve URL → curPage
     const initialPage = pathToPage(window.location.pathname);
-    if (initialPage !== curPage) {
+    if (initialPage !== curPageRef.current) {
       setCurPage(initialPage);
     }
-    // Replace current state so popstate works for the initial entry too
     window.history.replaceState({ page: initialPage }, '', window.location.pathname);
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [setCurPage]);
 
   const renderActivePage = () => {
     switch (curPage) {
@@ -125,6 +123,7 @@ const HomeCareApp: React.FC = () => {
       {/* Global Modals & Alerts */}
       <AuthModal />
       <Toast />
+      <InvoiceModal />
     </div>
   );
 };

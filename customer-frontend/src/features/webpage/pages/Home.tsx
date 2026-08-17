@@ -47,12 +47,21 @@ const Home: React.FC = () => {
   };
 
   // Submit Contact Inquiry
-  const handleContactSubmit = (e: React.FormEvent) => {
+  const handleContactSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!cName.trim() || !cEmail.trim() || !cMessage.trim()) {
       return;
     }
-    addLead(cName.trim(), cEmail.trim(), cSubject.trim() || 'General Inquiry', cService, cMessage.trim());
+    const res = await addLead(
+      cName.trim(),
+      cEmail.trim(),
+      cSubject.trim() || 'General Inquiry',
+      cService,
+      cMessage.trim()
+    );
+    if (res && res.success === false) {
+      return;
+    }
     setContactSubmitted(true);
     setCName('');
     setCEmail('');

@@ -7,10 +7,14 @@ const BannerCarousel: React.FC = () => {
   const [curIndex, setCurIndex] = useState(0);
   const timerRef = useRef<any | null>(null);
 
+  // Filter only active banners
+  const activeBanners = (banners || []).filter((b) => b.isActive !== false);
+
   const startSlider = () => {
     stopSlider();
+    if (activeBanners.length <= 1) return;
     timerRef.current = setInterval(() => {
-      setCurIndex((prev) => (prev + 1) % banners.length);
+      setCurIndex((prev) => (prev + 1) % activeBanners.length);
     }, 5500);
   };
 
@@ -21,19 +25,24 @@ const BannerCarousel: React.FC = () => {
   };
 
   useEffect(() => {
+    if (curIndex >= activeBanners.length) {
+      setCurIndex(0);
+    }
     startSlider();
     return () => stopSlider();
-  }, [banners.length]);
+  }, [activeBanners.length, curIndex]);
 
   const handlePrev = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurIndex((prev) => (prev - 1 + banners.length) % banners.length);
+    if (activeBanners.length <= 1) return;
+    setCurIndex((prev) => (prev - 1 + activeBanners.length) % activeBanners.length);
     startSlider();
   };
 
   const handleNext = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setCurIndex((prev) => (prev + 1) % banners.length);
+    if (activeBanners.length <= 1) return;
+    setCurIndex((prev) => (prev + 1) % activeBanners.length);
     startSlider();
   };
 
@@ -42,7 +51,7 @@ const BannerCarousel: React.FC = () => {
     startSlider();
   };
 
-  if (!banners || banners.length === 0) return null;
+  if (!activeBanners || activeBanners.length === 0) return null;
 
   return (
     <div
@@ -55,15 +64,19 @@ const BannerCarousel: React.FC = () => {
         className="flex h-full w-full transition-transform duration-[800ms] ease-in-out"
         style={{ transform: `translateX(-${curIndex * 100}%)` }}
       >
-        {banners.map((banner, index) => {
+        {activeBanners.map((banner, index) => {
           const isActive = index === curIndex;
+          const desktopSrc = banner.desktopImage || banner.img || '';
+          const mobileSrc = banner.mobileImage || banner.mobileImg || '';
+
           return (
-            <div className="min-w-full h-full relative overflow-hidden" key={index}>
+            <div className="min-w-full h-full relative overflow-hidden" key={banner._id || index}>
               {/* Background representation */}
-              {banner.img ? (
-                <div className="absolute inset-0 w-full h-full">
+              {/* Desktop image (rendered only on screen >= 768px) */}
+              {desktopSrc && (
+                <div className="absolute inset-0 w-full h-full hidden md:block">
                   <img
-                    src={banner.img}
+                    src={desktopSrc}
                     alt={banner.label || `Slide ${index + 1}`}
                     className={`w-full h-full object-cover block transition-transform duration-[6000ms] ease-out ${
                       isActive ? 'scale-105' : 'scale-100'
@@ -71,11 +84,36 @@ const BannerCarousel: React.FC = () => {
                   />
                   <div className="absolute inset-0 bg-gradient-to-r from-blk/80 via-blk/40 to-transparent" />
                 </div>
-              ) : (
-                <div className="absolute inset-0 bg-gradient-to-br from-[hsl(150,60%,6%)] via-[hsl(150,45%,15%)] to-[hsl(150,30%,24%)]">
-                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,hsla(150,80%,40%,0.08),transparent_50%)] pointer-events-none" />
+              )}
+
+              {/* Mobile image (rendered only on screen < 768px) */}
+              {mobileSrc && (
+                <div className="absolute inset-0 w-full h-full block md:hidden">
+                  <img
+                    src={mobileSrc}
+                    alt={banner.label || `Slide ${index + 1}`}
+                    className={`w-full h-full object-cover block transition-transform duration-[6000ms] ease-out ${
+                      isActive ? 'scale-105' : 'scale-100'
+                    }`}
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-r from-blk/80 via-blk/40 to-transparent" />
                 </div>
               )}
+
+              {/* Fallback gradient if the respective screen image was removed */}
+              <div
+                className={`absolute inset-0 bg-gradient-to-br from-[hsl(150,60%,6%)] via-[hsl(150,45%,15%)] to-[hsl(150,30%,24%)] ${
+                  desktopSrc && mobileSrc
+                    ? 'hidden'
+                    : desktopSrc && !mobileSrc
+                    ? 'block md:hidden'
+                    : !desktopSrc && mobileSrc
+                    ? 'hidden md:block'
+                    : 'block'
+                }`}
+              >
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,hsla(150,80%,40%,0.08),transparent_50%)] pointer-events-none" />
+              </div>
 
               {/* Text overlays (Renders over both image and gradient background) */}
               <div className="absolute inset-0 flex items-center justify-start text-left p-8 sm:p-20 z-10">
@@ -109,35 +147,41 @@ const BannerCarousel: React.FC = () => {
         })}
       </div>
 
-      {/* Nav Arrows (slim circles) */}
-      <button
-        className="absolute top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full border border-white/10 bg-blk/15 text-wht/60 backdrop-blur-[2px] flex items-center justify-center transition-all duration-200 hover:text-primary hover:border-primary hover:bg-wht cursor-pointer left-4"
-        onClick={handlePrev}
-        aria-label="Previous slide"
-      >
-        <ChevronLeft size={16} />
-      </button>
-      <button
-        className="absolute top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full border border-white/10 bg-blk/15 text-wht/60 backdrop-blur-[2px] flex items-center justify-center transition-all duration-200 hover:text-primary hover:border-primary hover:bg-wht cursor-pointer right-4"
-        onClick={handleNext}
-        aria-label="Next slide"
-      >
-        <ChevronRight size={16} />
-      </button>
-
-      {/* Luxury Minimalist Line Indicators */}
-      <div className="absolute bottom-5 left-8 flex gap-2 z-10">
-        {banners.map((_, index) => (
+      {/* Nav Arrows (slim circles) - Only show if more than 1 active banner */}
+      {activeBanners.length > 1 && (
+        <>
           <button
-            key={index}
-            className={`h-[2px] w-6 bg-white/20 cursor-pointer transition-all duration-500 ease-out ${
-              index === curIndex ? 'bg-primary w-12' : ''
-            }`}
-            onClick={() => handleDotClick(index)}
-            aria-label={`Slide ${index + 1}`}
-          />
-        ))}
-      </div>
+            className="absolute top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full border border-white/10 bg-blk/15 text-wht/60 backdrop-blur-[2px] flex items-center justify-center transition-all duration-200 hover:text-primary hover:border-primary hover:bg-wht cursor-pointer left-4"
+            onClick={handlePrev}
+            aria-label="Previous slide"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <button
+            className="absolute top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full border border-white/10 bg-blk/15 text-wht/60 backdrop-blur-[2px] flex items-center justify-center transition-all duration-200 hover:text-primary hover:border-primary hover:bg-wht cursor-pointer right-4"
+            onClick={handleNext}
+            aria-label="Next slide"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </>
+      )}
+
+      {/* Luxury Minimalist Line Indicators - Only show if more than 1 active banner */}
+      {activeBanners.length > 1 && (
+        <div className="absolute bottom-5 left-8 flex gap-2 z-10">
+          {activeBanners.map((_, index) => (
+            <button
+              key={index}
+              className={`h-[2px] w-6 bg-white/20 cursor-pointer transition-all duration-500 ease-out ${
+                index === curIndex ? 'bg-primary w-12' : ''
+              }`}
+              onClick={() => handleDotClick(index)}
+              aria-label={`Slide ${index + 1}`}
+            />
+          ))}
+        </div>
+      )}
     </div>
   );
 };

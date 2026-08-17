@@ -42,7 +42,7 @@ interface SavedAddress {
 type TabType = 'profile' | 'address' | 'reviews';
 
 const Profile: React.FC = () => {
-  const { curUser, updateProfile, reviews, products, logoutUser, setCurPage, deleteReview, fetchCurrentUser } = useApp();
+  const { curUser, updateProfile, reviews, products, logoutUser, setCurPage, showToast, fetchCurrentUser, setSelectedProductId } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabType>('profile');
   const [addresses, setAddresses] = useState<SavedAddress[]>([]);
@@ -56,6 +56,8 @@ const Profile: React.FC = () => {
   const [isSavingAddress, setIsSavingAddress] = useState(false);
   const [deleteConfirmAddressId, setDeleteConfirmAddressId] = useState<string | null>(null);
   const [isDeletingAddress, setIsDeletingAddress] = useState(false);
+  const [deleteConfirmReviewId, setDeleteConfirmReviewId] = useState<string | null>(null);
+  const [isDeletingReview, setIsDeletingReview] = useState(false);
   
   // Edit Profile Form state
   const [editFirstName, setEditFirstName] = useState('');
@@ -153,11 +155,160 @@ const Profile: React.FC = () => {
     );
   }
 
-  // Get current user reviews
-  const myReviews = reviews.filter(
-    (r) => r.author?.toLowerCase() === curUser.name?.toLowerCase() || 
-           r.author?.toLowerCase() === `${curUser.firstName} ${curUser.lastName}`.trim().toLowerCase()
-  );
+  const [myFetchedReviews, setMyFetchedReviews] = useState<any[]>([]);
+  const [isReviewsFetched, setIsReviewsFetched] = useState<boolean>(false);
+
+  // Fetch logged in user's reviews from http://localhost:5002/api/reviews/my-reviews
+  useEffect(() => {
+    const fetchUserReviews = async () => {
+      if (!curUser) return;
+      try {
+        if (!auth.currentUser) {
+          await auth.authStateReady();
+        }
+        const firebaseUser = auth.currentUser;
+        let token = '';
+        if (firebaseUser) {
+          token = await firebaseUser.getIdToken();
+        }
+
+        const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+        const response = await axios.get(`${backendUrl}/reviews/my-reviews`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true
+        });
+
+        if (response.data && response.data.success && Array.isArray(response.data.reviews)) {
+          setMyFetchedReviews(response.data.reviews);
+          setIsReviewsFetched(true);
+        }
+      } catch (err) {
+        console.error("Error fetching my-reviews:", err);
+      }
+    };
+
+    fetchUserReviews();
+  }, [curUser, activeTab]);
+
+  // Combined user reviews list
+  const displayReviews = isReviewsFetched 
+    ? myFetchedReviews 
+    : (myFetchedReviews.length > 0 
+        ? myFetchedReviews 
+        : reviews.filter(
+            (r) => r.author?.toLowerCase() === curUser?.name?.toLowerCase() || 
+                   r.author?.toLowerCase() === `${curUser?.firstName} ${curUser?.lastName}`.trim().toLowerCase()
+          )
+      );
+
+  // Navigate to product detail when clicking a review
+  const handleNavigateToProduct = (rev: any) => {
+    let targetId = typeof rev.product === 'object' ? (rev.product._id || rev.product.id) : null;
+    let targetTitle = typeof rev.product === 'object' && rev.product?.title 
+      ? rev.product.title 
+      : (typeof rev.product === 'string' ? rev.product : (rev.productName || ''));
+
+    let foundProd = null;
+    if (targetId) {
+      foundProd = products.find(p => String(p._id) === String(targetId) || String(p.id) === String(targetId));
+    }
+    if (!foundProd && targetTitle) {
+      foundProd = products.find(p => p.name.toLowerCase() === targetTitle.toLowerCase() || (p as any).title?.toLowerCase() === targetTitle.toLowerCase());
+    }
+
+    if (foundProd) {
+      setSelectedProductId(foundProd.id || (foundProd as any)._id);
+      setCurPage('product-detail');
+    } else if (targetId) {
+      setSelectedProductId(targetId);
+      setCurPage('product-detail');
+    } else {
+      setCurPage('products');
+    }
+  };
+
+  // Confirm and execute review deletion via API
+  const confirmDeleteReview = async () => {
+    if (!deleteConfirmReviewId) return;
+    const revId = deleteConfirmReviewId;
+    setIsDeletingReview(true);
+
+    try {
+      if (!auth.currentUser) {
+        await auth.authStateReady();
+      }
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      await axios.delete(`${backendUrl}/reviews/review-delete/${revId}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true
+      });
+
+      // Update local reviews state
+      setMyFetchedReviews(prev => prev.filter(r => String(r._id || r.id) !== String(revId)));
+      showToast("Review deleted successfully.");
+    } catch (err: any) {
+      console.error("Error deleting review:", err);
+      showToast(err.response?.data?.message || err.message || "Failed to delete review.");
+    } finally {
+      setIsDeletingReview(false);
+      setDeleteConfirmReviewId(null);
+    }
+  };
+
+  // Unread/new review ID-based tracking for badge
+  const userKey = curUser ? ((curUser as any)._id || (curUser as any).uid || curUser.email || 'user') : 'guest';
+  const seenIdsStorageKey = `seen_review_ids_${userKey}`;
+
+  // Helper to get array of seen IDs from localStorage
+  const [seenReviewIds, setSeenReviewIds] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem(seenIdsStorageKey);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  // When activeTab becomes 'reviews', mark all current review IDs as seen
+  useEffect(() => {
+    if (!curUser || activeTab !== 'reviews' || displayReviews.length === 0) return;
+
+    const currentIds = displayReviews.map((r: any) => String(r._id || r.id)).filter(Boolean);
+    setSeenReviewIds((prev) => {
+      const updatedSet = new Set([...prev, ...currentIds]);
+      const updatedArr = Array.from(updatedSet);
+      localStorage.setItem(seenIdsStorageKey, JSON.stringify(updatedArr));
+      return updatedArr;
+    });
+  }, [activeTab, displayReviews, curUser, seenIdsStorageKey]);
+
+  // Initial load: If first time user visits profile and seenIdsStorageKey doesn't exist, mark existing initial reviews as seen
+  useEffect(() => {
+    if (!curUser || displayReviews.length === 0) return;
+    const raw = localStorage.getItem(seenIdsStorageKey);
+    if (raw === null) {
+      const initialIds = displayReviews.map((r: any) => String(r._id || r.id)).filter(Boolean);
+      localStorage.setItem(seenIdsStorageKey, JSON.stringify(initialIds));
+      setSeenReviewIds(initialIds);
+    }
+  }, [curUser, displayReviews, seenIdsStorageKey]);
+
+  // Calculate unread/new review count for badge
+  const unreadReviewsCount = activeTab === 'reviews' 
+    ? 0 
+    : displayReviews.filter((r: any) => {
+        const idStr = String(r._id || r.id);
+        return idStr && !seenReviewIds.includes(idStr);
+      }).length;
+
+
+
 
   // Sync addresses list state and update backend if default changes
   const saveAddresses = (newList: SavedAddress[]) => {
@@ -580,11 +731,11 @@ const Profile: React.FC = () => {
                 <Star size={14} />
                 Reviews & Ratings
               </span>
-              {myReviews.length > 0 && (
+              {unreadReviewsCount > 0 && (
                 <span className={`text-[9px] font-bold px-2 py-0.5 rounded-full font-mono ${
                   activeTab === 'reviews' ? 'bg-wht text-primary' : 'bg-primary-soft text-primary'
                 }`}>
-                  {myReviews.length}
+                  {unreadReviewsCount}
                 </span>
               )}
             </button>
@@ -842,12 +993,23 @@ const Profile: React.FC = () => {
                 <p className="text-xs text-mut mt-0.5">Feedback and ratings you've shared on formulations.</p>
               </div>
 
-              {myReviews.length > 0 ? (
+              {displayReviews.length > 0 ? (
                 <div className="space-y-4">
-                  {myReviews.map((rev) => {
-                    const img = getProductImage(rev.product);
+                  {displayReviews.map((rev: any) => {
+                    const prodTitle = typeof rev.product === 'object' && rev.product?.title ? rev.product.title : (typeof rev.product === 'string' ? rev.product : (rev.productName || 'Product'));
+                    const img = (typeof rev.product === 'object' && rev.product?.images?.length > 0) ? rev.product.images[0].url : getProductImage(prodTitle);
+                    const revDate = rev.createdAt ? new Date(rev.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : (rev.date || 'Jul 19, 2026');
+                    const revRating = Number(rev.rating) || 5;
+                    const revBody = rev.review || rev.comment || rev.body || '';
+                    const revReply = rev.reply || rev.adminReply || '';
+                    const revId = rev._id || rev.id;
+
                     return (
-                      <div key={rev.id} className="border border-bdrl rounded-xl p-5 hover:border-primary/20 transition-all flex flex-col sm:flex-row gap-5 items-start bg-sur/10">
+                      <div
+                        key={revId}
+                        onClick={() => handleNavigateToProduct(rev)}
+                        className="border border-bdrl rounded-xl p-5 hover:border-primary/40 hover:shadow-sm transition-all flex flex-col sm:flex-row gap-5 items-start bg-sur/10 cursor-pointer"
+                      >
                         {/* Product Thumbnail */}
                         <div className="w-16 h-16 rounded-lg border border-bdrl bg-wht flex items-center justify-center shrink-0 overflow-hidden select-none">
                           {img ? (
@@ -860,8 +1022,8 @@ const Profile: React.FC = () => {
                         {/* Details */}
                         <div className="flex-1 min-w-0 space-y-2">
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5">
-                            <h4 className="font-bold text-blk text-[0.85rem] leading-tight truncate">{rev.product}</h4>
-                            <span className="text-[10px] text-mut font-mono shrink-0">{rev.date || 'Jul 19, 2026'}</span>
+                            <h4 className="font-bold text-blk text-[0.85rem] leading-tight truncate hover:text-primary transition-colors">{prodTitle}</h4>
+                            <span className="text-[10px] text-mut font-mono shrink-0">{revDate}</span>
                           </div>
 
                           {/* Star rating block */}
@@ -870,31 +1032,30 @@ const Profile: React.FC = () => {
                               <Star
                                 key={i}
                                 size={12}
-                                className={i < rev.rating ? "fill-gold text-gold" : "text-fnt"}
+                                className={i < revRating ? "fill-gold text-gold" : "text-fnt"}
                               />
                             ))}
                           </div>
 
                           {/* Review Body */}
-                          <p className="text-xs text-ink leading-relaxed break-words">{rev.body}</p>
+                          <p className="text-xs text-ink leading-relaxed break-words">{revBody}</p>
 
                           {/* Admin Reply */}
-                          {rev.reply && (
+                          {revReply && (
                             <div className="bg-wht border border-bdrl rounded-lg p-3.5 mt-2.5 text-[0.72rem] leading-relaxed relative">
                               <div className="absolute top-3 left-4 w-1.5 h-1.5 bg-accent rounded-full shrink-0" />
                               <p className="font-bold text-blk pl-3.5">Replied by Clean Everyday Support:</p>
-                              <p className="text-mut mt-1 pl-3.5 italic">"{rev.reply}"</p>
+                              <p className="text-mut mt-1 pl-3.5 italic">"{revReply}"</p>
                             </div>
                           )}
                         </div>
 
-                        {/* Actions (Delete only as edit is not supported in context) */}
+                        {/* Actions */}
                         <div className="self-end sm:self-start shrink-0">
                           <button
-                            onClick={() => {
-                              if (window.confirm("Are you sure you want to delete this review?")) {
-                                deleteReview(rev.id);
-                              }
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setDeleteConfirmReviewId(String(revId));
                             }}
                             className="text-mut hover:text-red hover:bg-red-bg p-2 rounded-full cursor-pointer transition-colors border-none bg-transparent"
                             title="Delete Review"
@@ -1307,6 +1468,48 @@ const Profile: React.FC = () => {
                     </button>
                     <button
                       onClick={() => setDeleteConfirmAddressId(null)}
+                      className="btn-secondary py-2.5 px-6 text-xs font-bold uppercase tracking-wider"
+                    >
+                      No
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 6: Delete Review Confirmation Modal Overlay */}
+      {deleteConfirmReviewId && (
+        <div className="fixed inset-0 bg-blk/60 backdrop-blur-md z-[9990] flex items-center justify-center p-4 overflow-y-auto animate-fadeIn">
+          <div className="bg-wht rounded-2xl w-full max-w-[420px] shadow-premium-xl relative border border-bdrl overflow-hidden my-auto animate-slideUp">
+            <div className="p-6 sm:p-8 text-center select-none">
+              {isDeletingReview ? (
+                <div className="py-6 flex flex-col items-center justify-center">
+                  <Loader2 size={38} className="text-red animate-spin mb-3" />
+                  <h4 className="font-display text-sm font-bold text-blk">Deleting Review...</h4>
+                  <p className="text-xs text-mut mt-1">Please wait while your review is being deleted.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="w-12 h-12 bg-red-bg border border-red/10 text-red rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Trash2 size={22} />
+                  </div>
+                  <h3 className="font-display text-lg font-bold text-blk mb-2">Delete Review</h3>
+                  <p className="text-xs text-mut leading-relaxed mb-6">
+                    Are you sure you want to delete this review?
+                  </p>
+                  
+                  <div className="flex gap-3 justify-center">
+                    <button
+                      onClick={confirmDeleteReview}
+                      className="bg-red hover:bg-red-hover text-wht font-bold py-2.5 px-6 rounded-xl text-xs uppercase tracking-wider transition-colors cursor-pointer border-none"
+                    >
+                      Yes
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirmReviewId(null)}
                       className="btn-secondary py-2.5 px-6 text-xs font-bold uppercase tracking-wider"
                     >
                       No

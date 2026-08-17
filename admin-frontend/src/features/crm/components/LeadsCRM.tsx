@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '../../../core/context/AppContext';
 import type { Lead, LeadActivity } from '../../../core/types';
 import {
@@ -12,12 +13,15 @@ import {
   Square,
   User,
   X,
-  FileText
+  FileText,
+  Loader2
 } from 'lucide-react';
 
 const LeadsCRM: React.FC = () => {
   const {
     leads,
+    fetchLeads,
+    isLeadsLoading,
     addLead,
     updateLeadStatus,
     updateLeadNotes,
@@ -28,6 +32,10 @@ const LeadsCRM: React.FC = () => {
     addLeadActivity,
     showToast
   } = useApp();
+
+  useEffect(() => {
+    fetchLeads();
+  }, []);
 
   // Search & Status filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,7 +49,7 @@ const LeadsCRM: React.FC = () => {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
 
   // Drag and Drop state
-  const [draggedLeadId, setDraggedLeadId] = useState<number | null>(null);
+  const [draggedLeadId, setDraggedLeadId] = useState<number | string | null>(null);
 
   // Sorting for Table
   const [sortField, setSortField] = useState<keyof Lead>('date');
@@ -63,10 +71,65 @@ const LeadsCRM: React.FC = () => {
   const [nlMessage, setNlMessage] = useState('');
   const [nlPriority, setNlPriority] = useState<Lead['priority']>('Medium');
 
+  // Auto-save Notes State
+  const [isNotesSaving, setIsNotesSaving] = useState(false);
+  const notesDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Clear notes debounce timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (notesDebounceRef.current) {
+        clearTimeout(notesDebounceRef.current);
+      }
+    };
+  }, []);
+
+  const handleNotesChange = (newNotes: string) => {
+    if (!selectedLead) return;
+    const leadId = selectedLead._id || selectedLead.id;
+
+    // Update local state immediately for uninterrupted smooth typing
+    setSelectedLead((prev) => (prev ? { ...prev, internalNotes: newNotes } : null));
+    setIsNotesSaving(true);
+
+    if (notesDebounceRef.current) {
+      clearTimeout(notesDebounceRef.current);
+    }
+
+    notesDebounceRef.current = setTimeout(async () => {
+      await updateLeadNotes(leadId, newNotes);
+      setIsNotesSaving(false);
+    }, 1200);
+  };
+
   const openDetailsDrawer = (lead: Lead) => {
     setSelectedLead(lead);
     setActiveWorkspaceTab('notes');
   };
+
+  // Keep selectedLead in sync with server refetched leads state
+  useEffect(() => {
+    if (selectedLead) {
+      const updated = leads.find(
+        (l) => (l._id && l._id === selectedLead._id) || String(l.id) === String(selectedLead.id)
+      );
+      if (updated) {
+        setSelectedLead((prev) =>
+          prev
+            ? {
+                ...prev,
+                tasks: updated.tasks,
+                activities: updated.activities,
+                comments: updated.comments,
+                reminders: updated.reminders,
+                status: updated.status,
+                priority: updated.priority
+              }
+            : null
+        );
+      }
+    }
+  }, [leads]);
 
   // Escape key down to close workspace details drawer
   useEffect(() => {
@@ -170,7 +233,7 @@ const LeadsCRM: React.FC = () => {
   ];
 
   // Drag and Drop implementation
-  const handleDragStart = (e: React.DragEvent, leadId: number) => {
+  const handleDragStart = (e: React.DragEvent, leadId: number | string) => {
     setDraggedLeadId(leadId);
     e.dataTransfer.setData('text/plain', String(leadId));
     e.dataTransfer.effectAllowed = 'move';
@@ -178,21 +241,28 @@ const LeadsCRM: React.FC = () => {
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
   };
 
-  const handleDrop = (e: React.DragEvent, targetStatus: Lead['status']) => {
+  const handleDrop = async (e: React.DragEvent, targetStatus: Lead['status']) => {
     e.preventDefault();
-    const leadId = draggedLeadId;
-    if (leadId === null) return;
-    
-    updateLeadStatus(leadId, targetStatus);
-    showToast(`Lead pipeline status updated to ${targetStatus}`);
+    const leadId = draggedLeadId || e.dataTransfer.getData('text/plain');
+    if (!leadId) return;
+
+    // Check if targetStatus is already the current status
+    const targetLead = leads.find((l) => String(l.id) === String(leadId) || l._id === String(leadId));
+    if (targetLead && targetLead.status === targetStatus) {
+      setDraggedLeadId(null);
+      return;
+    }
+
+    setDraggedLeadId(null);
+    const success = await updateLeadStatus(leadId, targetStatus);
 
     // If the expanded lead in details drawer is the dragged one, refresh drawer state
-    if (selectedLead && selectedLead.id === leadId) {
-      setSelectedLead({ ...selectedLead, status: targetStatus });
+    if (success && selectedLead && (String(selectedLead.id) === String(leadId) || selectedLead._id === String(leadId))) {
+      setSelectedLead((prev) => (prev ? { ...prev, status: targetStatus } : null));
     }
-    setDraggedLeadId(null);
   };
 
   // CSV Export
@@ -266,6 +336,7 @@ const LeadsCRM: React.FC = () => {
 
   // Drawer Action inputs staging
   const [commentInput, setCommentInput] = useState('');
+  const [isAddingComment, setIsAddingComment] = useState(false);
   const [taskInput, setTaskInput] = useState('');
   const [reminderTitle, setReminderTitle] = useState('');
   const [reminderDate, setReminderDate] = useState('');
@@ -275,69 +346,128 @@ const LeadsCRM: React.FC = () => {
 
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'notes' | 'activities' | 'tasks' | 'reminders' | 'comments'>('notes');
 
-  const triggerAddComment = () => {
-    if (!selectedLead || !commentInput.trim()) return;
-    addLeadComment(selectedLead.id, 'Super Admin', commentInput.trim());
-    
-    // Refresh drawer view local state
-    const commentsList = selectedLead.comments ? [...selectedLead.comments] : [];
-    commentsList.push({
-      id: `c-${Date.now()}`,
-      author: 'Super Admin',
-      body: commentInput.trim(),
-      date: new Date().toLocaleString('en-IN')
-    });
-    setSelectedLead({ ...selectedLead, comments: commentsList });
-    setCommentInput('');
+  const triggerAddComment = async () => {
+    if (!selectedLead || !commentInput.trim()) {
+      if (!commentInput.trim()) showToast('Please enter a comment.');
+      return;
+    }
+
+    const leadId = selectedLead._id || selectedLead.id;
+    setIsAddingComment(true);
+
+    try {
+      const success = await addLeadComment(leadId, commentInput.trim());
+      if (success) {
+        setCommentInput('');
+      }
+    } finally {
+      setIsAddingComment(false);
+    }
   };
 
-  const triggerAddTask = () => {
-    if (!selectedLead || !taskInput.trim()) return;
-    addLeadTask(selectedLead.id, taskInput.trim());
-    
-    // Refresh local
-    const tasksList = selectedLead.tasks ? [...selectedLead.tasks] : [];
-    tasksList.push({
-      id: `t-${Date.now()}`,
-      title: taskInput.trim(),
-      done: false
-    });
-    setSelectedLead({ ...selectedLead, tasks: tasksList });
-    setTaskInput('');
+  const [isAddingTask, setIsAddingTask] = useState(false);
+
+  const triggerAddTask = async () => {
+    if (!selectedLead || !taskInput.trim()) {
+      if (!taskInput.trim()) showToast('Please enter a task title.');
+      return;
+    }
+
+    const leadId = selectedLead._id || selectedLead.id;
+    setIsAddingTask(true);
+
+    try {
+      const success = await addLeadTask(leadId, taskInput.trim());
+      if (success) {
+        setTaskInput('');
+      }
+    } finally {
+      setIsAddingTask(false);
+    }
   };
 
-  const triggerAddReminder = () => {
-    if (!selectedLead || !reminderTitle.trim() || !reminderDate) return;
-    addLeadReminder(selectedLead.id, reminderTitle.trim(), reminderDate);
-    
-    // Refresh local
-    const remList = selectedLead.reminders ? [...selectedLead.reminders] : [];
-    remList.push({
-      id: `rem-${Date.now()}`,
-      title: reminderTitle.trim(),
-      date: reminderDate
-    });
-    setSelectedLead({ ...selectedLead, reminders: remList });
-    setReminderTitle('');
-    setReminderDate('');
+  const [togglingTaskId, setTogglingTaskId] = useState<string | null>(null);
+
+  const handleToggleTask = async (taskId: string, currentDone: boolean) => {
+    if (!selectedLead || togglingTaskId) return;
+    const leadId = selectedLead._id || selectedLead.id;
+    setTogglingTaskId(taskId);
+
+    try {
+      const nextDone = !currentDone;
+      const success = await toggleLeadTask(leadId, taskId, nextDone);
+      if (success) {
+        const updatedTasks = selectedLead.tasks?.map((tsk) =>
+          tsk.id === taskId ? { ...tsk, done: nextDone } : tsk
+        );
+        setSelectedLead({ ...selectedLead, tasks: updatedTasks });
+      }
+    } finally {
+      setTogglingTaskId(null);
+    }
   };
 
-  const triggerAddActivity = () => {
-    if (!selectedLead || !actTitle.trim()) return;
-    addLeadActivity(selectedLead.id, actType, actTitle.trim(), actContent.trim());
-    
-    // Refresh local
-    const actList = selectedLead.activities ? [...selectedLead.activities] : [];
-    actList.push({
-      type: actType,
-      title: actTitle.trim(),
-      content: actContent.trim(),
-      date: new Date().toLocaleString('en-IN')
-    });
-    setSelectedLead({ ...selectedLead, activities: actList });
-    setActTitle('');
-    setActContent('');
-    showToast('Activity logged.');
+  const [isAddingReminder, setIsAddingReminder] = useState(false);
+
+  const triggerAddReminder = async () => {
+    if (!selectedLead) return;
+    if (!reminderTitle.trim()) {
+      showToast('Please enter a reminder title.');
+      return;
+    }
+    if (!reminderDate) {
+      showToast('Please select a scheduled date.');
+      return;
+    }
+
+    const leadId = selectedLead._id || selectedLead.id;
+    setIsAddingReminder(true);
+
+    try {
+      const success = await addLeadReminder(leadId, reminderTitle.trim(), reminderDate);
+      if (success) {
+        setReminderTitle('');
+        setReminderDate('');
+      }
+    } finally {
+      setIsAddingReminder(false);
+    }
+  };
+
+  const [isAddingActivity, setIsAddingActivity] = useState(false);
+
+  const triggerAddActivity = async () => {
+    if (!selectedLead) return;
+    if (!actTitle.trim()) {
+      showToast('Please enter an activity title.');
+      return;
+    }
+    if (!actContent.trim()) {
+      showToast('Please enter interaction details / notes.');
+      return;
+    }
+
+    const leadId = selectedLead._id || selectedLead.id;
+    setIsAddingActivity(true);
+
+    try {
+      const success = await addLeadActivity(leadId, actType, actTitle.trim(), actContent.trim());
+      if (success) {
+        // Refresh local drawer activities state
+        const actList = selectedLead.activities ? [...selectedLead.activities] : [];
+        actList.push({
+          type: actType,
+          title: actTitle.trim(),
+          content: actContent.trim(),
+          date: new Date().toLocaleString('en-IN')
+        });
+        setSelectedLead({ ...selectedLead, activities: actList });
+        setActTitle('');
+        setActContent('');
+      }
+    } finally {
+      setIsAddingActivity(false);
+    }
   };
 
   return (
@@ -345,7 +475,10 @@ const LeadsCRM: React.FC = () => {
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7">
         <div>
-          <h2 className="font-display text-[1.6rem] font-bold text-blk tracking-tight">Leads pipeline CRM</h2>
+          <div className="flex items-center gap-2.5">
+            <h2 className="font-display text-[1.6rem] font-bold text-blk tracking-tight">Leads pipeline CRM</h2>
+            {isLeadsLoading && <Loader2 size={16} className="text-primary animate-spin" />}
+          </div>
           <p className="text-[0.78rem] text-mut">Follow up on customer inquiries, wholesale questions, and custom contracts.</p>
         </div>
         <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -436,7 +569,16 @@ const LeadsCRM: React.FC = () => {
       {/* VIEWPORT LAYOUT SWITCH */}
       {layoutMode === 'table' ? (
         /* TABLE LAYOUT VIEW */
-        <div className="bg-wht border border-bdrl rounded-xl shadow-premium-sm overflow-hidden mb-6">
+        <div className="relative">
+          {isLeadsLoading && leads.length > 0 && (
+            <div className="absolute inset-0 bg-wht/40 backdrop-blur-[1px] z-20 flex items-center justify-center rounded-xl pointer-events-auto">
+              <div className="bg-wht border border-bdr shadow-premium-md rounded-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-blk animate-fadeIn">
+                <Loader2 size={16} className="text-primary animate-spin" />
+                <span>Updating lead status...</span>
+              </div>
+            </div>
+          )}
+          <div className="bg-wht border border-bdrl rounded-xl shadow-premium-sm overflow-hidden mb-6">
           <div className="overflow-x-auto w-full scrollbar-thin">
             <table className="w-full text-left border-collapse min-w-[1000px]">
               <thead>
@@ -470,7 +612,16 @@ const LeadsCRM: React.FC = () => {
               </tr>
               </thead>
               <tbody className="divide-y divide-bdrl text-sm">
-                {currentLeads.length > 0 ? (
+                {isLeadsLoading && leads.length === 0 ? (
+                  <tr>
+                    <td colSpan={10} className="py-14 text-center">
+                      <div className="flex flex-col items-center justify-center gap-2">
+                        <Loader2 size={24} className="text-primary animate-spin" />
+                        <span className="text-xs text-mut font-medium">Fetching leads from server...</span>
+                      </div>
+                    </td>
+                  </tr>
+                ) : currentLeads.length > 0 ? (
                   currentLeads.map((l) => (
                     <tr key={l.id} className="hover:bg-sur/10 transition-colors">
                       <td className="py-3 px-4 font-mono text-xs text-mid whitespace-nowrap">LD-{String(l.id).substring(5, 10) || l.id}</td>
@@ -499,9 +650,10 @@ const LeadsCRM: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         <select
-                          className="border border-bdr rounded bg-wht px-2.5 py-1.5 text-sm font-semibold text-mid focus:border-primary outline-none cursor-pointer"
+                          className="border border-bdr rounded bg-wht px-2.5 py-1.5 text-sm font-semibold text-mid focus:border-primary outline-none cursor-pointer disabled:opacity-50"
                           value={l.status}
-                          onChange={(e) => updateLeadStatus(l.id, e.target.value as any)}
+                          disabled={isLeadsLoading}
+                          onChange={(e) => updateLeadStatus(l._id || l.id, e.target.value as any)}
                         >
                           {KANBAN_STATUSES.map((st) => (
                             <option key={st} value={st}>{st}</option>
@@ -568,78 +720,97 @@ const LeadsCRM: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
       ) : (
         /* KANBAN BOARD LAYOUT VIEW */
-        <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin select-none max-h-[600px]">
-          {KANBAN_STATUSES.map((status) => {
-            const columnLeads = filteredLeads.filter((l) => l.status === status);
-
-            return (
-              <div
-                key={status}
-                onDragOver={handleDragOver}
-                onDrop={(e) => handleDrop(e, status)}
-                className="w-[280px] bg-sur/40 border border-bdrl rounded-md p-4 shrink-0 flex flex-col max-h-[550px] overflow-y-auto"
-              >
-                {/* Column header */}
-                <div className="flex justify-between items-center pb-2.5 border-b border-bdrl mb-4">
-                  <span className="text-xs font-semibold text-blk capitalize">
-                    {status}
-                  </span>
-                  <span className="text-xs font-medium text-mut bg-wht border border-bdr px-2 py-0.5 rounded-full leading-none">
-                    {columnLeads.length}
-                  </span>
-                </div>
-
-                {/* Cards grid */}
-                <div className="flex flex-col gap-3 flex-1">
-                  {columnLeads.length > 0 ? (
-                    columnLeads.map((lead) => (
-                      <div
-                        key={lead.id}
-                        draggable="true"
-                        onDragStart={(e) => handleDragStart(e, lead.id)}
-                        onClick={() => openDetailsDrawer(lead)}
-                        className="bg-wht border border-bdr rounded-md p-4 hover:border-primary shadow-premium-sm hover:shadow-premium-md cursor-grab active:cursor-grabbing transition-all select-none animate-fadeIn"
-                      >
-                        <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded mb-2 capitalize ${
-                          lead.priority === 'High'
-                            ? 'bg-red-bg text-red'
-                            : lead.priority === 'Medium'
-                            ? 'bg-yellow-50 text-amber-700'
-                            : 'bg-sur text-mut'
-                        }`}>
-                          {lead.priority} priority
-                        </span>
-                        
-                        <h4 className="text-sm font-semibold text-blk truncate mb-0.5" title={lead.subject}>
-                          {lead.subject}
-                        </h4>
-                        <span className="text-xs text-mid font-medium block truncate">{lead.name}</span>
-                        {lead.company && <span className="text-xs text-mut block mt-0.5">{lead.company}</span>}
- 
-                        <div className="flex items-center justify-between border-t border-bdrl pt-2.5 mt-3 text-xs text-mut">
-                          <span>{lead.date}</span>
-                          <span className="bg-sur px-2 py-0.5 rounded border border-bdrl">{lead.service}</span>
-                        </div>
-                      </div>
-                    ))
-                  ) : (
-                    <div className="flex-1 border-2 border-dashed border-bdrl rounded-md flex items-center justify-center p-6 text-center text-[0.7rem] text-mut font-medium">
-                      Drag here
-                    </div>
-                  )}
-                </div>
+        <div className="relative">
+          {/* Loading overlay to stop glitching during in-flight drag-and-drop updates */}
+          {isLeadsLoading && leads.length > 0 && (
+            <div className="absolute inset-0 bg-wht/40 backdrop-blur-[1px] z-20 flex items-center justify-center rounded-xl pointer-events-auto">
+              <div className="bg-wht border border-bdr shadow-premium-md rounded-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-blk animate-fadeIn">
+                <Loader2 size={16} className="text-primary animate-spin" />
+                <span>Updating lead status...</span>
               </div>
-            );
-          })}
+            </div>
+          )}
+
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin select-none max-h-[600px]">
+            {isLeadsLoading && leads.length === 0 ? (
+              <div className="w-full py-16 flex flex-col items-center justify-center gap-2 bg-wht border border-bdrl rounded-xl">
+                <Loader2 size={28} className="text-primary animate-spin" />
+                <span className="text-xs text-mut font-medium">Fetching leads from server...</span>
+              </div>
+            ) : (
+              KANBAN_STATUSES.map((status) => {
+              const columnLeads = filteredLeads.filter((l) => l.status === status);
+
+              return (
+                <div
+                  key={status}
+                  onDragOver={handleDragOver}
+                  onDrop={(e) => handleDrop(e, status)}
+                  className="w-[280px] bg-sur/40 border border-bdrl rounded-md p-4 shrink-0 flex flex-col max-h-[550px] overflow-y-auto"
+                >
+                  {/* Column header */}
+                  <div className="flex justify-between items-center pb-2.5 border-b border-bdrl mb-4">
+                    <span className="text-xs font-semibold text-blk capitalize">
+                      {status}
+                    </span>
+                    <span className="text-xs font-medium text-mut bg-wht border border-bdr px-2 py-0.5 rounded-full leading-none">
+                      {columnLeads.length}
+                    </span>
+                  </div>
+
+                  {/* Cards grid */}
+                  <div className="flex flex-col gap-3 flex-1" onDragOver={handleDragOver}>
+                    {columnLeads.length > 0 ? (
+                      columnLeads.map((lead) => (
+                        <div
+                          key={lead.id}
+                          draggable="true"
+                          onDragStart={(e) => handleDragStart(e, lead._id || lead.id)}
+                          onClick={() => openDetailsDrawer(lead)}
+                          className="bg-wht border border-bdr rounded-md p-4 hover:border-primary shadow-premium-sm hover:shadow-premium-md cursor-grab active:cursor-grabbing transition-all select-none animate-fadeIn"
+                        >
+                          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded mb-2 capitalize ${
+                            lead.priority === 'High'
+                              ? 'bg-red-bg text-red'
+                              : lead.priority === 'Medium'
+                              ? 'bg-yellow-50 text-amber-700'
+                              : 'bg-sur text-mut'
+                          }`}>
+                            {lead.priority} priority
+                          </span>
+                          
+                          <h4 className="text-sm font-semibold text-blk truncate mb-0.5" title={lead.subject}>
+                            {lead.subject}
+                          </h4>
+                          <span className="text-xs text-mid font-medium block truncate">{lead.name}</span>
+                          {lead.company && <span className="text-xs text-mut block mt-0.5">{lead.company}</span>}
+   
+                          <div className="flex items-center justify-between border-t border-bdrl pt-2.5 mt-3 text-xs text-mut">
+                            <span>{lead.date}</span>
+                            <span className="bg-sur px-2 py-0.5 rounded border border-bdrl">{lead.service}</span>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="flex-1 border-2 border-dashed border-bdrl rounded-md flex items-center justify-center p-6 text-center text-[0.7rem] text-mut font-medium">
+                        Drag here
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }))}
+          </div>
         </div>
       )}
 
       {/* Workspace Leads details drawer */}
-      {selectedLead && (
+      {selectedLead && createPortal(
         <div 
-          className="fixed inset-0 z-[1000] flex justify-end bg-blk/60 backdrop-blur-xs animate-fadeIn"
+          className="fixed inset-0 z-[9998] flex justify-end bg-blk/60 backdrop-blur-xs animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setSelectedLead(null);
@@ -742,16 +913,20 @@ const LeadsCRM: React.FC = () => {
                       </div>
                     </div>
                     <div>
-                      <span className="text-xs font-semibold text-mut block mb-1.5">Internal sales follow up notes (Auto-saved)</span>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-xs font-semibold text-mut">Internal sales follow up notes (Auto-saved)</span>
+                        {isNotesSaving && (
+                          <span className="text-[11px] text-primary flex items-center gap-1 font-medium animate-fadeIn">
+                            <Loader2 size={11} className="animate-spin text-primary" /> Saving notes...
+                          </span>
+                        )}
+                      </div>
                       <textarea
                         rows={4}
                         placeholder="Log phone call remarks, user requirements details, scheduling quotes details..."
                         className="w-full border border-bdr focus:border-primary rounded px-3 py-2.5 outline-none resize-none placeholder:text-mut/50 bg-wht"
                         value={selectedLead.internalNotes || ''}
-                        onChange={(e) => {
-                          updateLeadNotes(selectedLead.id, e.target.value);
-                          setSelectedLead({ ...selectedLead, internalNotes: e.target.value });
-                        }}
+                        onChange={(e) => handleNotesChange(e.target.value)}
                       />
                     </div>
                   </div>
@@ -800,9 +975,11 @@ const LeadsCRM: React.FC = () => {
                       </div>
                       <button
                         onClick={triggerAddActivity}
-                        className="bg-primary text-wht rounded px-4 py-2 text-xs font-semibold hover:bg-primary-hover self-start cursor-pointer"
+                        disabled={isAddingActivity}
+                        className="bg-primary text-wht rounded px-4 py-2 text-xs font-semibold hover:bg-primary-hover self-start cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
                       >
-                        Add activity log
+                        {isAddingActivity && <Loader2 size={12} className="animate-spin text-wht" />}
+                        {isAddingActivity ? 'Adding activity...' : 'Add activity log'}
                       </button>
                     </div>
 
@@ -834,38 +1011,40 @@ const LeadsCRM: React.FC = () => {
                       />
                       <button
                         onClick={triggerAddTask}
-                        className="bg-primary text-wht rounded px-4 py-2 text-sm font-semibold cursor-pointer"
+                        disabled={isAddingTask}
+                        className="bg-primary text-wht rounded px-4 py-2 text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
                       >
-                        Add task
+                        {isAddingTask && <Loader2 size={13} className="animate-spin text-wht" />}
+                        {isAddingTask ? 'Adding...' : 'Add task'}
                       </button>
                     </div>
 
                     {/* Tasks Checklist */}
                     <div className="flex flex-col gap-2 mt-2 border border-bdrl rounded p-2 bg-sur/30">
                       {(selectedLead.tasks || []).length > 0 ? (
-                        (selectedLead.tasks || []).map((t) => (
-                          <div
-                            key={t.id}
-                            onClick={() => {
-                              toggleLeadTask(selectedLead.id, t.id);
-                              // Refresh local view
-                              const updatedTasks = selectedLead.tasks?.map((tsk) =>
-                                tsk.id === t.id ? { ...tsk, done: !tsk.done } : tsk
-                              );
-                              setSelectedLead({ ...selectedLead, tasks: updatedTasks });
-                            }}
-                            className="flex items-center gap-3 p-2 hover:bg-sur/50 rounded cursor-pointer select-none"
-                          >
-                            {t.done ? (
-                              <CheckSquare size={16} className="text-primary" />
-                            ) : (
-                              <Square size={16} className="text-mut" />
-                            )}
-                            <span className={`text-sm ${t.done ? 'line-through text-mut' : 'text-blk font-medium'}`}>
-                              {t.title}
-                            </span>
-                          </div>
-                        ))
+                        (selectedLead.tasks || []).map((t) => {
+                          const isToggling = togglingTaskId === t.id;
+                          return (
+                            <div
+                              key={t.id}
+                              onClick={() => !isToggling && handleToggleTask(t.id, t.done)}
+                              className={`flex items-center gap-3 p-2 hover:bg-sur/50 rounded cursor-pointer select-none transition-opacity ${
+                                isToggling ? 'opacity-70 cursor-wait' : ''
+                              }`}
+                            >
+                              {isToggling ? (
+                                <Loader2 size={16} className="text-primary animate-spin shrink-0" />
+                              ) : t.done ? (
+                                <CheckSquare size={16} className="text-primary shrink-0" />
+                              ) : (
+                                <Square size={16} className="text-mut shrink-0" />
+                              )}
+                              <span className={`text-sm ${t.done ? 'line-through text-mut' : 'text-blk font-medium'}`}>
+                                {t.title}
+                              </span>
+                            </div>
+                          );
+                        })
                       ) : (
                         <div className="text-center py-6 text-mut text-xs">No tasks created yet.</div>
                       )}
@@ -901,9 +1080,17 @@ const LeadsCRM: React.FC = () => {
                       </div>
                       <button
                         onClick={triggerAddReminder}
-                        className="bg-primary text-wht rounded px-4 py-2 text-xs font-semibold hover:bg-primary-hover self-start cursor-pointer"
+                        disabled={isAddingReminder}
+                        className="bg-primary text-wht rounded px-4 py-2 text-xs font-semibold hover:bg-primary-hover self-start cursor-pointer flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        Set reminder
+                        {isAddingReminder ? (
+                          <>
+                            <Loader2 size={13} className="animate-spin" />
+                            <span>Scheduling...</span>
+                          </>
+                        ) : (
+                          <span>Set reminder</span>
+                        )}
                       </button>
                     </div>
 
@@ -931,15 +1118,24 @@ const LeadsCRM: React.FC = () => {
                       <input
                         type="text"
                         placeholder="Type internal staff comment (e.g. CEO approved discount)..."
-                        className="border border-bdr rounded px-3 py-2 text-sm outline-none focus:border-primary flex-1 placeholder:text-mut/50 bg-wht"
+                        className="border border-bdr rounded px-3 py-2 text-sm outline-none focus:border-primary flex-1 placeholder:text-mut/50 bg-wht disabled:opacity-60"
                         value={commentInput}
                         onChange={(e) => setCommentInput(e.target.value)}
+                        disabled={isAddingComment}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' && !isAddingComment) {
+                            e.preventDefault();
+                            triggerAddComment();
+                          }
+                        }}
                       />
                       <button
                         onClick={triggerAddComment}
-                        className="bg-primary text-wht rounded px-4 py-2 text-sm font-semibold cursor-pointer"
+                        disabled={isAddingComment || !commentInput.trim()}
+                        className="bg-primary text-wht rounded px-4 py-2 text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
                       >
-                        Comment
+                        {isAddingComment && <Loader2 size={13} className="animate-spin text-wht" />}
+                        <span>{isAddingComment ? 'Commenting...' : 'Comment'}</span>
                       </button>
                     </div>
 
@@ -968,13 +1164,14 @@ const LeadsCRM: React.FC = () => {
 
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* Create Lead Modal Dialog */}
-      {newLeadModalOpen && (
+      {newLeadModalOpen && createPortal(
         <div 
-          className="fixed inset-0 z-[999] flex items-center justify-center bg-blk/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-blk/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setNewLeadModalOpen(false);
@@ -1111,7 +1308,8 @@ const LeadsCRM: React.FC = () => {
               </div>
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

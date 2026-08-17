@@ -7,6 +7,7 @@ import { Lead } from "../models/Lead.js";
 import { Banner } from "../models/Banner.js";
 import { v2 as cloudinary } from "cloudinary";
 import { uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { emitToAll } from "../socket/index.js";
 
 
 
@@ -78,17 +79,20 @@ export const getDashboard = async (req, res) => {
             activeLeads
         ] = await Promise.all([
 
-            Product.aggregate([
+            Order.aggregate([
                 {
                     $match: {
-                        isDeleted: false
+                        isDeleted: false,
+                        status: {
+                            $nin: ["Cancelled", "Returned", "Refunded"]
+                        }
                     }
                 },
                 {
                     $group: {
                         _id: null,
                         grossRevenue: {
-                            $sum: "$grossRevenue"
+                            $sum: "$grandTotal"
                         }
                     }
                 }
@@ -613,6 +617,9 @@ export const publishBanners = async (req, res) => {
 
             updated.push(savedBanner);
         }
+
+        // Real-time synchronization
+        emitToAll("banners:updated", { banners: updated, total: updated.length });
 
         return res.status(200).json({
             success: true,

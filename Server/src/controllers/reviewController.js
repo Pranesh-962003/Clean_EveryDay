@@ -3,6 +3,8 @@ import { Review } from "../models/Review.js";
 import { Product } from "../models/Product.js";
 import { User } from "../models/User.js";
 import { Order } from "../models/Order.js";
+import { getMyReviewsService, deleteReviewService } from "../services/reviewService.js";
+import { emitToAdmin, emitToAll } from "../socket/index.js";
 
 // Submit Review
 export const submitReview = async (req, res) => {
@@ -130,6 +132,9 @@ export const submitReview = async (req, res) => {
             isVerifiedPurchase: !!purchasedOrder
 
         });
+
+        // Real-time synchronization
+        emitToAdmin("review:created", { review });
 
         // =====================================
         // Response
@@ -420,7 +425,7 @@ export const updateReviewStatus = async (req, res) => {
         // Validate Status
         // =====================================
 
-        if (!["Approved", "Hidden"].includes(status)) {
+        if (!["Approved", "Hidden", "Rejected", "Pending"].includes(status)) {
             return res.status(400).json({
                 success: false,
                 message: "Invalid review status."
@@ -489,6 +494,11 @@ export const updateReviewStatus = async (req, res) => {
                 totalReviews
             }
         );
+
+        // Real-time synchronization
+        emitToAdmin("review:updated", { review, status });
+        emitToAll("review:statusUpdated", { review, status });
+        emitToAll("product:updated", { productId: review.product, averageRating, totalReviews });
 
         // =====================================
         // Response
@@ -590,6 +600,11 @@ export const deleteReview = async (req, res) => {
             }
         );
 
+        // Real-time synchronization
+        emitToAdmin("review:deleted", { id: review._id, _id: review._id, productId: review.product });
+        emitToAll("review:deleted", { id: review._id, _id: review._id, productId: review.product });
+        emitToAll("product:updated", { productId: review.product, averageRating, totalReviews });
+
         // =====================================
         // Response
         // =====================================
@@ -617,4 +632,65 @@ export const deleteReview = async (req, res) => {
         });
 
     }
+};
+
+
+export const getMyReviews = async (req, res) => {
+    try {
+        const reviews = await getMyReviewsService(req);
+
+        return res.status(200).json({
+            success: true,
+            reviews
+        });
+
+    } catch (error) {
+
+        return res.status(500).json({
+            success: false,
+            message: error.message
+        });
+
+    }
+};
+
+export const userDeleteReview = async (req, res) => {
+
+    try {
+
+        const review = await deleteReviewService(req);
+
+        // Real-time synchronization
+        emitToAdmin("review:deleted", { id: review._id, _id: review._id, productId: review.product });
+        emitToAll("review:deleted", { id: review._id, _id: review._id, productId: review.product });
+        if (review.product) {
+            Product.findById(review.product).then((p) => {
+                if (p) {
+                    emitToAll("product:updated", { product: p, productId: p._id, averageRating: p.averageRating, totalReviews: p.totalReviews });
+                }
+            }).catch(() => {});
+        }
+
+        return res.status(200).json({
+
+            success: true,
+
+            message: "Review deleted successfully.",
+
+            review
+
+        });
+
+    } catch (error) {
+
+        return res.status(400).json({
+
+            success: false,
+
+            message: error.message
+
+        });
+
+    }
+
 };

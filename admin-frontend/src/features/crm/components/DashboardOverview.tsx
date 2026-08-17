@@ -1,5 +1,10 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useApp } from '../../../core/context/AppContext';
+// @ts-ignore
+import { auth } from '../../../../firebase';
+import { getSocket } from '../../../core/socket/socket';
+import { SOCKET_EVENTS } from '../../../core/socket/socketEvents';
 import { 
   TrendingUp, 
   IndianRupee, 
@@ -20,25 +25,79 @@ interface DashboardOverviewProps {
 
 const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) => {
   const { orders, products, leads, reviews } = useApp();
+  const [apiDashboardData, setApiDashboardData] = useState<any>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const fetchDashboard = async () => {
+      try {
+        const firebaseUser = auth.currentUser;
+        let token = '';
+        if (firebaseUser) {
+          token = await firebaseUser.getIdToken();
+        }
+        const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+        const response = await axios.get(`${backendUrl}/auth/admin/dashboard`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true
+        });
+
+        if (isMounted && response.data && response.data.success) {
+          setApiDashboardData(response.data);
+        }
+      } catch (err) {
+        console.warn('Admin dashboard API note:', err);
+      }
+    };
+
+    fetchDashboard();
+
+    const socket = getSocket();
+    const handleSyncEvent = () => {
+      if (isMounted) {
+        fetchDashboard();
+      }
+    };
+
+    socket.on(SOCKET_EVENTS.ORDER_CREATED, handleSyncEvent);
+    socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleSyncEvent);
+    socket.on(SOCKET_EVENTS.ORDER_CANCELLED, handleSyncEvent);
+    socket.on(SOCKET_EVENTS.PRODUCT_CREATED, handleSyncEvent);
+    socket.on(SOCKET_EVENTS.PRODUCT_DELETED, handleSyncEvent);
+    socket.on(SOCKET_EVENTS.REVIEW_CREATED, handleSyncEvent);
+    socket.on(SOCKET_EVENTS.LEAD_CREATED, handleSyncEvent);
+
+    return () => {
+      isMounted = false;
+      socket.off(SOCKET_EVENTS.ORDER_CREATED, handleSyncEvent);
+      socket.off(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleSyncEvent);
+      socket.off(SOCKET_EVENTS.ORDER_CANCELLED, handleSyncEvent);
+      socket.off(SOCKET_EVENTS.PRODUCT_CREATED, handleSyncEvent);
+      socket.off(SOCKET_EVENTS.PRODUCT_DELETED, handleSyncEvent);
+      socket.off(SOCKET_EVENTS.REVIEW_CREATED, handleSyncEvent);
+      socket.off(SOCKET_EVENTS.LEAD_CREATED, handleSyncEvent);
+    };
+  }, []);
+
+  const stats = apiDashboardData?.stats;
 
   // Metrics calculations
-  const totalRevenue = orders.reduce((sum, o) => sum + (o.total || 0), 0);
-  const totalOrders = orders.length;
+  const totalRevenue = stats ? stats.grossRevenue : orders.reduce((sum, o) => sum + (o.total || 0), 0);
+  const totalOrders = stats ? stats.totalOrders : orders.length;
   
   // Workflow statuses in Order
-  const pendingOrders = orders.filter(
+  const pendingOrders = stats ? stats.pendingOrders : orders.filter(
     (o) => o.status !== 'Delivered' && o.status !== 'Cancelled' && o.status !== 'Returned' && o.status !== 'Refunded'
   ).length;
 
-  const deliveredOrders = orders.filter((o) => o.status === 'Delivered').length;
-  const totalProducts = products.length;
-  const totalLeads = leads.length;
-  const totalReviews = reviews.length;
-  const pendingReviews = reviews.filter((r) => !r.approved).length;
+  const deliveredOrders = stats ? stats.deliveredOrders : orders.filter((o) => o.status === 'Delivered').length;
+  const totalProducts = stats ? stats.totalProducts : products.length;
+  const totalLeads = stats ? stats.activeLeads : leads.length;
+  const totalReviews = stats ? stats.totalReviews : reviews.length;
+  const pendingReviews = stats ? stats.pendingReviews : reviews.filter((r) => !r.approved).length;
 
   // Low stock products alert (stock <= 5)
-  const lowStockProducts = products.filter((p) => p.stock <= 5);
-  const lowStockCount = lowStockProducts.length;
+  const lowStockCount = stats ? stats.lowStockAlerts : products.filter((p) => p.stock <= 5).length;
 
   // Helper: Export to CSV
   const exportCSV = (data: any[], filename: string) => {
@@ -58,6 +117,46 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
     link.click();
     document.body.removeChild(link);
   };
+
+  // Derived recent lists from API or fallback to context state
+  const recentOrdersList = apiDashboardData?.recentOrders?.length
+    ? apiDashboardData.recentOrders.map((o: any) => ({
+        id: o.orderNumber || o._id,
+        name: o.customer ? `${o.customer.firstName || ''} ${o.customer.lastName || ''}`.trim() : (o.billingAddress?.fullName || 'Customer'),
+        date: new Date(o.createdAt).toLocaleDateString('en-IN'),
+        total: o.grandTotal || 0,
+        status: o.status || 'Pending'
+      }))
+    : orders.slice(0, 5).map((o) => ({
+        id: o.id,
+        name: o.address?.name || 'Customer',
+        date: o.date,
+        total: o.total,
+        status: o.status
+      }));
+
+  const recentLeadsList = apiDashboardData?.recentLeads?.length
+    ? apiDashboardData.recentLeads.map((l: any) => ({
+        id: l._id,
+        subject: l.subject || 'Inquiry',
+        name: l.fullName || l.name || 'Lead',
+        email: l.email || '',
+        service: l.service || 'General',
+        status: l.status || 'New'
+      }))
+    : leads.slice(0, 5);
+
+  const recentCustomersList = apiDashboardData?.recentCustomers?.length
+    ? apiDashboardData.recentCustomers.map((c: any) => ({
+        name: c.customer ? `${c.customer.firstName || ''} ${c.customer.lastName || ''}`.trim() : (c.billingAddress?.fullName || 'Customer'),
+        email: c.customer?.email || 'No email',
+        city: c.shippingAddress?.city || c.billingAddress?.city || 'India'
+      }))
+    : orders.slice(0, 4).map((o) => ({
+        name: o.address?.name || 'Customer',
+        email: o.customerEmail || 'No email',
+        city: o.address?.city || 'India'
+      }));
 
   return (
     <div className="animate-fadeIn">
@@ -189,12 +288,12 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
               <button onClick={() => onTabChange('orders')} className="text-xs text-primary font-semibold hover:underline">View registry</button>
             </div>
             <div className="flex flex-col divide-y divide-bdrl max-h-[300px] overflow-y-auto pr-1">
-              {orders.length > 0 ? (
-                orders.slice(0, 5).map((order) => (
-                  <div className="flex items-center justify-between py-3 first:pt-0" key={order.id}>
+              {recentOrdersList.length > 0 ? (
+                recentOrdersList.map((order: any, idx: number) => (
+                  <div className="flex items-center justify-between py-3 first:pt-0" key={order.id || idx}>
                     <div>
                       <span className="font-semibold text-xs">{order.id}</span>
-                      <span className="text-xs text-mut block">{order.address?.name} • {order.date}</span>
+                      <span className="text-xs text-mut block">{order.name} • {order.date}</span>
                     </div>
                     <div className="flex items-center gap-3">
                       <span className="text-xs font-semibold text-blk">₹{order.total}</span>
@@ -221,9 +320,9 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
               <button onClick={() => onTabChange('leads')} className="text-xs text-primary font-semibold hover:underline">View CRM pipeline</button>
             </div>
             <div className="flex flex-col divide-y divide-bdrl max-h-[300px] overflow-y-auto pr-1">
-              {leads.length > 0 ? (
-                leads.slice(0, 5).map((lead) => (
-                  <div className="flex items-center justify-between py-3 first:pt-0" key={lead.id}>
+              {recentLeadsList.length > 0 ? (
+                recentLeadsList.map((lead: any, idx: number) => (
+                  <div className="flex items-center justify-between py-3 first:pt-0" key={lead.id || idx}>
                     <div>
                       <span className="text-xs font-semibold text-blk block">{lead.subject}</span>
                       <span className="text-xs text-mut block">{lead.name} • {lead.email}</span>
@@ -315,10 +414,10 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
           <div className="bg-wht border border-bdrl rounded-xl p-6 shadow-premium-sm">
             <h4 className="text-xs font-semibold text-mut border-b border-bdrl pb-3 mb-4">Recent customers</h4>
             <div className="flex flex-col divide-y divide-bdrl max-h-[220px] overflow-y-auto pr-1">
-              {orders.length > 0 ? (
-                orders.slice(0, 4).map((order, idx) => {
-                  const name = order.address?.name || 'Customer';
-                  const initials = name.split(' ').map((w) => w[0]).join('').toUpperCase().substring(0, 2);
+              {recentCustomersList.length > 0 ? (
+                recentCustomersList.map((cust: any, idx: number) => {
+                  const name = cust.name || 'Customer';
+                  const initials = name.split(' ').map((w: string) => w[0]).join('').toUpperCase().substring(0, 2) || 'C';
                   return (
                     <div className="flex items-center justify-between py-2.5 first:pt-0" key={idx}>
                       <div className="flex items-center gap-2.5">
@@ -327,10 +426,10 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
                         </div>
                         <div>
                           <span className="text-sm font-semibold text-blk block">{name}</span>
-                          <span className="text-xs text-mut block">{order.customerEmail || 'No email'}</span>
+                          <span className="text-xs text-mut block">{cust.email || 'No email'}</span>
                         </div>
                       </div>
-                      <span className="text-xs text-mut">{order.address?.city}</span>
+                      <span className="text-xs text-mut">{cust.city}</span>
                     </div>
                   );
                 })

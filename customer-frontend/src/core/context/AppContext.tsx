@@ -3,6 +3,8 @@ import axios from 'axios';
 import type { Product, Review, User, Lead, Banner, CartItem, Order, Staff, LeadActivity } from '../types';
 // @ts-ignore
 import { auth } from '../../../firebase';
+import { getSocket, updateSocketAuth } from '../socket/socket';
+import { SOCKET_EVENTS } from '../socket/socketEvents';
 
 interface AppContextType {
   products: Product[];
@@ -49,7 +51,7 @@ interface AppContextType {
     service?: string,
     message?: string,
     priority?: Lead['priority']
-  ) => void;
+  ) => Promise<{ success: boolean; message?: string }> | void;
   updateLeadStatus: (id: number, status: Lead['status']) => void;
   updateLeadNotes: (id: number, notes: string) => void;
   addLeadComment: (id: number, author: string, body: string) => void;
@@ -58,6 +60,7 @@ interface AppContextType {
   addLeadReminder: (id: number, title: string, date: string) => void;
   addLeadActivity: (id: number, type: LeadActivity['type'], title: string, content: string) => void;
   updateBanners: (banners: Banner[]) => void;
+  fetchBanners: () => Promise<void>;
   showToast: (msg: string) => void;
   updateProduct: (product: Product, localDeletedImagePublicIds?: string[]) => Promise<boolean>;
   updateOrderStatus: (id: string, status: Order['status']) => void;
@@ -98,6 +101,7 @@ interface AppContextType {
   setInvoiceOrder: (order: Order | null) => void;
   fetchCurrentUser: (preFetchedUser?: User) => Promise<void>;
   updateProfile: (updatedUser: Partial<User>) => void;
+  setCurUser: React.Dispatch<React.SetStateAction<User | null>>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -266,62 +270,6 @@ const DEF_USERS: User[] = [
   }
 ];
 
-const DEF_LEADS: Lead[] = [
-  {
-    id: 1,
-    name: 'Priya Sharma',
-    email: 'priya.sharma@gmail.com',
-    phone: '+91 98112 34567',
-    company: 'Sharma Garments',
-    source: 'Google Search',
-    subject: 'Wholesale inquiry for floor care products',
-    service: 'Floor Care',
-    message: 'Hi, I am looking to purchase the Fresh Floor Cleaner in bulk (5L) for our office premises. Do you offer commercial discounts?',
-    status: 'New',
-    priority: 'High',
-    assignedTo: 'Rahul Sen',
-    followUpDate: '2026-07-10',
-    date: '12 Jun 2026',
-    internalNotes: 'Awaiting pricing sheet approval.',
-    attachments: [],
-    activities: [
-      { type: 'Note', title: 'Lead created', content: 'Inquiry received via web form', date: '2026-06-12 10:14' }
-    ],
-    tasks: [
-      { id: 't1', title: 'Prepare commercial proposal', done: false, date: '2026-07-09' }
-    ],
-    reminders: [],
-    comments: []
-  },
-  {
-    id: 2,
-    name: 'Amit Verma',
-    email: 'amit.verma@outlook.com',
-    phone: '+91 99887 76655',
-    company: 'Verma Tech Solutions',
-    source: 'Reference',
-    subject: 'Eco laundry liquid questions',
-    service: 'Laundry Care',
-    message: 'Hello, is the Safe Laundry Wash safe for silk and delicate woolen garments? Let me know.',
-    status: 'Contacted',
-    priority: 'Medium',
-    assignedTo: 'Nisha Patil',
-    followUpDate: '2026-07-15',
-    date: '20 Jun 2026',
-    internalNotes: 'Sent fabric safety details email.',
-    attachments: [],
-    activities: [
-      { type: 'Note', title: 'Lead created', content: 'Inquiry received via web form', date: '2026-06-20 14:02' },
-      { type: 'Email', title: 'Fabric safety details sent', content: 'Emailed user details on pH levels and fabric testing guidelines.', date: '2026-06-21 09:45' }
-    ],
-    tasks: [
-      { id: 't2', title: 'Send follow up email', done: true, date: '2026-06-25' }
-    ],
-    reminders: [],
-    comments: []
-  }
-];
-
 const DEF_BANNERS: Banner[] = Array.from({ length: 4 }, (_, i) => ({
   img: null,
   mobileImg: null,
@@ -354,7 +302,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [products, setProducts] = useState<Product[]>(DEF_PRODS);
   const [reviews, setReviews] = useState<Review[]>(DEF_REVS);
   const [users, setUsers] = useState<User[]>(DEF_USERS);
-  const [leads, setLeads] = useState<Lead[]>(DEF_LEADS);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [banners, setBanners] = useState<Banner[]>(DEF_BANNERS);
   const [staff, setStaff] = useState<Staff[]>(DEF_STAFF);
   const [curUser, setCurUser] = useState<User | null>(null);
@@ -396,10 +344,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const backendUrl = import.meta.env.VITE_BACKEND_URI;
       let response;
       if (backendUrl) {
+        if (!auth.currentUser) {
+          await auth.authStateReady();
+        }
+        const firebaseUser = auth.currentUser;
+        let headers: any = {};
+        if (firebaseUser) {
+          const token = await firebaseUser.getIdToken();
+          if (token) {
+            headers.Authorization = `Bearer ${token}`;
+          }
+        }
+
         try {
-          response = await axios.get(`${backendUrl}/auth/me`, { withCredentials: true });
+          response = await axios.get(`${backendUrl}/auth/me`, { headers, withCredentials: true });
         } catch {
-          response = await axios.get(`${backendUrl}/users/current-user`, { withCredentials: true });
+          response = await axios.get(`${backendUrl}/users/current-user`, { headers, withCredentials: true });
         }
       }
       if (response && response.data && response.data.success && response.data.user) {
@@ -470,10 +430,293 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const fetchBanners = async () => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.get(`${backendUrl}/users/banners-default`);
+      if (response.data && response.data.success && Array.isArray(response.data.banners)) {
+        if (response.data.banners.length > 0) {
+          const mappedBanners: Banner[] = response.data.banners.map((b: any, idx: number) => ({
+            _id: b._id,
+            img: b.desktopImage || b.img || null,
+            mobileImg: b.mobileImage || b.mobileImg || null,
+            desktopImage: b.desktopImage || b.img || '',
+            mobileImage: b.mobileImage || b.mobileImg || '',
+            label: b.label || `Banner ${idx + 1}`,
+            title: b.title || '',
+            subtitle: b.subtitle || '',
+            ctaText: b.ctaText || '',
+            ctaLink: b.ctaLink || '',
+            displayOrder: b.displayOrder || (idx + 1),
+            isActive: b.isActive !== undefined ? b.isActive : true
+          }));
+          setBanners(mappedBanners);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching homepage banners from API:', error);
+    }
+  };
+
   useEffect(() => {
     fetchCurrentUser();
     fetchProducts();
+    fetchBanners();
   }, []);
+
+  // Real-time synchronization with Socket.IO
+  useEffect(() => {
+    const socket = getSocket();
+
+    const formatBackendProduct = (backendProd: any, existingId?: number): Product => {
+      return {
+        id: existingId || Math.floor(Math.random() * 100000),
+        _id: backendProd._id,
+        name: backendProd.title || backendProd.name,
+        cat: backendProd.category,
+        desc: backendProd.description,
+        tags: backendProd.tags || [],
+        badge: backendProd.badge === 'None' ? null : backendProd.badge,
+        imgs: backendProd.images ? backendProd.images.map((im: any) => (typeof im === 'string' ? im : im.url || '')) : (backendProd.imgs || []),
+        images: backendProd.images || [],
+        price: backendProd.sellingPrice || backendProd.retailPrice || backendProd.price || 0,
+        originalPrice: backendProd.retailPrice || backendProd.originalPrice,
+        sku: backendProd.sku,
+        brand: backendProd.brand,
+        discount: backendProd.discountPercentage || 0,
+        stock: backendProd.stock !== undefined ? backendProd.stock : 0,
+        status: backendProd.isActive !== false ? 'Active' : 'Draft',
+        createdDate: backendProd.createdAt ? backendProd.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+        specs: {
+          Size: backendProd.specifications?.containerSize || '',
+          Usage: backendProd.specifications?.usageInstructions || '',
+          pH: backendProd.specifications?.phLevel || '',
+          Suitable: backendProd.specifications?.suitableSurfaces || ''
+        },
+        rating: backendProd.averageRating || 0,
+        reviewCount: backendProd.totalReviews || 0
+      };
+    };
+
+    const handleProductCreated = (data: { product: any }) => {
+      if (!data?.product) return;
+      setProducts((prev) => {
+        const exists = prev.some((p) => p._id === data.product._id || (p.sku && p.sku === data.product.sku));
+        if (exists) {
+          return prev.map((p) => (p._id === data.product._id || p.sku === data.product.sku ? formatBackendProduct(data.product, p.id) : p));
+        }
+        return [formatBackendProduct(data.product), ...prev];
+      });
+    };
+
+    const handleProductUpdated = (data: { product?: any; productId?: string; averageRating?: number; totalReviews?: number }) => {
+      setProducts((prev) => {
+        if (data.product) {
+          const pData = data.product;
+          return prev.map((p) => {
+            if (p._id === pData._id || p.sku === pData.sku || p.name === pData.title) {
+              return formatBackendProduct(pData, p.id);
+            }
+            return p;
+          });
+        }
+        if (data.productId) {
+          return prev.map((p) => {
+            if (p._id === data.productId || String(p.id) === data.productId) {
+              return {
+                ...p,
+                ...(data.averageRating !== undefined ? { rating: data.averageRating } : {}),
+                ...(data.totalReviews !== undefined ? { reviewCount: data.totalReviews } : {})
+              };
+            }
+            return p;
+          });
+        }
+        return prev;
+      });
+    };
+
+    const handleProductDeleted = (data: { id?: string; _id?: string; sku?: string }) => {
+      const deleteId = data.id || data._id;
+      const deleteSku = data.sku;
+      setProducts((prev) => prev.filter((p) => p._id !== deleteId && String(p.id) !== deleteId && (!deleteSku || p.sku !== deleteSku)));
+      setCart((prev) => prev.filter((item) => item.product._id !== deleteId && String(item.product.id) !== deleteId && (!deleteSku || item.product.sku !== deleteSku)));
+    };
+
+    const handleInventoryUpdated = (data: { productId: string; stock: number }) => {
+      if (!data?.productId) return;
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p._id === data.productId || String(p.id) === data.productId) {
+            return { ...p, stock: data.stock };
+          }
+          return p;
+        })
+      );
+      setCart((prev) =>
+        prev.map((item) => {
+          if (item.product && (item.product._id === data.productId || String(item.product.id) === data.productId)) {
+            return {
+              ...item,
+              product: { ...item.product, stock: data.stock }
+            };
+          }
+          return item;
+        })
+      );
+    };
+
+    const handleBannersUpdated = (data: { banners?: any[] }) => {
+      if (Array.isArray(data?.banners) && data.banners.length > 0) {
+        const mappedBanners: Banner[] = data.banners.map((b: any, idx: number) => ({
+          _id: b._id,
+          img: b.desktopImage || b.img || null,
+          mobileImg: b.mobileImage || b.mobileImg || null,
+          desktopImage: b.desktopImage || b.img || '',
+          mobileImage: b.mobileImage || b.mobileImg || '',
+          label: b.label || `Banner ${idx + 1}`,
+          title: b.title || '',
+          subtitle: b.subtitle || '',
+          ctaText: b.ctaText || '',
+          ctaLink: b.ctaLink || '',
+          displayOrder: b.displayOrder || (idx + 1),
+          isActive: b.isActive !== undefined ? b.isActive : true
+        }));
+        setBanners(mappedBanners);
+      }
+    };
+
+    const handleReviewStatusUpdated = (data: { review: any; status: string }) => {
+      if (!data?.review) return;
+      if (data.status === 'Approved') {
+        fetchProductReviews(data.review.product);
+      } else {
+        setReviews((prev) => prev.filter((r) => r._id !== data.review._id && String(r.id) !== String(data.review._id)));
+      }
+    };
+
+    const handleReviewDeleted = (data: { id?: string; _id?: string; productId?: string }) => {
+      const revId = data.id || data._id;
+      if (revId) {
+        setReviews((prev) => prev.filter((r) => r._id !== revId && String(r.id) !== String(revId)));
+      }
+    };
+
+    const handleOrderCreated = (data: { order: any }) => {
+      if (!data?.order) return;
+      const newOrder = mapBackendOrderToFrontend(data.order);
+      setOrders((prev) => {
+        const exists = prev.some(
+          (o) =>
+            (newOrder.orderNumber && o.orderNumber === newOrder.orderNumber) ||
+            (newOrder._id && o._id === newOrder._id) ||
+            o.id === newOrder.id
+        );
+        if (exists) {
+          return prev.map((o) =>
+            (newOrder.orderNumber && o.orderNumber === newOrder.orderNumber) ||
+            (newOrder._id && o._id === newOrder._id) ||
+            o.id === newOrder.id
+              ? newOrder
+              : o
+          );
+        }
+        return [newOrder, ...prev];
+      });
+    };
+
+    const handleOrderStatusUpdated = (data: { order?: any; status?: string }) => {
+      if (!data?.order) return;
+      const updated = mapBackendOrderToFrontend(data.order);
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (
+            (data.order.orderNumber && o.orderNumber === data.order.orderNumber) ||
+            (data.order._id && o._id === data.order._id) ||
+            (data.order.orderNumber && o.id === data.order.orderNumber)
+          ) {
+            return {
+              ...o,
+              ...updated,
+              status: (data.status || data.order.status || updated.status) as any
+            };
+          }
+          return o;
+        })
+      );
+    };
+
+    const handleCartUpdated = (data: { cart?: any }) => {
+      if (data?.cart) {
+        const fetchedItems = data.cart.items || [];
+        const mappedCart: CartItem[] = fetchedItems
+          .map((item: any) => {
+            const p = item.product;
+            if (!p) return null;
+            return {
+              _id: item._id,
+              product: formatBackendProduct(p),
+              quantity: item.quantity
+            };
+          })
+          .filter(Boolean) as CartItem[];
+        setCart(mappedCart);
+      }
+    };
+
+    const handleUserUpdated = (data: { user: any }) => {
+      if (data?.user) {
+        setCurUser((prev) => {
+          if (!prev) return data.user;
+          return { ...prev, ...data.user, addresses: data.user.addresses || prev.addresses };
+        });
+      }
+    };
+
+    socket.on(SOCKET_EVENTS.PRODUCT_CREATED, handleProductCreated);
+    socket.on(SOCKET_EVENTS.PRODUCT_UPDATED, handleProductUpdated);
+    socket.on(SOCKET_EVENTS.PRODUCT_DELETED, handleProductDeleted);
+    socket.on(SOCKET_EVENTS.INVENTORY_UPDATED, handleInventoryUpdated);
+    socket.on(SOCKET_EVENTS.BANNERS_UPDATED, handleBannersUpdated);
+    socket.on(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewStatusUpdated);
+    socket.on(SOCKET_EVENTS.REVIEW_DELETED, handleReviewDeleted);
+    socket.on(SOCKET_EVENTS.ORDER_CREATED, handleOrderCreated);
+    socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderStatusUpdated);
+    socket.on(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderStatusUpdated);
+    socket.on(SOCKET_EVENTS.CART_UPDATED, handleCartUpdated);
+    socket.on(SOCKET_EVENTS.USER_UPDATED, handleUserUpdated);
+
+    // Auth state token listener
+    const unsubscribeAuth = auth.onAuthStateChanged(async (firebaseUser: any) => {
+      if (firebaseUser) {
+        try {
+          const token = await firebaseUser.getIdToken();
+          updateSocketAuth(token);
+        } catch {
+          updateSocketAuth(null);
+        }
+      } else {
+        updateSocketAuth(null);
+      }
+    });
+
+    return () => {
+      socket.off(SOCKET_EVENTS.PRODUCT_CREATED, handleProductCreated);
+      socket.off(SOCKET_EVENTS.PRODUCT_UPDATED, handleProductUpdated);
+      socket.off(SOCKET_EVENTS.PRODUCT_DELETED, handleProductDeleted);
+      socket.off(SOCKET_EVENTS.INVENTORY_UPDATED, handleInventoryUpdated);
+      socket.off(SOCKET_EVENTS.BANNERS_UPDATED, handleBannersUpdated);
+      socket.off(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewStatusUpdated);
+      socket.off(SOCKET_EVENTS.REVIEW_DELETED, handleReviewDeleted);
+      socket.off(SOCKET_EVENTS.ORDER_CREATED, handleOrderCreated);
+      socket.off(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderStatusUpdated);
+      socket.off(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderStatusUpdated);
+      socket.off(SOCKET_EVENTS.CART_UPDATED, handleCartUpdated);
+      socket.off(SOCKET_EVENTS.USER_UPDATED, handleUserUpdated);
+      unsubscribeAuth();
+    };
+  }, []);
+
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -971,6 +1214,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         showToast('Your review has been submitted for approval.');
         return { success: true };
       }
+      return { success: false, message: 'Could not authenticate user for review submission.' };
     } catch (error: any) {
       console.error('Submit review API error:', error);
       const errMsg = error.response?.data?.message || error.message || 'Failed to submit review.';
@@ -1017,6 +1261,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const newItems = fetched.filter((item) => !existingIds.has(String(item._id || item.id)));
           return [...newItems, ...prev];
         });
+
+        if (fetched.length > 0) {
+          const totalRating = fetched.reduce((sum, item) => sum + item.rating, 0);
+          const avgRating = Number((totalRating / fetched.length).toFixed(1));
+          const totalCount = fetched.length;
+
+          setProducts((prevProducts) =>
+            prevProducts.map((p) => {
+              const isMatch =
+                (productName && String(p.name).toLowerCase().trim() === String(productName).toLowerCase().trim()) ||
+                (p._id && String(p._id) === String(productId)) ||
+                (p.id && String(p.id) === String(productId)) ||
+                (p.sku && String(p.sku) === String(productId));
+
+              if (isMatch) {
+                return { ...p, rating: avgRating, reviewCount: totalCount };
+              }
+              return p;
+            })
+          );
+        }
       }
     } catch (err) {
       console.warn('Could not fetch product reviews from backend:', err);
@@ -1053,7 +1318,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Reply saved.');
   };
 
-  const addLead = (
+  const addLead = async (
     name: string,
     email: string,
     phoneOrSubject: string,
@@ -1063,7 +1328,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     service?: string,
     message?: string,
     priority: Lead['priority'] = 'Medium'
-  ) => {
+  ): Promise<{ success: boolean; message?: string }> => {
     let finalPhone = '';
     let finalCompany = '';
     let finalSource = 'Web Inquiry';
@@ -1078,7 +1343,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       finalCompany = '';
       finalSource = 'Web Inquiry';
       finalSubject = phoneOrSubject;
-      finalService = companyOrService || 'General';
+      finalService = companyOrService || 'General Support';
       finalMessage = sourceOrMessage || '';
       finalPriority = 'Medium';
     } else {
@@ -1087,35 +1352,77 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       finalCompany = companyOrService || '';
       finalSource = sourceOrMessage || 'Web Inquiry';
       finalSubject = subject || '';
-      finalService = service || '';
+      finalService = service || 'General Support';
       finalMessage = message || '';
       finalPriority = priority;
     }
 
-    const newLead: Lead = {
-      id: Date.now(),
-      name,
-      email,
-      phone: finalPhone,
-      company: finalCompany,
-      source: finalSource,
-      subject: finalSubject,
-      service: finalService,
-      message: finalMessage,
-      status: 'New',
-      priority: finalPriority,
-      date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      internalNotes: '',
-      attachments: [],
-      activities: [
-        { type: 'Note', title: 'Inquiry received', content: 'Lead submitted web inquiry form.', date: new Date().toLocaleString('en-IN') }
-      ],
-      tasks: [],
-      reminders: [],
-      comments: []
-    };
-    setLeads((prev) => [newLead, ...prev]);
-    showToast('Message sent! We will contact you soon.');
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const payload = {
+        fullName: name.trim(),
+        email: email.toLowerCase().trim(),
+        phoneNumber: finalPhone.trim(),
+        companyName: finalCompany.trim(),
+        subject: finalSubject ? finalSubject.trim() : 'General Enquiry',
+        category: finalService || 'General Support',
+        message: finalMessage.trim()
+      };
+
+      const response = await axios.post(`${backendUrl}/leads/create`, payload, {
+        headers,
+        withCredentials: true
+      });
+
+      const newLead: Lead = {
+        id: response.data?.lead?._id || Date.now(),
+        name: name.trim(),
+        email: email.toLowerCase().trim(),
+        phone: finalPhone,
+        company: finalCompany,
+        source: finalSource,
+        subject: finalSubject || 'General Enquiry',
+        service: finalService || 'General Support',
+        message: finalMessage,
+        status: 'New',
+        priority: finalPriority,
+        date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+        internalNotes: '',
+        attachments: [],
+        activities: [
+          { type: 'Note', title: 'Inquiry received', content: 'Inquiry received via web form.', date: new Date().toLocaleString('en-IN') }
+        ],
+        tasks: [],
+        reminders: [],
+        comments: []
+      };
+      setLeads((prev) => [newLead, ...prev]);
+      showToast(response.data?.message || 'Your enquiry has been submitted successfully.');
+      return { success: true, message: response.data?.message };
+    } catch (error: any) {
+      console.error('Failed to submit enquiry to API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to submit enquiry.';
+      showToast(errMsg);
+      return { success: false, message: errMsg };
+    }
   };
 
   const updateLeadStatus = (id: number, status: Lead['status']) => {
@@ -1313,8 +1620,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 },
                 quantity: item.quantity
               };
-            }).filter(Boolean);
-            setCart(mappedCart);
+            }).filter(Boolean) as CartItem[];
+
+            setCart(prev => {
+              if (mappedCart.length > 0) {
+                const backendProdIds = new Set(mappedCart.map(i => String(i.product._id || i.product.id)));
+                const extraLocalItems = prev.filter(i => !backendProdIds.has(String(i.product._id || i.product.id)));
+                return [...mappedCart, ...extraLocalItems];
+              }
+              return prev.length > 0 ? prev : [];
+            });
           }
         }
       }
@@ -1932,6 +2247,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         users,
         leads,
         banners,
+        fetchBanners,
         staff,
         curUser,
         isAuthLoading,
@@ -1996,7 +2312,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         invoiceOrder,
         setInvoiceOrder,
         fetchCurrentUser,
-        updateProfile
+        updateProfile,
+        setCurUser
       }}
     >
       {children}

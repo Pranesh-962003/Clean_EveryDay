@@ -1,6 +1,7 @@
 import { Product } from "../models/Product.js";
 import cloudinary from "../config/cloudinary.js";
 import { uploadToCloudinary } from "../utils/cloudinaryUpload.js";
+import { emitToAll } from "../socket/index.js";
 
 
 export const addProduct = async (req, res) => {
@@ -165,6 +166,9 @@ export const addProduct = async (req, res) => {
             }
 
         });
+
+        // Real-time synchronization
+        emitToAll("product:created", { product });
 
         return res.status(201).json({
             success: true,
@@ -549,6 +553,12 @@ export const updateProduct = async (req, res) => {
 
         await product.save();
 
+        // Real-time synchronization
+        emitToAll("product:updated", { product });
+        if (stock !== undefined) {
+            emitToAll("inventory:updated", { productId: product._id, stock: product.stock });
+        }
+
         return res.status(200).json({
             success: true,
             message: "Product updated successfully.",
@@ -591,6 +601,9 @@ export const deleteProduct = async (req, res) => {
         product.isDeleted = true;
 
         await product.save();
+
+        // Real-time synchronization
+        emitToAll("product:deleted", { id: product._id, _id: product._id, sku: product.sku });
 
         return res.status(200).json({
             success: true,

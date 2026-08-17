@@ -1,16 +1,25 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../../core/context/AppContext';
 import type { Banner } from '../../../core/types';
-import { Save, AlertCircle, Eye, X } from 'lucide-react';
+import { Save, AlertCircle, Eye, X, Loader2 } from 'lucide-react';
 
 const BannersManagement: React.FC = () => {
   const { banners, updateBanners } = useApp();
 
+  const [isPublishing, setIsPublishing] = useState<boolean>(false);
+  const [desktopFiles, setDesktopFiles] = useState<(File | null)[]>([null, null, null, null]);
+  const [mobileFiles, setMobileFiles] = useState<(File | null)[]>([null, null, null, null]);
+
   // Staged state for editing
   const [stagedBanners, setStagedBanners] = useState<Banner[]>(() =>
     banners.map((b) => ({
-      img: b.img,
-      mobileImg: b.mobileImg || null,
+      _id: b._id,
+      img: b.desktopImage || b.img || null,
+      mobileImg: b.mobileImage || b.mobileImg || null,
+      desktopImage: b.desktopImage || b.img || '',
+      mobileImage: b.mobileImage || b.mobileImg || '',
+      desktopImagePublicId: b.desktopImagePublicId || '',
+      mobileImagePublicId: b.mobileImagePublicId || '',
       label: b.label || '',
       title: b.title || 'Organic Clean Solutions',
       subtitle: b.subtitle || 'Clean living, organic ingredients, safe spaces',
@@ -22,6 +31,32 @@ const BannersManagement: React.FC = () => {
       isActive: b.isActive !== undefined ? b.isActive : true
     }))
   );
+
+  // Sync stagedBanners when server banners load or update
+  useEffect(() => {
+    if (banners && banners.length > 0) {
+      setStagedBanners(
+        banners.map((b) => ({
+          _id: b._id,
+          img: b.desktopImage || b.img || null,
+          mobileImg: b.mobileImage || b.mobileImg || null,
+          desktopImage: b.desktopImage || b.img || '',
+          mobileImage: b.mobileImage || b.mobileImg || '',
+          desktopImagePublicId: b.desktopImagePublicId || '',
+          mobileImagePublicId: b.mobileImagePublicId || '',
+          label: b.label || '',
+          title: b.title || 'Organic Clean Solutions',
+          subtitle: b.subtitle || 'Clean living, organic ingredients, safe spaces',
+          ctaText: b.ctaText || 'Explore Now',
+          ctaLink: b.ctaLink || 'products',
+          displayOrder: b.displayOrder || 1,
+          scheduleStart: b.scheduleStart || '',
+          scheduleEnd: b.scheduleEnd || '',
+          isActive: b.isActive !== undefined ? b.isActive : true
+        }))
+      );
+    }
+  }, [banners]);
 
   // Active slot being customized
   const [activeSlot, setActiveSlot] = useState<number>(0);
@@ -45,10 +80,25 @@ const BannersManagement: React.FC = () => {
   }, [previewBanner]);
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
 
-  // Convert files to base64
+  // Convert files to preview & track raw File for multipart publish
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, slotIndex: number, type: 'desktop' | 'mobile') => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (type === 'desktop') {
+      setDesktopFiles((prev) => {
+        const next = [...prev];
+        next[slotIndex] = file;
+        return next;
+      });
+    } else {
+      setMobileFiles((prev) => {
+        const next = [...prev];
+        next[slotIndex] = file;
+        return next;
+      });
+    }
+
     const reader = new FileReader();
     reader.onload = () => {
       if (reader.result) {
@@ -56,8 +106,8 @@ const BannersManagement: React.FC = () => {
           prev.map((b, idx) => {
             if (idx === slotIndex) {
               return type === 'desktop'
-                ? { ...b, img: reader.result as string }
-                : { ...b, mobileImg: reader.result as string };
+                ? { ...b, img: reader.result as string, desktopImage: reader.result as string }
+                : { ...b, mobileImg: reader.result as string, mobileImage: reader.result as string };
             }
             return b;
           })
@@ -68,12 +118,26 @@ const BannersManagement: React.FC = () => {
   };
 
   const handleClearImage = (slotIndex: number, type: 'desktop' | 'mobile') => {
+    if (type === 'desktop') {
+      setDesktopFiles((prev) => {
+        const next = [...prev];
+        next[slotIndex] = null;
+        return next;
+      });
+    } else {
+      setMobileFiles((prev) => {
+        const next = [...prev];
+        next[slotIndex] = null;
+        return next;
+      });
+    }
+
     setStagedBanners((prev) =>
       prev.map((b, idx) => {
         if (idx === slotIndex) {
           return type === 'desktop'
-            ? { ...b, img: null }
-            : { ...b, mobileImg: null };
+            ? { ...b, img: null, desktopImage: '' }
+            : { ...b, mobileImg: null, mobileImage: '' };
         }
         return b;
       })
@@ -86,10 +150,19 @@ const BannersManagement: React.FC = () => {
     );
   };
 
-  const handlePublishBanners = () => {
-    // Sort before saving
-    const sorted = [...stagedBanners].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
-    updateBanners(sorted);
+  const handlePublishBanners = async () => {
+    setIsPublishing(true);
+    try {
+      // Sort before saving
+      const sorted = [...stagedBanners].sort((a, b) => (a.displayOrder || 0) - (b.displayOrder || 0));
+      const success = await updateBanners(sorted, desktopFiles, mobileFiles);
+      if (success) {
+        setDesktopFiles([null, null, null, null]);
+        setMobileFiles([null, null, null, null]);
+      }
+    } finally {
+      setIsPublishing(false);
+    }
   };
 
   return (
@@ -103,13 +176,29 @@ const BannersManagement: React.FC = () => {
         <div className="flex gap-2">
           <button
             onClick={handlePublishBanners}
-            className="bg-primary text-wht rounded px-5 py-2.5 text-sm font-semibold hover:bg-primary-hover transition-colors flex items-center gap-1.5 cursor-pointer shadow-premium-sm"
+            disabled={isPublishing}
+            className="bg-primary text-wht rounded px-5 py-2.5 text-sm font-semibold hover:bg-primary-hover transition-colors flex items-center gap-1.5 cursor-pointer shadow-premium-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
-            <Save size={14} /> Publish banners
+            {isPublishing ? (
+              <>
+                <Loader2 size={14} className="animate-spin text-wht" />
+                <span>Publishing banners...</span>
+              </>
+            ) : (
+              <>
+                <Save size={14} />
+                <span>Publish banners</span>
+              </>
+            )}
           </button>
           <button
-            onClick={() => setStagedBanners(banners.map((b) => ({ ...b })))}
-            className="text-sm font-semibold px-4 py-2.5 border border-bdr text-mid bg-wht hover:bg-sur rounded cursor-pointer"
+            onClick={() => {
+              setDesktopFiles([null, null, null, null]);
+              setMobileFiles([null, null, null, null]);
+              setStagedBanners(banners.map((b) => ({ ...b })));
+            }}
+            disabled={isPublishing}
+            className="text-sm font-semibold px-4 py-2.5 border border-bdr text-mid bg-wht hover:bg-sur rounded cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             Reset
           </button>

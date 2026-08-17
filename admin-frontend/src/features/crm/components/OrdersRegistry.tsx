@@ -1,6 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import { useApp } from '../../../core/context/AppContext';
 import type { Order } from '../../../core/types';
+// @ts-ignore
+import { auth } from '../../../../firebase';
+import { getSocket } from '../../../core/socket/socket';
+import { SOCKET_EVENTS } from '../../../core/socket/socketEvents';
 import {
   Search,
   FileDown,
@@ -23,6 +28,113 @@ const OrdersRegistry: React.FC = () => {
     setInvoiceOrder
   } = useApp();
 
+  const [apiOrders, setApiOrders] = useState<Order[] | null>(null);
+
+  const loadOrders = useCallback(async () => {
+    try {
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.get(`${backendUrl}/auth/admin/orders`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true
+      });
+
+      if (response.data && response.data.success && Array.isArray(response.data.orders)) {
+        const fetchedOrders: Order[] = response.data.orders.map((o: any) => ({
+          id: o.id || o.orderNumber || o._id,
+          _id: o._id,
+          date: o.date ? new Date(o.date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
+          total: o.total || o.grandTotal || 0,
+          customerEmail: o.customerEmail || o.customer?.email || '',
+          paymentStatus: o.paymentStatus || o.payment?.status || 'Pending',
+          status: o.status || 'Pending',
+          address: {
+            name: o.address?.name || o.shippingAddress?.fullName || 'Customer',
+            phone: o.address?.phone || o.shippingAddress?.phone || 'N/A',
+            city: o.address?.city || o.shippingAddress?.city || 'N/A',
+            street: o.address?.street || o.shippingAddress?.addressLine1 || 'N/A',
+            state: o.address?.state || o.shippingAddress?.state || 'N/A',
+            pincode: o.address?.pincode || o.shippingAddress?.pincode || 'N/A'
+          },
+          billingAddress: o.billingAddress ? {
+            name: o.billingAddress.name || o.billingAddress.fullName || 'Customer',
+            street: o.billingAddress.street || o.billingAddress.addressLine1 || 'N/A',
+            city: o.billingAddress.city || 'N/A',
+            state: o.billingAddress.state || 'N/A',
+            pincode: o.billingAddress.pincode || 'N/A'
+          } : undefined,
+          paymentMethod: o.paymentMethod || o.payment?.method || 'COD',
+          shippingMethod: o.shippingMethod || o.delivery?.title || 'Standard Delivery',
+          taxes: typeof o.taxes === 'number' ? o.taxes : (o.tax?.amount || o.taxes?.amount || 0),
+          discount: o.discount || 0,
+          courierCompany: o.courierCompany || o.shipping?.courier || '',
+          trackingId: o.trackingId || o.shipping?.trackingId || '',
+          trackingUrl: o.trackingUrl || o.shipping?.trackingUrl || '',
+          estimatedDelivery: o.estimatedDelivery || o.shipping?.estimatedDelivery || '',
+          adminNotes: o.adminNotes || '',
+          items: (o.items || []).map((item: any, idx: number) => ({
+            product: {
+              id: item.product?.id || idx + 1,
+              name: item.product?.name || item.title || 'Product',
+              sku: item.product?.sku || item.sku || 'N/A',
+              price: item.sellingPrice || item.retailPrice || 0,
+              imgs: item.image ? [item.image] : []
+            },
+            quantity: item.quantity || 1
+          }))
+        }));
+        setApiOrders(fetchedOrders);
+      }
+    } catch (err) {
+      console.warn('Orders Registry API note:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadOrders();
+    const socket = getSocket();
+    const handleOrderEvent = () => {
+      loadOrders();
+    };
+
+    socket.on(SOCKET_EVENTS.ORDER_CREATED, handleOrderEvent);
+    socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderEvent);
+    socket.on(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderEvent);
+
+    return () => {
+      socket.off(SOCKET_EVENTS.ORDER_CREATED, handleOrderEvent);
+      socket.off(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderEvent);
+      socket.off(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderEvent);
+    };
+  }, [loadOrders]);
+
+  const activeOrders = apiOrders !== null ? apiOrders : orders;
+
+  const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
+
+  const handleStatusChange = async (orderId: string, _id: string | undefined, newStatus: any) => {
+    setUpdatingOrderId(orderId);
+    try {
+      // Optimistically update local state for instant feedback
+      setApiOrders((prev) =>
+        prev
+          ? prev.map((o) => (o.id === orderId || o._id === _id ? { ...o, status: newStatus } : o))
+          : null
+      );
+      await updateOrderStatus(orderId, newStatus, _id);
+      // Automatically re-fetch API to sync latest data without refreshing page
+      await loadOrders();
+    } catch (err) {
+      console.warn('Status change error:', err);
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -35,8 +147,6 @@ const OrdersRegistry: React.FC = () => {
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 8;
-
-
 
   // Selected Order for details drawer
   const [detailedOrder, setDetailedOrder] = useState<Order | null>(null);
@@ -67,7 +177,7 @@ const OrdersRegistry: React.FC = () => {
   };
 
   // Filter Orders
-  const filteredOrders = orders.filter((o) => {
+  const filteredOrders = activeOrders.filter((o) => {
     const custName = o.address?.name || 'Customer';
     const email = o.customerEmail || '';
     const phone = o.address?.phone || '';
@@ -227,7 +337,7 @@ const OrdersRegistry: React.FC = () => {
           <div className="w-9 h-9 rounded bg-primary-soft flex items-center justify-center text-primary shrink-0"><Calendar size={16} /></div>
           <div>
             <span className="text-xs text-mut font-medium block leading-none mb-1">Total orders</span>
-            <span className="text-xl font-bold text-blk leading-none">{orders.length}</span>
+            <span className="text-xl font-bold text-blk leading-none">{activeOrders.length}</span>
           </div>
         </div>
 
@@ -236,7 +346,7 @@ const OrdersRegistry: React.FC = () => {
           <div>
             <span className="text-xs text-mut font-medium block leading-none mb-1">Pending dispatch</span>
             <span className="text-xl font-bold text-blk leading-none">
-              {orders.filter((o) => o.status !== 'Delivered' && o.status !== 'Cancelled').length}
+              {activeOrders.filter((o) => o.status !== 'Delivered' && o.status !== 'Cancelled' && o.status !== 'Returned' && o.status !== 'Refunded').length}
             </span>
           </div>
         </div>
@@ -246,7 +356,7 @@ const OrdersRegistry: React.FC = () => {
           <div>
             <span className="text-xs text-mut font-medium block leading-none mb-1">Delivered</span>
             <span className="text-xl font-bold text-blk leading-none">
-              {orders.filter((o) => o.status === 'Delivered').length}
+              {activeOrders.filter((o) => o.status === 'Delivered').length}
             </span>
           </div>
         </div>
@@ -256,7 +366,7 @@ const OrdersRegistry: React.FC = () => {
           <div>
             <span className="text-xs text-mut font-medium block leading-none mb-1">Unpaid (COD)</span>
             <span className="text-xl font-bold text-blk leading-none">
-              {orders.filter((o) => o.paymentStatus === 'Pending').length}
+              {activeOrders.filter((o) => o.paymentStatus === 'Pending' || (o.paymentMethod === 'COD' && o.paymentStatus !== 'Paid')).length}
             </span>
           </div>
         </div>
@@ -376,28 +486,34 @@ const OrdersRegistry: React.FC = () => {
 
                     {/* Order status dropdown */}
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        className={`border rounded px-2 py-1.5 text-sm font-medium outline-none cursor-pointer ${
-                          o.status === 'Delivered'
-                            ? 'bg-primary-soft border-primary-light text-primary'
-                            : o.status === 'Cancelled'
-                            ? 'bg-red-bg border-red/10 text-red'
-                            : 'bg-wht border-bdr text-mid'
-                        }`}
-                        value={o.status}
-                        onChange={(e) => updateOrderStatus(o.id, e.target.value as any)}
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="Confirmed">Confirmed</option>
-                        <option value="Packed">Packed</option>
-                        <option value="Ready for Dispatch">Ready for dispatch</option>
-                        <option value="Shipped">Shipped</option>
-                        <option value="Out for Delivery">Out for delivery</option>
-                        <option value="Delivered">Delivered</option>
-                        <option value="Cancelled">Cancelled</option>
-                        <option value="Returned">Returned</option>
-                        <option value="Refunded">Refunded</option>
-                      </select>
+                      <div className="inline-flex items-center gap-1.5 justify-center">
+                        {Boolean(updatingOrderId && (updatingOrderId === o.id || updatingOrderId === o._id)) ? (
+                          <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" title="Updating order status..." />
+                        ) : null}
+                        <select
+                          disabled={Boolean(updatingOrderId && (updatingOrderId === o.id || updatingOrderId === o._id))}
+                          className={`border rounded px-2 py-1.5 text-sm font-medium outline-none cursor-pointer ${
+                            o.status === 'Delivered'
+                              ? 'bg-primary-soft border-primary-light text-primary'
+                              : o.status === 'Cancelled'
+                              ? 'bg-red-bg border-red/10 text-red'
+                              : 'bg-wht border-bdr text-mid'
+                          }`}
+                          value={o.status}
+                          onChange={(e) => handleStatusChange(o.id, o._id, e.target.value as any)}
+                        >
+                          <option value="Pending">Pending</option>
+                          <option value="Confirmed">Confirmed</option>
+                          <option value="Packed">Packed</option>
+                          <option value="Ready for Dispatch">Ready for dispatch</option>
+                          <option value="Shipped">Shipped</option>
+                          <option value="Out for Delivery">Out for delivery</option>
+                          <option value="Delivered">Delivered</option>
+                          <option value="Cancelled">Cancelled</option>
+                          <option value="Returned">Returned</option>
+                          <option value="Refunded">Refunded</option>
+                        </select>
+                      </div>
                     </td>
 
                     {/* Shipping Method */}

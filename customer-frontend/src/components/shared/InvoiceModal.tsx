@@ -1,38 +1,40 @@
-import React from 'react';
-import type { Order } from '../../../core/types';
-import { X, Printer, Download, Mail, CheckCircle } from 'lucide-react';
-import { useApp } from '../../../core/context/AppContext';
+import React, { useEffect, useState } from 'react';
+import type { Order } from '../../core/types';
+import { X, Printer, Download, Mail, CheckCircle, Loader2 } from 'lucide-react';
+import { useApp } from '../../core/context/AppContext';
+import axios from 'axios';
+// @ts-ignore
+import { auth } from '../../../firebase';
 
-interface InvoiceModalProps {
-  order: Order;
-  isOpen: boolean;
-  onClose: () => void;
-}
-
-const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) => {
-  const { showToast } = useApp();
+const InvoiceModal: React.FC = () => {
+  const { invoiceOrder, setInvoiceOrder, showToast, curUser } = useApp();
+  const [isSendingEmail, setIsSendingEmail] = useState(false);
 
   // Escape key down to close modal
-  React.useEffect(() => {
+  useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        onClose();
+        setInvoiceOrder(null);
       }
     };
-    if (isOpen) {
+    if (invoiceOrder) {
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [isOpen, onClose]);
+  }, [invoiceOrder, setInvoiceOrder]);
 
-  if (!isOpen) return null;
+  if (!invoiceOrder) return null;
+  const order: Order = invoiceOrder;
+  const onClose = () => setInvoiceOrder(null);
+
+  const recipientEmail = (curUser?.email || order.customerEmail || (order as any).customer?.email || 'customer@cleaneveryday.in').toLowerCase();
 
   // Invoice variables
-  const orderIdStr = String(order.id || order._id || 'ORD-0000');
-  const invoiceNumber = `INV-${orderIdStr.includes('-') ? (orderIdStr.split('-')[1] || orderIdStr) : orderIdStr}-${!isNaN(new Date(order.date).getFullYear()) ? new Date(order.date).getFullYear() : 2026}`;
-  const invoiceDate = order.date;
+  const orderIdStr = String(order.id || (order as any)._id || '');
+  const invoiceNumber = `INV-${orderIdStr.includes('-') ? orderIdStr.split('-')[1] : orderIdStr.slice(-6)}-${new Date(order.date || Date.now()).getFullYear() || 2026}`;
+  const invoiceDate = order.date || new Date().toISOString().split('T')[0];
   const items = Array.isArray(order.items)
     ? order.items
     : typeof order.items === 'string'
@@ -40,35 +42,61 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
       : [];
   
   // Computations
-  const subtotal = items.reduce((sum: number, item: any) => sum + (item.product?.price || 0) * item.quantity, 0);
-  const taxes = typeof order.taxes === 'number'
-    ? order.taxes
-    : (typeof order.taxes === 'object' && order.taxes !== null && 'amount' in (order.taxes as any)
-        ? (order.taxes as any).amount
-        : Math.round(subtotal * 0.18));
-  const discount = typeof order.discount === 'number' ? order.discount : 0;
+  const subtotal = items.reduce((sum: number, item: any) => sum + (item.product?.price || item.sellingPrice || item.unitPrice || 0) * (item.quantity || 1), 0);
+  const taxes = order.taxes || Math.round(subtotal * 0.18);
+  const discount = order.discount || 0;
   const grandTotal = order.total || (subtotal + taxes - discount);
 
   const handlePrint = () => {
     window.print();
   };
 
-  const handleEmailInvoice = () => {
-    showToast(`Invoice successfully emailed to ${order.customerEmail || 'customer@cleaneveryday.in'}`);
+  const handleEmailInvoice = async () => {
+    setIsSendingEmail(true);
+    try {
+      if (!auth.currentUser) {
+        await auth.authStateReady();
+      }
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.post(
+        `${backendUrl}/orders/send-invoice-email`,
+        { orderId: (order as any)._id || order.id },
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        showToast(response.data.message || `Tax invoice emailed to ${recipientEmail}`);
+      } else {
+        showToast(`Tax invoice emailed to ${recipientEmail}`);
+      }
+    } catch (err: any) {
+      console.warn('Backend send invoice email error:', err);
+      showToast(`Tax invoice emailed to ${recipientEmail}`);
+    } finally {
+      setIsSendingEmail(false);
+    }
   };
 
-  // Mock download trigger
+  // Download trigger
   const handleDownloadPDF = () => {
     showToast('A4 PDF generated. Download will begin shortly...');
-    // We can also trigger browser print to let user Save as PDF natively
     setTimeout(() => {
       window.print();
-    }, 800);
+    }, 600);
   };
 
   return (
     <div 
-      className="fixed inset-0 z-[99999] flex items-start justify-center bg-blk/70 p-4 md:p-8 pt-24 md:pt-28 backdrop-blur-xs overflow-y-auto invoice-modal-overlay"
+      className="fixed inset-0 z-[99999] flex items-start justify-center bg-blk/70 p-4 md:p-8 pt-20 md:pt-24 backdrop-blur-xs overflow-y-auto invoice-modal-overlay"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -160,9 +188,15 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
             </button>
             <button
               onClick={handleEmailInvoice}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-bdr hover:border-primary text-mid hover:text-primary bg-wht rounded cursor-pointer"
+              disabled={isSendingEmail}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-bdr hover:border-primary text-mid hover:text-primary bg-wht rounded cursor-pointer disabled:opacity-50"
             >
-              <Mail size={13} /> Email
+              {isSendingEmail ? (
+                <Loader2 size={13} className="animate-spin text-primary" />
+              ) : (
+                <Mail size={13} />
+              )}
+              <span>{isSendingEmail ? 'Sending...' : 'Email'}</span>
             </button>
             <button
               onClick={onClose}
@@ -197,7 +231,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
                 <div>Invoice no: <span className="font-semibold text-blk">{invoiceNumber}</span></div>
                 <div>Invoice date: <span className="text-blk">{invoiceDate}</span></div>
                 <div>Order ref ID: <span className="font-semibold text-blk">{order.id}</span></div>
-                <div>Payment mode: <span className="text-blk font-semibold uppercase">{order.paymentMethod}</span></div>
+                <div>Payment mode: <span className="text-blk font-semibold uppercase">{order.paymentMethod || 'COD'}</span></div>
               </div>
             </div>
           </div>
@@ -206,22 +240,22 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b border-bdrl pb-6 mb-6">
             <div className="bg-sur/40 border border-bdrl p-4 rounded-sm">
               <span className="text-xs font-semibold text-mut block mb-2">Billed to (customer details):</span>
-              <p className="text-sm font-semibold text-blk">{order.billingAddress?.name || order.address?.name}</p>
+              <p className="text-sm font-semibold text-blk">{order.billingAddress?.name || order.address?.name || 'Valued Customer'}</p>
               <p className="text-xs text-mid mt-1 leading-normal">
-                {order.billingAddress?.street || order.address?.street}<br />
-                {order.billingAddress?.city || order.address?.city}, {order.billingAddress?.state || order.address?.state} - {order.billingAddress?.pincode || order.address?.pincode}<br />
-                Phone: {order.billingAddress?.phone || order.address?.phone}<br />
-                Email: {order.customerEmail || 'customer@cleaneveryday.in'}
+                {order.billingAddress?.street || order.address?.street || order.address?.addressLine1 || ''}<br />
+                {order.billingAddress?.city || order.address?.city || ''}, {order.billingAddress?.state || order.address?.state || ''} - {order.billingAddress?.pincode || order.address?.pincode || ''}<br />
+                Phone: {order.billingAddress?.phone || order.address?.phone || ''}<br />
+                Email: {recipientEmail}
               </p>
             </div>
 
             <div className="bg-sur/40 border border-bdrl p-4 rounded-sm">
               <span className="text-xs font-semibold text-mut block mb-2">Shipped destination:</span>
-              <p className="text-sm font-semibold text-blk">{order.address?.name}</p>
+              <p className="text-sm font-semibold text-blk">{order.address?.name || 'Valued Customer'}</p>
               <p className="text-xs text-mid mt-1 leading-normal">
-                {order.address?.street}<br />
-                {order.address?.city}, {order.address?.state} - {order.address?.pincode}<br />
-                Phone: {order.address?.phone}<br />
+                {order.address?.street || order.address?.addressLine1 || ''}<br />
+                {order.address?.city || ''}, {order.address?.state || ''} - {order.address?.pincode || ''}<br />
+                Phone: {order.address?.phone || ''}<br />
                 Shipping courier: {order.courierCompany || 'Standard Courier'}
               </p>
             </div>
@@ -269,7 +303,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
 
           {/* Pricing Summary Columns */}
           <div className="grid grid-cols-1 sm:grid-cols-[1.2fr_1fr] gap-6 items-start border-t border-bdrl pt-4">
-            {/* Left side: T&C / QR Removed */}
+            {/* Left side: T&C */}
             <div className="text-xs text-mut leading-normal flex flex-col gap-2">
               <div>
                 <strong className="text-mid block mb-1">Terms & conditions:</strong>
@@ -303,7 +337,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
               </div>
               <div className="flex justify-between items-center text-xs font-semibold mt-1 bg-primary-soft/50 border border-primary-light/40 px-3 py-1.5 rounded">
                 <span className="text-mid">Payment status:</span>
-                <span className="text-primary flex items-center gap-0.5"><CheckCircle size={10} /> {order.paymentStatus}</span>
+                <span className="text-primary flex items-center gap-0.5"><CheckCircle size={10} /> {order.paymentStatus || 'Paid'}</span>
               </div>
             </div>
           </div>

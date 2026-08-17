@@ -72,6 +72,7 @@ export interface User {
     postalCode?: string;
     country?: string;
   };
+  addresses?: any[];
 }
 
 export interface LeadActivity {
@@ -102,7 +103,8 @@ export interface LeadComment {
 }
 
 export interface Lead {
-  id: number;
+  _id?: string;
+  id: number | string;
   name: string;
   email: string;
   phone: string;
@@ -125,8 +127,13 @@ export interface Lead {
 }
 
 export interface Banner {
+  _id?: string;
   img: string | null;
   mobileImg?: string | null;
+  desktopImage?: string;
+  mobileImage?: string;
+  desktopImagePublicId?: string;
+  mobileImagePublicId?: string;
   label: string;
   title?: string;
   subtitle?: string;
@@ -150,7 +157,9 @@ export interface OrderTimelineEvent {
 }
 
 export interface Order {
+  _id?: string;
   id: string; // e.g., CE-23945
+  orderNumber?: string;
   date: string;
   items: CartItem[];
   total: number;

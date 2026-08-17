@@ -111,7 +111,7 @@ const WizardHeader: React.FC<{
 
 /* ─── Redesigned Checkout Component ─── */
 const Checkout: React.FC = () => {
-  const { cart, placeOrder, updateCartQty, removeFromCart, setCurPage, curUser, showToast, openAuthModal, deletingProductId, updatingProductId } = useApp();
+  const { cart, placeOrder, updateCartQty, removeFromCart, setCurPage, curUser, showToast, openAuthModal, deletingProductId, updatingProductId, setCurUser, fetchCurrentUser } = useApp();
 
   // Wizard Step State
   const [checkoutStep, setCheckoutStep] = useState<'cart' | 'address' | 'delivery' | 'review' | 'payment' | 'processing' | 'success'>('cart');
@@ -326,8 +326,63 @@ const Checkout: React.FC = () => {
   };
 
   // Set default address helper
-  const handleSetDefaultAddress = (addrId: string) => {
+  const handleSetDefaultAddress = async (addrId: string) => {
+    try {
+      if (!auth.currentUser) {
+        await auth.authStateReady();
+      }
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+
+      if (token) {
+        const response = await axios.put(
+          `${import.meta.env.VITE_BACKEND_URI}/users/address/default/${addrId}`,
+          {},
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true
+          }
+        );
+
+        if (response.data && response.data.success && Array.isArray(response.data.addresses)) {
+          const updatedList = response.data.addresses.map((item: any, idx: number) => ({
+            id: item._id || `addr-user-${idx}`,
+            name: item.fullName || curUser?.name || 'Valued Customer',
+            phone: item.phoneNumber || curUser?.phoneNumber || '',
+            alternatePhone: item.alternatePhone || '',
+            addressLine1: item.addressLine1 || '',
+            addressLine2: item.addressLine2 || '',
+            landmark: item.landmark || '',
+            city: item.city || '',
+            state: item.state || '',
+            pincode: item.postalCode || '',
+            country: item.country || 'India',
+            type: item.tag || 'Home',
+            isDefault: item.isDefault ?? idx === 0,
+            instructions: ''
+          }));
+          setAddresses(updatedList);
+          setSelectedAddressId(addrId);
+          if (setCurUser) {
+            setCurUser((prev: any) => prev ? { ...prev, addresses: response.data.addresses } : prev);
+          }
+          if (fetchCurrentUser) {
+            await fetchCurrentUser();
+          }
+          showToast('Default address updated.');
+          return;
+        }
+      }
+    } catch (error: any) {
+      console.error('Error setting default address:', error);
+      showToast(error.response?.data?.message || 'Failed to update default address.');
+    }
+
     setAddresses(prev => prev.map(a => ({ ...a, isDefault: a.id === addrId })));
+    setSelectedAddressId(addrId);
     showToast('Default address updated.');
   };
 
@@ -356,17 +411,29 @@ const Checkout: React.FC = () => {
       isDefault: addresses.length === 0
     };
 
-    let serverSaved = false;
-
     try {
       if (!auth.currentUser) {
         await auth.authStateReady();
       }
       const firebaseUser = auth.currentUser;
+      let token = '';
       if (firebaseUser) {
-        const token = await firebaseUser.getIdToken();
-        if (token) {
-          const apiRes = await axios.post(
+        token = await firebaseUser.getIdToken();
+      }
+
+      if (token) {
+        let apiRes;
+        if (editingAddressId) {
+          apiRes = await axios.put(
+            `${import.meta.env.VITE_BACKEND_URI}/users/address-update/${editingAddressId}`,
+            payload,
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true
+            }
+          );
+        } else {
+          apiRes = await axios.post(
             `${import.meta.env.VITE_BACKEND_URI}/users/address`,
             payload,
             {
@@ -374,84 +441,91 @@ const Checkout: React.FC = () => {
               withCredentials: true
             }
           );
-          if (apiRes.data && apiRes.data.success && Array.isArray(apiRes.data.addresses)) {
-            serverSaved = true;
-            const updatedList = apiRes.data.addresses.map((item: any, idx: number) => ({
-              id: item._id || `addr-user-${idx}`,
-              name: item.fullName || curUser?.name || 'Valued Customer',
-              phone: item.phoneNumber || curUser?.phoneNumber || '',
-              alternatePhone: item.alternatePhone || '',
-              addressLine1: item.addressLine1 || '',
-              addressLine2: item.addressLine2 || '',
-              landmark: item.landmark || '',
-              city: item.city || '',
-              state: item.state || '',
-              pincode: item.postalCode || '',
-              country: item.country || 'India',
-              type: item.tag || 'Home',
-              isDefault: item.isDefault ?? idx === 0,
-              instructions: ''
-            }));
-            setAddresses(updatedList);
-            const latest = updatedList[updatedList.length - 1];
-            if (latest) {
-              setSelectedAddressId(latest.id);
-            }
+        }
+
+        if (apiRes.data && apiRes.data.success && Array.isArray(apiRes.data.addresses)) {
+          const updatedList = apiRes.data.addresses.map((item: any, idx: number) => ({
+            id: item._id || `addr-user-${idx}`,
+            name: item.fullName || curUser?.name || 'Valued Customer',
+            phone: item.phoneNumber || curUser?.phoneNumber || '',
+            alternatePhone: item.alternatePhone || '',
+            addressLine1: item.addressLine1 || '',
+            addressLine2: item.addressLine2 || '',
+            landmark: item.landmark || '',
+            city: item.city || '',
+            state: item.state || '',
+            pincode: item.postalCode || '',
+            country: item.country || 'India',
+            type: item.tag || 'Home',
+            isDefault: item.isDefault ?? idx === 0,
+            instructions: formInstructions.trim()
+          }));
+          setAddresses(updatedList);
+
+          const targetId = editingAddressId || updatedList[updatedList.length - 1]?.id;
+          if (targetId) {
+            setSelectedAddressId(targetId);
           }
+
+          if (setCurUser) {
+            setCurUser((prev: any) => prev ? { ...prev, addresses: apiRes.data.addresses } : prev);
+          }
+          if (fetchCurrentUser) {
+            await fetchCurrentUser();
+          }
+
+          showToast(editingAddressId ? 'Delivery address updated.' : 'New address registered.');
+          resetAddressForm();
+          setIsSavingAddress(false);
+          return;
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.warn("Could not sync address to server:", error);
+      showToast(error.response?.data?.message || 'Failed to save address to server.');
     }
 
-    if (!serverSaved) {
-      if (editingAddressId) {
-        // Update
-        setAddresses(prev => prev.map(a => a.id === editingAddressId ? {
-          ...a,
-          name: formName.trim(),
-          phone: formPhone.trim(),
-          alternatePhone: formAltPhone.trim(),
-          addressLine1: formLine1.trim(),
-          addressLine2: formLine2.trim(),
-          landmark: formLandmark.trim(),
-          city: formCity.trim(),
-          state: formState.trim(),
-          pincode: formPincode.trim(),
-          country: formCountry,
-          type: formType,
-          instructions: formInstructions.trim()
-        } : a));
-        showToast('Delivery address updated.');
-      } else {
-        // Create new
-        const newAddr = {
-          id: `addr-${Date.now()}`,
-          name: formName.trim(),
-          phone: formPhone.trim(),
-          alternatePhone: formAltPhone.trim(),
-          addressLine1: formLine1.trim(),
-          addressLine2: formLine2.trim(),
-          landmark: formLandmark.trim(),
-          city: formCity.trim(),
-          state: formState.trim(),
-          pincode: formPincode.trim(),
-          country: formCountry,
-          type: formType,
-          isDefault: addresses.length === 0,
-          instructions: formInstructions.trim()
-        };
-        setAddresses(prev => [...prev, newAddr]);
-        setSelectedAddressId(newAddr.id);
-        showToast('New address registered.');
-      }
+    // Fallback local update
+    if (editingAddressId) {
+      setAddresses(prev => prev.map(a => a.id === editingAddressId ? {
+        ...a,
+        name: formName.trim(),
+        phone: formPhone.trim(),
+        alternatePhone: formAltPhone.trim(),
+        addressLine1: formLine1.trim(),
+        addressLine2: formLine2.trim(),
+        landmark: formLandmark.trim(),
+        city: formCity.trim(),
+        state: formState.trim(),
+        pincode: formPincode.trim(),
+        country: formCountry,
+        type: formType,
+        instructions: formInstructions.trim()
+      } : a));
+      showToast('Delivery address updated.');
     } else {
-      showToast(editingAddressId ? 'Delivery address updated.' : 'New address registered.');
+      const newAddr = {
+        id: `addr-${Date.now()}`,
+        name: formName.trim(),
+        phone: formPhone.trim(),
+        alternatePhone: formAltPhone.trim(),
+        addressLine1: formLine1.trim(),
+        addressLine2: formLine2.trim(),
+        landmark: formLandmark.trim(),
+        city: formCity.trim(),
+        state: formState.trim(),
+        pincode: formPincode.trim(),
+        country: formCountry,
+        type: formType,
+        isDefault: addresses.length === 0,
+        instructions: formInstructions.trim()
+      };
+      setAddresses(prev => [...prev, newAddr]);
+      setSelectedAddressId(newAddr.id);
+      showToast('New address registered.');
     }
 
     setIsSavingAddress(false);
-
-    // Reset Form
     resetAddressForm();
   };
 
@@ -474,28 +548,87 @@ const Checkout: React.FC = () => {
 
   const handleEditAddress = (addr: any) => {
     setEditingAddressId(addr.id);
-    setFormName(addr.name);
-    setFormPhone(addr.phone);
+    setFormName(addr.name || '');
+    setFormPhone(addr.phone || '');
     setFormAltPhone(addr.alternatePhone || '');
-    setFormLine1(addr.addressLine1);
+    setFormLine1(addr.addressLine1 || '');
     setFormLine2(addr.addressLine2 || '');
     setFormLandmark(addr.landmark || '');
-    setFormCity(addr.city);
-    setFormState(addr.state);
-    setFormPincode(addr.pincode);
+    setFormCity(addr.city || '');
+    setFormState(addr.state || '');
+    setFormPincode(addr.pincode || '');
     setFormCountry(addr.country || 'India');
     setFormType(addr.type || 'Home');
     setFormInstructions(addr.instructions || '');
     setAddressFormOpen(true);
   };
 
-  const handleDeleteAddress = (addrId: string) => {
-    if (confirm('Delete this delivery coordinate?')) {
-      setAddresses(prev => prev.filter(a => a.id !== addrId));
-      showToast('Address removed.');
-      if (selectedAddressId === addrId) {
-        setSelectedAddressId('');
+  const handleDeleteAddress = async (addrId: string) => {
+    if (!confirm('Delete this delivery coordinate?')) return;
+
+    try {
+      if (!auth.currentUser) {
+        await auth.authStateReady();
       }
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+
+      if (token) {
+        const response = await axios.delete(
+          `${import.meta.env.VITE_BACKEND_URI}/users/address-delete/${addrId}`,
+          {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true
+          }
+        );
+
+        if (response.data && response.data.success && Array.isArray(response.data.addresses)) {
+          const updatedList = response.data.addresses.map((item: any, idx: number) => ({
+            id: item._id || `addr-user-${idx}`,
+            name: item.fullName || curUser?.name || 'Valued Customer',
+            phone: item.phoneNumber || curUser?.phoneNumber || '',
+            alternatePhone: item.alternatePhone || '',
+            addressLine1: item.addressLine1 || '',
+            addressLine2: item.addressLine2 || '',
+            landmark: item.landmark || '',
+            city: item.city || '',
+            state: item.state || '',
+            pincode: item.postalCode || '',
+            country: item.country || 'India',
+            type: item.tag || 'Home',
+            isDefault: item.isDefault ?? idx === 0,
+            instructions: ''
+          }));
+          setAddresses(updatedList);
+
+          if (selectedAddressId === addrId) {
+            const def = updatedList.find((a: any) => a.isDefault);
+            setSelectedAddressId(def ? def.id : (updatedList[0]?.id || ''));
+          }
+
+          if (setCurUser) {
+            setCurUser((prev: any) => prev ? { ...prev, addresses: response.data.addresses } : prev);
+          }
+          if (fetchCurrentUser) {
+            await fetchCurrentUser();
+          }
+
+          showToast('Address removed.');
+          return;
+        }
+      }
+    } catch (error: any) {
+      console.error('Error deleting address:', error);
+      showToast(error.response?.data?.message || 'Failed to delete address.');
+    }
+
+    setAddresses(prev => prev.filter(a => a.id !== addrId));
+    showToast('Address removed.');
+    if (selectedAddressId === addrId) {
+      setSelectedAddressId('');
     }
   };
 

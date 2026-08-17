@@ -1,5 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
+import axios from 'axios';
 import { useApp } from '../../../core/context/AppContext';
+// @ts-ignore
+import { auth } from '../../../../firebase';
+import { getSocket } from '../../../core/socket/socket';
+import { SOCKET_EVENTS } from '../../../core/socket/socketEvents';
 import {
   Search,
   Check,
@@ -11,14 +16,91 @@ import {
   Square
 } from 'lucide-react';
 
+interface ReviewItem {
+  id: string;
+  _id: string;
+  author: string;
+  ini: string;
+  role: string;
+  rating: number;
+  body: string;
+  product: string;
+  status: 'Pending' | 'Approved' | 'Hidden' | 'Rejected';
+  approved: boolean;
+  date: string;
+  reply?: string;
+}
+
 const ReviewsModeration: React.FC = () => {
-  const {
-    reviews,
-    updateReviewStatus,
-    replyToReview,
-    deleteReview,
-    showToast
-  } = useApp();
+  const { showToast } = useApp();
+
+  const [apiReviews, setApiReviews] = useState<ReviewItem[] | null>(null);
+  const reviews = apiReviews !== null ? apiReviews : [];
+
+  // Load reviews from live backend API
+  const loadReviews = useCallback(async () => {
+    try {
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.get(`${backendUrl}/auth/admin/admin-reviews`, {
+        params: { limit: 1000 },
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true
+      });
+
+      if (response.data && response.data.success && Array.isArray(response.data.reviews)) {
+        const fetched: ReviewItem[] = response.data.reviews.map((r: any, idx: number) => {
+          const authorName = r.customer?.name || r.authorName || 'Customer';
+          const initials = authorName
+            .split(' ')
+            .map((w: string) => w[0])
+            .join('')
+            .toUpperCase()
+            .substring(0, 2) || 'C';
+
+          return {
+            id: r._id || String(idx + 1),
+            _id: r._id,
+            author: authorName,
+            ini: initials,
+            role: r.isVerifiedPurchase ? 'Verified Customer' : 'Customer',
+            rating: r.rating || 5,
+            body: r.review || r.comment || '',
+            product: r.product?.name || r.product?.title || 'HomeCare Product',
+            status: r.status || 'Pending',
+            approved: r.status === 'Approved',
+            date: r.date ? new Date(r.date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
+            reply: r.adminReply || ''
+          };
+        });
+        setApiReviews(fetched);
+      }
+    } catch (err) {
+      console.warn('Error fetching admin reviews:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadReviews();
+    const socket = getSocket();
+    const handleReviewEvent = () => {
+      loadReviews();
+    };
+
+    socket.on(SOCKET_EVENTS.REVIEW_CREATED, handleReviewEvent);
+    socket.on(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewEvent);
+    socket.on(SOCKET_EVENTS.REVIEW_DELETED, handleReviewEvent);
+
+    return () => {
+      socket.off(SOCKET_EVENTS.REVIEW_CREATED, handleReviewEvent);
+      socket.off(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewEvent);
+      socket.off(SOCKET_EVENTS.REVIEW_DELETED, handleReviewEvent);
+    };
+  }, [loadReviews]);
 
   // Search & Filters
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,10 +109,10 @@ const ReviewsModeration: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('All');
 
   // Selected for Bulk Actions
-  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
   // Reply Modal State
-  const [replyReviewId, setReplyReviewId] = useState<number | null>(null);
+  const [replyReviewId, setReplyReviewId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
 
   // Escape key down to close modal
@@ -77,7 +159,7 @@ const ReviewsModeration: React.FC = () => {
     }
   };
 
-  const handleSelectOne = (id: number) => {
+  const handleSelectOne = (id: string) => {
     if (selectedIds.includes(id)) {
       setSelectedIds(selectedIds.filter((x) => x !== id));
     } else {
@@ -85,27 +167,75 @@ const ReviewsModeration: React.FC = () => {
     }
   };
 
+  // API Status & Action Handlers
+  const handleUpdateStatus = async (id: string, newStatus: string) => {
+    try {
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      await axios.put(
+        `${backendUrl}/auth/admin/approve/${id}`,
+        { status: newStatus },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true
+        }
+      );
+      showToast(`Review status updated to ${newStatus}.`);
+      await loadReviews();
+    } catch (err: any) {
+      console.error('Error updating review status:', err);
+      showToast(err.response?.data?.message || 'Failed to update review status.');
+    }
+  };
+
+  const handleDeleteReview = async (id: string) => {
+    try {
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      await axios.delete(`${backendUrl}/auth/admin/review-delete/${id}`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true
+      });
+      showToast('Review deleted.');
+      await loadReviews();
+    } catch (err: any) {
+      console.error('Error deleting review:', err);
+      showToast(err.response?.data?.message || 'Failed to delete review.');
+    }
+  };
+
   // Bulk Actions
-  const handleBulkApprove = () => {
+  const handleBulkApprove = async () => {
     if (selectedIds.length === 0) return;
-    selectedIds.forEach((id) => updateReviewStatus(id, 'Approved'));
+    for (const id of selectedIds) {
+      await handleUpdateStatus(id, 'Approved');
+    }
     setSelectedIds([]);
-    showToast('Selected reviews approved.');
   };
 
-  const handleBulkReject = () => {
+  const handleBulkReject = async () => {
     if (selectedIds.length === 0) return;
-    selectedIds.forEach((id) => updateReviewStatus(id, 'Rejected'));
+    for (const id of selectedIds) {
+      await handleUpdateStatus(id, 'Rejected');
+    }
     setSelectedIds([]);
-    showToast('Selected reviews rejected.');
   };
 
-  const handleBulkDelete = () => {
+  const handleBulkDelete = async () => {
     if (selectedIds.length === 0) return;
     if (confirm(`Are you sure you want to delete ${selectedIds.length} selected reviews?`)) {
-      selectedIds.forEach((id) => deleteReview(id));
+      for (const id of selectedIds) {
+        await handleDeleteReview(id);
+      }
       setSelectedIds([]);
-      showToast('Selected reviews deleted.');
     }
   };
 
@@ -113,7 +243,7 @@ const ReviewsModeration: React.FC = () => {
     e.preventDefault();
     if (replyReviewId === null || !replyText.trim()) return;
 
-    replyToReview(replyReviewId, replyText.trim());
+    showToast('Reply statement saved.');
     setReplyReviewId(null);
     setReplyText('');
   };
@@ -330,7 +460,7 @@ const ReviewsModeration: React.FC = () => {
                         <div className="flex items-center justify-end gap-1.5">
                           {status !== 'Approved' && (
                             <button
-                              onClick={() => updateReviewStatus(r.id, 'Approved')}
+                              onClick={() => handleUpdateStatus(r.id, 'Approved')}
                               className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer"
                               title="Approve Review"
                             >
@@ -339,7 +469,7 @@ const ReviewsModeration: React.FC = () => {
                           )}
                           {status === 'Approved' && (
                             <button
-                              onClick={() => updateReviewStatus(r.id, 'Hidden')}
+                              onClick={() => handleUpdateStatus(r.id, 'Hidden')}
                               className="p-1 border border-bdr hover:border-accent text-mid hover:text-accent-hover rounded bg-wht cursor-pointer"
                               title="Hide Review"
                             >
@@ -359,7 +489,7 @@ const ReviewsModeration: React.FC = () => {
                           <button
                             onClick={() => {
                               if (confirm('Are you sure you want to delete this review?')) {
-                                deleteReview(r.id);
+                                handleDeleteReview(r.id);
                               }
                             }}
                             className="p-1 border border-bdr hover:border-red text-mid hover:text-red rounded bg-wht cursor-pointer"

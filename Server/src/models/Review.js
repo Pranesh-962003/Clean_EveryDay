@@ -68,7 +68,8 @@ const reviewSchema = new mongoose.Schema(
             enum: [
                 "Pending",
                 "Approved",
-                "Hidden"
+                "Hidden",
+                "Rejected"
             ],
             default: "Pending",
             index: true,

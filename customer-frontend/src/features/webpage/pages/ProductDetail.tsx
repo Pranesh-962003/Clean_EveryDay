@@ -207,10 +207,11 @@ const ProductDetail: React.FC = () => {
   const [imgFading, setImgFading] = useState(false);
   const [reviewModalOpen, setReviewModalOpen] = useState(false);
 
-  // For logged-in inline review form
+  // For inline review form
   const [rStars, setRStars] = useState(0);
   const [rHoverStars, setRHoverStars] = useState(0);
   const [rBody, setRBody] = useState('');
+  const [guestName, setGuestName] = useState('');
   const [ratingError, setRatingError] = useState(false);
 
   const product = products.find((p) => p.id === selectedProductId);
@@ -282,20 +283,32 @@ const ProductDetail: React.FC = () => {
     });
   };
 
-  // Logged-in inline review submit
+  // Inline review submit for logged in users & guests
   const handleInlineReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (rStars === 0) { setRatingError(true); return; }
     if (!rBody.trim()) return;
-    const res = await submitReview(curUser!.name, rStars, rBody.trim(), product.name, product._id || String(product.id));
-    if (res?.success) {
-      setRStars(0); setRBody(''); setRatingError(false);
+
+    const targetId = product._id || product.sku || product.id;
+    const authorName = curUser ? curUser.name : (guestName.trim() || 'Customer');
+    const res = await submitReview(authorName, rStars, rBody.trim(), product.name, product._id || String(product.id));
+    if (res && res.success) {
+      setRStars(0); setRBody(''); setGuestName(''); setRatingError(false);
+      setTimeout(() => {
+        fetchProductReviews(targetId, product.name);
+      }, 500);
     }
   };
 
   // Guest review modal submit
   const handleGuestReview = async (_email: string, name: string, stars: number, body: string) => {
-    await submitReview(name, stars, body, product.name, product._id || String(product.id));
+    const targetId = product._id || product.sku || product.id;
+    const res = await submitReview(name, stars, body, product.name, product._id || String(product.id));
+    if (res && res.success) {
+      setTimeout(() => {
+        fetchProductReviews(targetId, product.name);
+      }, 500);
+    }
   };
 
   return (

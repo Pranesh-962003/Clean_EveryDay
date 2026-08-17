@@ -3,6 +3,8 @@ import axios from 'axios';
 import type { Product, Review, User, Lead, Banner, CartItem, Order, Staff, LeadActivity } from '../types';
 // @ts-ignore
 import { auth } from '../../../firebase';
+import { getSocket, updateSocketAuth } from '../socket/socket';
+import { SOCKET_EVENTS } from '../socket/socketEvents';
 
 interface AppContextType {
   products: Product[];
@@ -13,6 +15,7 @@ interface AppContextType {
   staff: Staff[];
   curUser: User | null;
   isAuthLoading: boolean;
+  isLeadsLoading: boolean;
   curPage: string;
   curFilter: string;
   searchQuery: string;
@@ -38,6 +41,7 @@ interface AppContextType {
   deleteReview: (id: number) => void;
   updateReviewStatus: (id: number, status: NonNullable<Review['status']>) => void;
   replyToReview: (id: number, replyText: string) => void;
+  fetchLeads: () => Promise<void>;
   addLead: (
     name: string,
     email: string,
@@ -48,18 +52,19 @@ interface AppContextType {
     service?: string,
     message?: string,
     priority?: Lead['priority']
-  ) => void;
-  updateLeadStatus: (id: number, status: Lead['status']) => void;
-  updateLeadNotes: (id: number, notes: string) => void;
-  addLeadComment: (id: number, author: string, body: string) => void;
-  addLeadTask: (id: number, title: string) => void;
-  toggleLeadTask: (id: number, taskId: string) => void;
-  addLeadReminder: (id: number, title: string, date: string) => void;
-  addLeadActivity: (id: number, type: LeadActivity['type'], title: string, content: string) => void;
-  updateBanners: (banners: Banner[]) => void;
+  ) => Promise<boolean>;
+  updateLeadStatus: (id: number | string, status: Lead['status']) => Promise<boolean>;
+  updateLeadNotes: (id: number | string, notes: string) => Promise<boolean>;
+  addLeadComment: (id: number | string, commentOrAuthor: string, body?: string) => Promise<boolean>;
+  addLeadTask: (id: number | string, title: string) => Promise<boolean>;
+  toggleLeadTask: (id: number | string, taskId: string, completed?: boolean) => Promise<boolean>;
+  addLeadReminder: (id: number | string, title: string, date: string) => Promise<boolean>;
+  addLeadActivity: (id: number | string, type: LeadActivity['type'], title: string, content: string) => Promise<boolean>;
+  updateBanners: (banners: Banner[], desktopFiles?: (File | null)[], mobileFiles?: (File | null)[]) => Promise<boolean>;
+  fetchBanners: () => Promise<void>;
   showToast: (msg: string) => void;
   updateProduct: (product: Product, localDeletedImagePublicIds?: string[]) => Promise<boolean>;
-  updateOrderStatus: (id: string, status: Order['status']) => void;
+  updateOrderStatus: (id: string, status: Order['status'], targetId?: string) => Promise<boolean>;
   updateOrderDetails: (id: string, details: Partial<Order>) => void;
   addOrderTimelineEvent: (id: string, status: string, notes?: string) => void;
   
@@ -251,62 +256,6 @@ const DEF_USERS: User[] = [
   }
 ];
 
-const DEF_LEADS: Lead[] = [
-  {
-    id: 1,
-    name: 'Priya Sharma',
-    email: 'priya.sharma@gmail.com',
-    phone: '+91 98112 34567',
-    company: 'Sharma Garments',
-    source: 'Google Search',
-    subject: 'Wholesale inquiry for floor care products',
-    service: 'Floor Care',
-    message: 'Hi, I am looking to purchase the Fresh Floor Cleaner in bulk (5L) for our office premises. Do you offer commercial discounts?',
-    status: 'New',
-    priority: 'High',
-    assignedTo: 'Rahul Sen',
-    followUpDate: '2026-07-10',
-    date: '12 Jun 2026',
-    internalNotes: 'Awaiting pricing sheet approval.',
-    attachments: [],
-    activities: [
-      { type: 'Note', title: 'Lead created', content: 'Inquiry received via web form', date: '2026-06-12 10:14' }
-    ],
-    tasks: [
-      { id: 't1', title: 'Prepare commercial proposal', done: false, date: '2026-07-09' }
-    ],
-    reminders: [],
-    comments: []
-  },
-  {
-    id: 2,
-    name: 'Amit Verma',
-    email: 'amit.verma@outlook.com',
-    phone: '+91 99887 76655',
-    company: 'Verma Tech Solutions',
-    source: 'Reference',
-    subject: 'Eco laundry liquid questions',
-    service: 'Laundry Care',
-    message: 'Hello, is the Safe Laundry Wash safe for silk and delicate woolen garments? Let me know.',
-    status: 'Contacted',
-    priority: 'Medium',
-    assignedTo: 'Nisha Patil',
-    followUpDate: '2026-07-15',
-    date: '20 Jun 2026',
-    internalNotes: 'Sent fabric safety details email.',
-    attachments: [],
-    activities: [
-      { type: 'Note', title: 'Lead created', content: 'Inquiry received via web form', date: '2026-06-20 14:02' },
-      { type: 'Email', title: 'Fabric safety details sent', content: 'Emailed user details on pH levels and fabric testing guidelines.', date: '2026-06-21 09:45' }
-    ],
-    tasks: [
-      { id: 't2', title: 'Send follow up email', done: true, date: '2026-06-25' }
-    ],
-    reminders: [],
-    comments: []
-  }
-];
-
 const DEF_BANNERS: Banner[] = Array.from({ length: 4 }, (_, i) => ({
   img: null,
   mobileImg: null,
@@ -339,12 +288,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [products, setProducts] = useState<Product[]>(DEF_PRODS);
   const [reviews, setReviews] = useState<Review[]>(DEF_REVS);
   const [users, setUsers] = useState<User[]>(DEF_USERS);
-  const [leads, setLeads] = useState<Lead[]>(DEF_LEADS);
+  const [leads, setLeads] = useState<Lead[]>([]);
   const [banners, setBanners] = useState<Banner[]>(DEF_BANNERS);
   const [staff, setStaff] = useState<Staff[]>(DEF_STAFF);
   const [curUser, setCurUser] = useState<User | null>(null);
 
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
+  const [isLeadsLoading, setIsLeadsLoading] = useState<boolean>(false);
 
   const [curPage, setCurPage] = useState<string>('home');
   const [curFilter, setCurFilter] = useState<string>('All');
@@ -451,10 +401,257 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const fetchLeads = async () => {
+    setIsLeadsLoading(true);
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.get(`${backendUrl}/leads/admin/leads/all`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        withCredentials: true
+      });
+
+      if (response.data && response.data.success && Array.isArray(response.data.leads)) {
+        const mappedLeads: Lead[] = response.data.leads.map((backendLead: any, idx: number) => {
+          return {
+            id: idx + 1,
+            _id: backendLead._id,
+            name: backendLead.clientName || backendLead.name || '',
+            email: backendLead.email || '',
+            phone: backendLead.phoneNumber || backendLead.phone || '',
+            company: backendLead.companyName || backendLead.company || '',
+            source: backendLead.source || 'Web Inquiry',
+            subject: backendLead.subject || 'General Enquiry',
+            service: backendLead.category || backendLead.service || 'General Support',
+            message: backendLead.message || '',
+            status: backendLead.status || 'New',
+            priority: backendLead.priority || 'Medium',
+            assignedTo: backendLead.assignedTo ? (typeof backendLead.assignedTo === 'object' ? (backendLead.assignedTo.name || backendLead.assignedTo.email) : backendLead.assignedTo) : undefined,
+            followUpDate: backendLead.followUpDate ? backendLead.followUpDate.split('T')[0] : '',
+            date: backendLead.createdAt
+              ? new Date(backendLead.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+              : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+            internalNotes: backendLead.internalNotes || '',
+            attachments: backendLead.attachments || [],
+            activities: Array.isArray(backendLead.activities)
+              ? backendLead.activities.map((a: any) => ({
+                  type: a.type || 'Note',
+                  title: a.title || '',
+                  content: a.details || a.content || '',
+                  date: a.createdAt
+                    ? new Date(a.createdAt).toLocaleString('en-IN')
+                    : (a.date || '')
+                }))
+              : [],
+            tasks: Array.isArray(backendLead.tasks)
+              ? backendLead.tasks.map((t: any, tIdx: number) => ({
+                  id: t._id || t.id || `t-${tIdx}`,
+                  title: t.title || '',
+                  done: t.completed !== undefined ? t.completed : Boolean(t.done),
+                  date: t.completedAt ? new Date(t.completedAt).toLocaleDateString('en-IN') : (t.date || '')
+                }))
+              : [],
+            reminders: Array.isArray(backendLead.reminders)
+              ? backendLead.reminders.map((r: any, rIdx: number) => ({
+                  id: r._id || r.id || `r-${rIdx}`,
+                  title: r.title || '',
+                  date: r.scheduledFor ? new Date(r.scheduledFor).toLocaleDateString('en-IN') : (r.date || '')
+                }))
+              : [],
+            comments: Array.isArray(backendLead.comments)
+              ? backendLead.comments.map((c: any, cIdx: number) => ({
+                  id: c._id || c.id || `c-${cIdx}`,
+                  author: (c.createdBy && typeof c.createdBy === 'object') ? (c.createdBy.name || c.createdBy.email) : (c.author || 'Admin'),
+                  body: c.comment || c.body || '',
+                  date: c.createdAt ? new Date(c.createdAt).toLocaleString('en-IN') : (c.date || '')
+                }))
+              : []
+          };
+        });
+        setLeads(mappedLeads);
+      }
+    } catch (error) {
+      console.error('Error fetching leads from API:', error);
+    } finally {
+      setIsLeadsLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchCurrentUser();
     fetchProducts();
+    fetchLeads();
+    fetchBanners();
   }, []);
+
+  // Real-time synchronization with Socket.IO
+  useEffect(() => {
+    const socket = getSocket();
+
+    const formatBackendProduct = (backendProd: any, existingId?: number): Product => {
+      return {
+        id: existingId || Math.floor(Math.random() * 100000),
+        _id: backendProd._id,
+        name: backendProd.title || backendProd.name,
+        cat: backendProd.category,
+        desc: backendProd.description,
+        tags: backendProd.tags || [],
+        badge: backendProd.badge === 'None' ? null : backendProd.badge,
+        imgs: backendProd.images ? backendProd.images.map((im: any) => (typeof im === 'string' ? im : im.url || '')) : (backendProd.imgs || []),
+        images: backendProd.images || [],
+        price: backendProd.sellingPrice || backendProd.retailPrice || backendProd.price || 0,
+        originalPrice: backendProd.retailPrice || backendProd.originalPrice,
+        sku: backendProd.sku,
+        brand: backendProd.brand,
+        discount: backendProd.discountPercentage || 0,
+        stock: backendProd.stock !== undefined ? backendProd.stock : 0,
+        status: backendProd.isActive !== false ? 'Active' : 'Draft',
+        createdDate: backendProd.createdAt ? backendProd.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+        specs: {
+          Size: backendProd.specifications?.containerSize || '',
+          Usage: backendProd.specifications?.usageInstructions || '',
+          pH: backendProd.specifications?.phLevel || '',
+          Suitable: backendProd.specifications?.suitableSurfaces || ''
+        },
+        rating: backendProd.averageRating || 0,
+        reviewCount: backendProd.totalReviews || 0
+      };
+    };
+
+    const handleProductCreated = (data: { product: any }) => {
+      if (!data?.product) return;
+      setProducts((prev) => {
+        const exists = prev.some((p) => p._id === data.product._id || (p.sku && p.sku === data.product.sku));
+        if (exists) {
+          return prev.map((p) => (p._id === data.product._id || p.sku === data.product.sku ? formatBackendProduct(data.product, p.id) : p));
+        }
+        return [formatBackendProduct(data.product), ...prev];
+      });
+    };
+
+    const handleProductUpdated = (data: { product?: any; productId?: string; averageRating?: number; totalReviews?: number }) => {
+      setProducts((prev) => {
+        if (data.product) {
+          const pData = data.product;
+          return prev.map((p) => {
+            if (p._id === pData._id || p.sku === pData.sku || p.name === pData.title) {
+              return formatBackendProduct(pData, p.id);
+            }
+            return p;
+          });
+        }
+        if (data.productId) {
+          return prev.map((p) => {
+            if (p._id === data.productId || String(p.id) === data.productId) {
+              return {
+                ...p,
+                ...(data.averageRating !== undefined ? { rating: data.averageRating } : {}),
+                ...(data.totalReviews !== undefined ? { reviewCount: data.totalReviews } : {})
+              };
+            }
+            return p;
+          });
+        }
+        return prev;
+      });
+    };
+
+    const handleProductDeleted = (data: { id?: string; _id?: string; sku?: string }) => {
+      const deleteId = data.id || data._id;
+      const deleteSku = data.sku;
+      setProducts((prev) => prev.filter((p) => p._id !== deleteId && String(p.id) !== deleteId && (!deleteSku || p.sku !== deleteSku)));
+    };
+
+    const handleInventoryUpdated = (data: { productId: string; stock: number }) => {
+      if (!data?.productId) return;
+      setProducts((prev) =>
+        prev.map((p) => {
+          if (p._id === data.productId || String(p.id) === data.productId) {
+            return { ...p, stock: data.stock };
+          }
+          return p;
+        })
+      );
+    };
+
+    const handleBannersUpdated = (data: { banners?: any[] }) => {
+      if (Array.isArray(data?.banners) && data.banners.length > 0) {
+        const mappedBanners: Banner[] = data.banners.map((b: any, idx: number) => ({
+          _id: b._id,
+          img: b.desktopImage || b.img || null,
+          mobileImg: b.mobileImage || b.mobileImg || null,
+          desktopImage: b.desktopImage || b.img || '',
+          mobileImage: b.mobileImage || b.mobileImg || '',
+          desktopImagePublicId: b.desktopImagePublicId || '',
+          mobileImagePublicId: b.mobileImagePublicId || '',
+          label: b.label || `Banner ${idx + 1}`,
+          title: b.title || '',
+          subtitle: b.subtitle || '',
+          ctaText: b.ctaText || '',
+          ctaLink: b.ctaLink || '',
+          displayOrder: b.displayOrder || (idx + 1),
+          scheduleStart: b.scheduleStart ? b.scheduleStart.split('T')[0] : '',
+          scheduleEnd: b.scheduleEnd ? b.scheduleEnd.split('T')[0] : '',
+          isActive: b.isActive !== undefined ? b.isActive : true
+        }));
+        setBanners(mappedBanners);
+      }
+    };
+
+    const handleLeadEvent = () => {
+      // Quiet background refresh for leads
+      fetchLeads();
+    };
+
+    socket.on(SOCKET_EVENTS.PRODUCT_CREATED, handleProductCreated);
+    socket.on(SOCKET_EVENTS.PRODUCT_UPDATED, handleProductUpdated);
+    socket.on(SOCKET_EVENTS.PRODUCT_DELETED, handleProductDeleted);
+    socket.on(SOCKET_EVENTS.INVENTORY_UPDATED, handleInventoryUpdated);
+    socket.on(SOCKET_EVENTS.BANNERS_UPDATED, handleBannersUpdated);
+    socket.on(SOCKET_EVENTS.LEAD_CREATED, handleLeadEvent);
+    socket.on(SOCKET_EVENTS.LEAD_UPDATED, handleLeadEvent);
+    socket.on(SOCKET_EVENTS.LEAD_ACTIVITY_ADDED, handleLeadEvent);
+    socket.on(SOCKET_EVENTS.LEAD_TASK_UPDATED, handleLeadEvent);
+    socket.on(SOCKET_EVENTS.LEAD_REMINDER_ADDED, handleLeadEvent);
+
+    // Auth state token listener
+    const unsubscribeAuth = auth.onAuthStateChanged(async (firebaseUser: any) => {
+      if (firebaseUser) {
+        try {
+          const token = await firebaseUser.getIdToken();
+          updateSocketAuth(token);
+        } catch {
+          updateSocketAuth(null);
+        }
+      } else {
+        updateSocketAuth(null);
+      }
+    });
+
+    return () => {
+      socket.off(SOCKET_EVENTS.PRODUCT_CREATED, handleProductCreated);
+      socket.off(SOCKET_EVENTS.PRODUCT_UPDATED, handleProductUpdated);
+      socket.off(SOCKET_EVENTS.PRODUCT_DELETED, handleProductDeleted);
+      socket.off(SOCKET_EVENTS.INVENTORY_UPDATED, handleInventoryUpdated);
+      socket.off(SOCKET_EVENTS.BANNERS_UPDATED, handleBannersUpdated);
+      socket.off(SOCKET_EVENTS.LEAD_CREATED, handleLeadEvent);
+      socket.off(SOCKET_EVENTS.LEAD_UPDATED, handleLeadEvent);
+      socket.off(SOCKET_EVENTS.LEAD_ACTIVITY_ADDED, handleLeadEvent);
+      socket.off(SOCKET_EVENTS.LEAD_TASK_UPDATED, handleLeadEvent);
+      socket.off(SOCKET_EVENTS.LEAD_REMINDER_ADDED, handleLeadEvent);
+      unsubscribeAuth();
+    };
+  }, []);
+
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -925,7 +1122,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Reply saved.');
   };
 
-  const addLead = (
+  const addLead = async (
     name: string,
     email: string,
     phoneOrSubject: string,
@@ -935,208 +1132,680 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     service?: string,
     message?: string,
     priority: Lead['priority'] = 'Medium'
-  ) => {
+  ): Promise<boolean> => {
     let finalPhone = '';
     let finalCompany = '';
     let finalSource = 'Web Inquiry';
     let finalSubject = '';
-    let finalService = '';
+    let finalCategory = 'Floor Care';
     let finalMessage = '';
-    let finalPriority = priority;
+    let finalPriority: Lead['priority'] = priority || 'Medium';
 
     if (subject === undefined) {
       // 5 arguments call (from client Home.tsx page)
       finalPhone = '';
       finalCompany = '';
-      finalSource = 'Web Inquiry';
       finalSubject = phoneOrSubject;
-      finalService = companyOrService || 'General';
+      finalCategory = companyOrService || 'Floor Care';
       finalMessage = sourceOrMessage || '';
-      finalPriority = 'Medium';
     } else {
       // 9 arguments call (from LeadsCRM.tsx wizard)
       finalPhone = phoneOrSubject || '';
       finalCompany = companyOrService || '';
       finalSource = sourceOrMessage || 'Web Inquiry';
       finalSubject = subject || '';
-      finalService = service || '';
+      finalCategory = service || 'Floor Care';
       finalMessage = message || '';
-      finalPriority = priority;
     }
 
-    const newLead: Lead = {
-      id: Date.now(),
-      name,
-      email,
-      phone: finalPhone,
-      company: finalCompany,
-      source: finalSource,
-      subject: finalSubject,
-      service: finalService,
-      message: finalMessage,
-      status: 'New',
-      priority: finalPriority,
-      date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
-      internalNotes: '',
-      attachments: [],
-      activities: [
-        { type: 'Note', title: 'Inquiry received', content: 'Lead submitted web inquiry form.', date: new Date().toLocaleString('en-IN') }
-      ],
-      tasks: [],
-      reminders: [],
-      comments: []
-    };
-    setLeads((prev) => [newLead, ...prev]);
-    showToast('Message sent! We will contact you soon.');
-  };
-
-  const updateLeadStatus = (id: number, status: Lead['status']) => {
-    if (!checkAdminPermission()) return;
-    setLeads((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const nextActs = l.activities ? [...l.activities] : [];
-          nextActs.push({
-            type: 'Note',
-            title: `Status changed to ${status}`,
-            content: `Internal lead status updated by admin.`,
-            date: new Date().toLocaleString('en-IN')
-          });
-          return { ...l, status, activities: nextActs };
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
         }
-        return l;
-      })
-    );
-    showToast(`Lead status updated to ${status}.`);
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const payload = {
+        subject: finalSubject ? finalSubject.trim() : 'General Enquiry',
+        clientName: name.trim(),
+        email: email.toLowerCase().trim(),
+        phoneNumber: finalPhone.trim(),
+        companyName: finalCompany.trim(),
+        category: finalCategory,
+        source: finalSource,
+        priority: finalPriority,
+        message: finalMessage.trim()
+      };
+
+      const response = await axios.post(`${backendUrl}/leads/admin/create-lead`, payload, {
+        headers,
+        withCredentials: true
+      });
+
+      if (response.data && response.data.success) {
+        showToast(response.data.message || 'Lead created successfully.');
+        await fetchLeads();
+        return true;
+      } else {
+        showToast(response.data.message || 'Failed to create lead.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to create lead via Admin API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to create lead.';
+      showToast(errMsg);
+      return false;
+    }
   };
 
-  const updateLeadNotes = (id: number, notes: string) => {
-    if (!checkAdminPermission()) return;
-    setLeads((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, internalNotes: notes } : l))
-    );
-  };
+  const updateLeadStatus = async (id: number | string, status: Lead['status']): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
 
-  const addLeadComment = (id: number, author: string, body: string) => {
-    if (!checkAdminPermission()) return;
-    setLeads((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const nextComments = l.comments ? [...l.comments] : [];
-          nextComments.push({
-            id: `c-${Date.now()}`,
-            author,
-            body,
-            date: new Date().toLocaleString('en-IN')
-          });
-          const nextActs = l.activities ? [...l.activities] : [];
-          nextActs.push({
-            type: 'Comment',
-            title: `New internal comment`,
-            content: `${author} commented: "${body.substring(0, 40)}${body.length > 40 ? '...' : ''}"`,
-            date: new Date().toLocaleString('en-IN')
-          });
-          return { ...l, comments: nextComments, activities: nextActs };
+    const targetLead = leads.find((l) => l._id === String(id) || String(l.id) === String(id));
+    if (!targetLead) {
+      console.warn('Lead not found for status update:', id);
+      return false;
+    }
+
+    if (targetLead.status === status) {
+      return true;
+    }
+
+    const leadMongoId = targetLead._id || id;
+    setIsLeadsLoading(true);
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
         }
-        return l;
-      })
-    );
-    showToast('Comment added.');
-  };
+      }
 
-  const addLeadTask = (id: number, title: string) => {
-    if (!checkAdminPermission()) return;
-    setLeads((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const nextTasks = l.tasks ? [...l.tasks] : [];
-          nextTasks.push({
-            id: `t-${Date.now()}`,
-            title,
-            done: false
-          });
-          const nextActs = l.activities ? [...l.activities] : [];
-          nextActs.push({
-            type: 'Task',
-            title: `Task created`,
-            content: `New task added: "${title}"`,
-            date: new Date().toLocaleString('en-IN')
-          });
-          return { ...l, tasks: nextTasks, activities: nextActs };
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.patch(
+        `${backendUrl}/leads/admin/${leadMongoId}/status`,
+        { status },
+        {
+          headers,
+          withCredentials: true
         }
-        return l;
-      })
-    );
-    showToast('Task added.');
+      );
+
+      if (response.data && response.data.success) {
+        showToast(response.data.message || `Lead status updated to ${status}.`);
+        await fetchLeads();
+        return true;
+      } else {
+        showToast(response.data.message || 'Failed to update lead status.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to update lead status via Admin API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to update lead status.';
+      showToast(errMsg);
+      return false;
+    } finally {
+      setIsLeadsLoading(false);
+    }
   };
 
-  const toggleLeadTask = (id: number, taskId: string) => {
-    if (!checkAdminPermission()) return;
+  const updateLeadNotes = async (id: number | string, notes: string): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+
+    // Immediately update local state in leads array for snappy UI
     setLeads((prev) =>
-      prev.map((l) => {
-        if (l.id === id && l.tasks) {
-          const updatedTasks = l.tasks.map((t) =>
-            t.id === taskId ? { ...t, done: !t.done } : t
-          );
-          const toggledTask = l.tasks.find((t) => t.id === taskId);
-          const nextActs = l.activities ? [...l.activities] : [];
-          if (toggledTask) {
-            nextActs.push({
-              type: 'Task',
-              title: `Task marked ${!toggledTask.done ? 'done' : 'undone'}`,
-              content: `Task: "${toggledTask.title}" status changed.`,
-              date: new Date().toLocaleString('en-IN')
-            });
+      prev.map((l) => ((String(l.id) === String(id) || l._id === String(id)) ? { ...l, internalNotes: notes } : l))
+    );
+
+    const targetLead = leads.find((l) => l._id === String(id) || String(l.id) === String(id));
+    const leadMongoId = targetLead?._id || id;
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.patch(
+        `${backendUrl}/leads/admin/${leadMongoId}/profile`,
+        { internalNotes: notes },
+        {
+          headers,
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        return true;
+      } else {
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to update lead notes via Admin API:', error);
+      return false;
+    }
+  };
+
+  const addLeadComment = async (
+    id: number | string,
+    commentOrAuthor: string,
+    body?: string
+  ): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+
+    const commentText = (body !== undefined ? body : commentOrAuthor).trim();
+    if (!commentText) {
+      showToast('Comment cannot be empty.');
+      return false;
+    }
+
+    const targetLead = leads.find((l) => l._id === String(id) || String(l.id) === String(id));
+    const leadMongoId = targetLead?._id || id;
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.post(
+        `${backendUrl}/leads/admin/${leadMongoId}/comments`,
+        { comment: commentText },
+        {
+          headers,
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        showToast(response.data.message || 'Comment added successfully.');
+        await fetchLeads();
+        return true;
+      } else {
+        showToast(response.data?.message || 'Failed to add comment.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to add lead comment via Admin API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to add comment.';
+      showToast(errMsg);
+      return false;
+    }
+  };
+
+  const addLeadTask = async (id: number | string, title: string): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+
+    const targetLead = leads.find((l) => l._id === String(id) || String(l.id) === String(id));
+    const leadMongoId = targetLead?._id || id;
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.post(
+        `${backendUrl}/leads/admin/${leadMongoId}/tasks`,
+        { title: title.trim() },
+        {
+          headers,
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        showToast(response.data.message || 'Task added successfully.');
+        await fetchLeads();
+        return true;
+      } else {
+        showToast(response.data.message || 'Failed to add task.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to add lead task via Admin API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to add task.';
+      showToast(errMsg);
+      return false;
+    }
+  };
+
+  const toggleLeadTask = async (
+    id: number | string,
+    taskId: string,
+    completed?: boolean
+  ): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+
+    const targetLead = leads.find((l) => l._id === String(id) || String(l.id) === String(id));
+    const leadMongoId = targetLead?._id || id;
+
+    // Determine target completion state if not explicitly provided
+    const currentTask = targetLead?.tasks?.find((t) => t.id === taskId);
+    const newCompleted = completed !== undefined ? completed : !(currentTask?.done);
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.patch(
+        `${backendUrl}/leads/admin/${leadMongoId}/tasks/${taskId}`,
+        { completed: newCompleted },
+        {
+          headers,
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        // Update local leads state
+        setLeads((prev) =>
+          prev.map((l) => {
+            if ((String(l.id) === String(id) || l._id === String(id)) && l.tasks) {
+              const updatedTasks = l.tasks.map((t) =>
+                t.id === taskId ? { ...t, done: newCompleted } : t
+              );
+              return { ...l, tasks: updatedTasks };
+            }
+            return l;
+          })
+        );
+
+        showToast(response.data.message || (newCompleted ? 'Task completed successfully.' : 'Task marked as incomplete.'));
+        return true;
+      } else {
+        showToast(response.data.message || 'Failed to update task.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to update lead task via Admin API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to update task.';
+      showToast(errMsg);
+      return false;
+    }
+  };
+
+  const addLeadReminder = async (id: number | string, title: string, date: string): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+
+    const targetLead = leads.find((l) => l._id === String(id) || String(l.id) === String(id));
+    const leadMongoId = targetLead?._id || id;
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.post(
+        `${backendUrl}/leads/admin/${leadMongoId}/reminders`,
+        {
+          title: title.trim(),
+          scheduledFor: date
+        },
+        {
+          headers,
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        showToast(response.data.message || 'Reminder scheduled successfully.');
+        await fetchLeads();
+        return true;
+      } else {
+        showToast(response.data?.message || 'Failed to schedule reminder.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to schedule lead reminder via Admin API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to schedule reminder.';
+      showToast(errMsg);
+      return false;
+    }
+  };
+
+  const addLeadActivity = async (
+    id: number | string,
+    type: LeadActivity['type'],
+    title: string,
+    content: string
+  ): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+
+    const targetLead = leads.find((l) => l._id === String(id) || String(l.id) === String(id));
+    const leadMongoId = targetLead?._id || id;
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.post(
+        `${backendUrl}/leads/admin/${leadMongoId}/activities`,
+        {
+          type,
+          title: title.trim(),
+          details: content.trim()
+        },
+        {
+          headers,
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        const returnedAct = response.data.activity;
+        const newActivityItem: LeadActivity = {
+          type: (returnedAct?.type || type) as LeadActivity['type'],
+          title: returnedAct?.title || title.trim(),
+          content: returnedAct?.details || content.trim(),
+          date: returnedAct?.createdAt
+            ? new Date(returnedAct.createdAt).toLocaleString('en-IN')
+            : new Date().toLocaleString('en-IN')
+        };
+
+        // Update local leads state
+        setLeads((prev) =>
+          prev.map((l) => {
+            if (String(l.id) === String(id) || l._id === String(id)) {
+              const nextActs = l.activities ? [...l.activities, newActivityItem] : [newActivityItem];
+              return { ...l, activities: nextActs };
+            }
+            return l;
+          })
+        );
+
+        showToast(response.data.message || 'Activity logged successfully.');
+        return true;
+      } else {
+        showToast(response.data.message || 'Failed to add activity log.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to add lead activity via Admin API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to add activity log.';
+      showToast(errMsg);
+      return false;
+    }
+  };
+
+  const fetchBanners = async () => {
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.get(`${backendUrl}/auth/admin/banners-get`, {
+        headers,
+        withCredentials: true
+      });
+
+      if (response.data && response.data.success && Array.isArray(response.data.banners)) {
+        if (response.data.banners.length > 0) {
+          const mappedBanners: Banner[] = response.data.banners.map((b: any, idx: number) => ({
+            _id: b._id,
+            img: b.desktopImage || b.img || null,
+            mobileImg: b.mobileImage || b.mobileImg || null,
+            desktopImage: b.desktopImage || b.img || '',
+            mobileImage: b.mobileImage || b.mobileImg || '',
+            desktopImagePublicId: b.desktopImagePublicId || '',
+            mobileImagePublicId: b.mobileImagePublicId || '',
+            label: b.label || `Banner ${idx + 1}`,
+            title: b.title || '',
+            subtitle: b.subtitle || '',
+            ctaText: b.ctaText || '',
+            ctaLink: b.ctaLink || '',
+            displayOrder: b.displayOrder || (idx + 1),
+            scheduleStart: b.scheduleStart ? b.scheduleStart.split('T')[0] : '',
+            scheduleEnd: b.scheduleEnd ? b.scheduleEnd.split('T')[0] : '',
+            isActive: b.isActive !== undefined ? b.isActive : true
+          }));
+          setBanners(mappedBanners);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching banners from Admin API:', error);
+    }
+  };
+
+  const updateBanners = async (
+    updatedBanners: Banner[],
+    desktopFiles?: (File | null)[],
+    mobileFiles?: (File | null)[]
+  ): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+
+      const bannersToSave = updatedBanners.slice(0, 4).map((b, index) => {
+        const dImg = b.img === null || b.img === '' ? '' : (typeof b.img === 'string' && b.img.startsWith('http') ? b.img : (b.desktopImage || ''));
+        const mImg = b.mobileImg === null || b.mobileImg === '' ? '' : (typeof b.mobileImg === 'string' && b.mobileImg.startsWith('http') ? b.mobileImg : (b.mobileImage || ''));
+
+        return {
+          label: b.label || `Banner ${index + 1}`,
+          title: b.title || 'Organic Clean Solutions',
+          subtitle: b.subtitle || '',
+          ctaText: b.ctaText || 'Explore Now',
+          ctaLink: b.ctaLink || 'products',
+          desktopImage: dImg,
+          desktopImagePublicId: dImg ? (b.desktopImagePublicId || '') : '',
+          mobileImage: mImg,
+          mobileImagePublicId: mImg ? (b.mobileImagePublicId || '') : '',
+          displayOrder: b.displayOrder || (index + 1),
+          scheduleStart: b.scheduleStart || null,
+          scheduleEnd: b.scheduleEnd || null,
+          isActive: b.isActive !== undefined ? b.isActive : true
+        };
+      });
+
+      const formData = new FormData();
+      formData.append('banners', JSON.stringify(bannersToSave));
+
+      const hasNewDesktopFiles = (desktopFiles && desktopFiles.some((f) => f !== null)) ||
+        updatedBanners.some((b) => typeof b.img === 'string' && b.img.startsWith('data:'));
+      const hasNewMobileFiles = (mobileFiles && mobileFiles.some((f) => f !== null)) ||
+        updatedBanners.some((b) => typeof b.mobileImg === 'string' && b.mobileImg.startsWith('data:'));
+
+      if (hasNewDesktopFiles) {
+        for (let i = 0; i < bannersToSave.length; i++) {
+          const dFile = desktopFiles?.[i];
+          if (dFile) {
+            formData.append('desktopImages', dFile);
+          } else if (updatedBanners[i]?.img && typeof updatedBanners[i].img === 'string' && updatedBanners[i].img?.startsWith('data:')) {
+            const blob = await (await fetch(updatedBanners[i].img as string)).blob();
+            const file = new File([blob], `desktop_banner_${i + 1}.png`, { type: blob.type || 'image/png' });
+            formData.append('desktopImages', file);
+          } else if (bannersToSave[i].desktopImage && bannersToSave[i].desktopImage.startsWith('http')) {
+            try {
+              const res = await fetch(bannersToSave[i].desktopImage);
+              const blob = await res.blob();
+              const file = new File([blob], `desktop_banner_${i + 1}.jpg`, { type: blob.type || 'image/jpeg' });
+              formData.append('desktopImages', file);
+            } catch (err) {
+              console.warn(`Could not fetch existing desktop image for slot ${i}`, err);
+            }
           }
-          return { ...l, tasks: updatedTasks, activities: nextActs };
         }
-        return l;
-      })
-    );
-  };
+      }
 
-  const addLeadReminder = (id: number, title: string, date: string) => {
-    if (!checkAdminPermission()) return;
-    setLeads((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const nextReminders = l.reminders ? [...l.reminders] : [];
-          nextReminders.push({
-            id: `rem-${Date.now()}`,
-            title,
-            date
-          });
-          return { ...l, reminders: nextReminders };
+      if (hasNewMobileFiles) {
+        for (let i = 0; i < bannersToSave.length; i++) {
+          const mFile = mobileFiles?.[i];
+          if (mFile) {
+            formData.append('mobileImages', mFile);
+          } else if (updatedBanners[i]?.mobileImg && typeof updatedBanners[i].mobileImg === 'string' && updatedBanners[i].mobileImg?.startsWith('data:')) {
+            const blob = await (await fetch(updatedBanners[i].mobileImg as string)).blob();
+            const file = new File([blob], `mobile_banner_${i + 1}.png`, { type: blob.type || 'image/png' });
+            formData.append('mobileImages', file);
+          } else if (bannersToSave[i].mobileImage && bannersToSave[i].mobileImage.startsWith('http')) {
+            try {
+              const res = await fetch(bannersToSave[i].mobileImage);
+              const blob = await res.blob();
+              const file = new File([blob], `mobile_banner_${i + 1}.jpg`, { type: blob.type || 'image/jpeg' });
+              formData.append('mobileImages', file);
+            } catch (err) {
+              console.warn(`Could not fetch existing mobile image for slot ${i}`, err);
+            }
+          }
         }
-        return l;
-      })
-    );
-    showToast('Reminder scheduled.');
-  };
+      }
 
-  const addLeadActivity = (id: number, type: LeadActivity['type'], title: string, content: string) => {
-    if (!checkAdminPermission()) return;
-    setLeads((prev) =>
-      prev.map((l) => {
-        if (l.id === id) {
-          const nextActs = l.activities ? [...l.activities] : [];
-          nextActs.push({
-            type,
-            title,
-            content,
-            date: new Date().toLocaleString('en-IN')
-          });
-          return { ...l, activities: nextActs };
+      const response = await axios.put(
+        `${backendUrl}/auth/admin/banners-publish`,
+        formData,
+        {
+          headers,
+          withCredentials: true
         }
-        return l;
-      })
-    );
-  };
+      );
 
-  const updateBanners = (updatedBanners: Banner[]) => {
-    if (!checkAdminPermission()) return;
-    setBanners(updatedBanners);
-    showToast('Homepage hero banners published.');
+      if (response.data && response.data.success) {
+        showToast(response.data.message || 'Homepage hero banners published.');
+        await fetchBanners();
+        return true;
+      } else {
+        showToast(response.data?.message || 'Failed to publish banners.');
+        return false;
+      }
+    } catch (error: any) {
+      console.error('Failed to publish banners via Admin API:', error);
+      const errMsg = error.response?.data?.message || 'Failed to publish banners.';
+      showToast(errMsg);
+      return false;
+    }
   };
 
   // E-commerce Cart Operations
@@ -1316,26 +1985,69 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateOrderStatus = (id: string, status: Order['status']) => {
+  const updateOrderStatus = async (id: string, status: Order['status'], targetId?: string): Promise<boolean> => {
     const isAllowedSelfAction = status === 'Cancelled' || status === 'Returned';
 
-    if (!isAllowedSelfAction && !checkAdminPermission()) return;
+    if (!isAllowedSelfAction && !checkAdminPermission()) return false;
 
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id === id) {
-          const nextTimeline = o.timeline ? [...o.timeline] : [];
-          nextTimeline.push({
-            status,
-            date: new Date().toLocaleString('en-IN'),
-            notes: isAllowedSelfAction ? `Status updated to ${status} by customer.` : `Status updated to ${status} by admin.`
-          });
-          return { ...o, status, timeline: nextTimeline };
+    try {
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const orderIdToUse = targetId || id;
+
+      const response = await axios.put(
+        `${backendUrl}/orders/${orderIdToUse}/status`,
+        { status },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true
         }
-        return o;
-      })
-    );
-    showToast(`Order status updated to ${status}.`);
+      );
+
+      if (response.data && response.data.success) {
+        setOrders((prev) =>
+          prev.map((o) => {
+            if (o.id === id || o.id === targetId || o._id === id || o._id === targetId) {
+              const nextTimeline = o.timeline ? [...o.timeline] : [];
+              nextTimeline.push({
+                status,
+                date: new Date().toLocaleString('en-IN'),
+                notes: isAllowedSelfAction ? `Status updated to ${status} by customer.` : `Status updated to ${status} by admin.`
+              });
+              return { ...o, status, timeline: nextTimeline };
+            }
+            return o;
+          })
+        );
+        showToast(`Order status updated to ${status}.`);
+        return true;
+      } else {
+        showToast(response.data?.message || 'Failed to update order status.');
+        return false;
+      }
+    } catch (err: any) {
+      console.warn('API updateOrderStatus note:', err);
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (o.id === id || o.id === targetId || o._id === id || o._id === targetId) {
+            const nextTimeline = o.timeline ? [...o.timeline] : [];
+            nextTimeline.push({
+              status,
+              date: new Date().toLocaleString('en-IN'),
+              notes: isAllowedSelfAction ? `Status updated to ${status} by customer.` : `Status updated to ${status} by admin.`
+            });
+            return { ...o, status, timeline: nextTimeline };
+          }
+          return o;
+        })
+      );
+      showToast(`Order status updated to ${status}.`);
+      return true;
+    }
   };
 
   const updateOrderDetails = (id: string, details: Partial<Order>) => {
@@ -1499,6 +2211,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteReview,
         updateReviewStatus,
         replyToReview,
+        fetchLeads,
+        isLeadsLoading,
         addLead,
         updateLeadStatus,
         updateLeadNotes,
@@ -1508,6 +2222,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addLeadReminder,
         addLeadActivity,
         updateBanners,
+        fetchBanners,
         showToast,
         cart,
         orders,

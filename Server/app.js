@@ -13,7 +13,7 @@ import rateLimit from "express-rate-limit";
 import morgan from "morgan";
 import { connectDb } from "./src/config/DataBase.js";
 import admin from "./src/config/firebase.js";
-import { getApp } from "firebase-admin/app";
+import { getApp, getApps } from "firebase-admin/app";
 import authRouter from "./src/routes/authRoutes.js";
 import adminRouter from "./src/routes/adminRoutes.js";
 import userRouter from "./src/routes/userRoutes.js";
@@ -21,6 +21,8 @@ import {productRouter,pubilcProductRouter} from "./src/routes/productRoutes.js";
 import orderRouter from "./src/routes/orderRoutes.js";
 import reviewRouter from "./src/routes/reviewRoutes.js";
 import cartRouter from "./src/routes/cartRoutes.js";
+import leadRouter from "./src/routes/leadRoutes.js";
+import { startReminderScheduler } from "./src/utils/reminderScheduler.js";
 
 
 
@@ -33,6 +35,7 @@ app.set("trust proxy", 1);
 // Ensure Database connection for serverless function invocations
 app.use(async (req, res, next) => {
   await connectDb();
+  startReminderScheduler();
   next();
 });
 
@@ -44,6 +47,8 @@ app.use(
     crossOriginEmbedderPolicy: false,
   })
 );
+
+
 
 const allowedOrigins = [
   process.env.FRONTEND_URL ? process.env.FRONTEND_URL.trim().replace(/\/$/, '') : null,
@@ -73,10 +78,12 @@ app.use(
   })
 );
 
+
+
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 200,
+    max: process.env.NODE_ENV === "production" ? 500 : 5000,
     validate: { trustProxy: false },
     message: {
       success: false,
@@ -149,6 +156,9 @@ app.use("/carts", cartRouter);
 
 app.use("/api/reviews", reviewRouter);
 app.use("/reviews", reviewRouter);
+
+app.use("/api/leads", leadRouter);
+app.use("/leads", leadRouter);
 // console.log(Cloudinary.api);
 
 // =========================
