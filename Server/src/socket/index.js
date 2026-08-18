@@ -9,20 +9,33 @@ let io = null;
  * @param {import("http").Server} httpServer
  */
 export const initSocket = (httpServer) => {
+  if (io) return io;
+
+  const parseOrigins = (val) => {
+    if (!val) return [];
+    return val
+      .split(",")
+      .map((o) => o.trim().replace(/\/+$/, ""))
+      .filter(Boolean);
+  };
+
   const allowedOrigins = [
-    process.env.FRONTEND_URL ? process.env.FRONTEND_URL.trim().replace(/\/$/, "") : null,
-    process.env.ADMIN_FRONTEND_URL ? process.env.ADMIN_FRONTEND_URL.trim().replace(/\/$/, "") : null,
+    "https://clean-every-day.vercel.app",
+    "https://clean-every-day-244d.vercel.app",
     "http://localhost:5173",
     "http://localhost:5174",
     "http://127.0.0.1:5173",
     "http://127.0.0.1:5174",
+    ...parseOrigins(process.env.FRONTEND_URL),
+    ...parseOrigins(process.env.ADMIN_FRONTEND_URL),
   ].filter(Boolean);
 
   io = new Server(httpServer, {
+    path: "/socket.io/",
     cors: {
       origin: (origin, callback) => {
         if (!origin) return callback(null, true);
-        const cleanOrigin = origin.replace(/\/$/, "");
+        const cleanOrigin = origin.replace(/\/+$/, "");
         if (
           cleanOrigin.startsWith("http://localhost:") ||
           cleanOrigin.startsWith("http://127.0.0.1:") ||
@@ -35,7 +48,8 @@ export const initSocket = (httpServer) => {
       },
       credentials: true,
     },
-    transports: ["websocket", "polling"],
+    transports: ["polling", "websocket"],
+    allowUpgrades: true,
     pingTimeout: 20000,
     pingInterval: 25000,
   });

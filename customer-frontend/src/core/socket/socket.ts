@@ -3,8 +3,11 @@ import { io, Socket } from "socket.io-client";
 let socketInstance: Socket | null = null;
 
 export const getSocketUrl = (): string => {
-  const envUrl = import.meta.env.VITE_BACKEND_URI || "http://localhost:5002/api";
-  return envUrl.replace(/\/api\/?$/, "");
+  if (import.meta.env.VITE_SOCKET_URL) {
+    return import.meta.env.VITE_SOCKET_URL.trim().replace(/\/+$/, "");
+  }
+  const envUrl = (import.meta.env.VITE_BACKEND_URI || "http://localhost:5002/api").trim();
+  return envUrl.replace(/\/api\/?$/i, "").replace(/\/+$/, "");
 };
 
 /**
@@ -15,12 +18,14 @@ export const getSocket = (token?: string | null): Socket => {
   if (!socketInstance) {
     const url = getSocketUrl();
     socketInstance = io(url, {
+      path: "/socket.io/",
       auth: {
         token: token || undefined,
       },
-      transports: ["websocket", "polling"],
+      transports: ["polling", "websocket"],
+      upgrade: true,
       reconnection: true,
-      reconnectionAttempts: 15,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
       timeout: 20000,
