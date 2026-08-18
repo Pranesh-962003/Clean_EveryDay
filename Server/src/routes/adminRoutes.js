@@ -14,17 +14,7 @@ adminRouter.get("/admin-reviews",verifyToken,verifyAdmin,getAllReviews);
 adminRouter.delete("/review-delete/:id",verifyToken,verifyAdmin,deleteReview);
 adminRouter.get("/dashboard",verifyToken,verifyAdmin,getDashboard);
 adminRouter.get("/orders",verifyToken,verifyAdmin,getOrderRegistry);
-adminRouter.put(
-    "/banners-publish",verifyToken, verifyAdmin,upload.fields([
-        {
-            name: "desktopImages",
-            maxCount: 4
-        },
-        {
-            name: "mobileImages",
-            maxCount: 4
-        }
-    ]),publishBanners);
+adminRouter.put("/banners-publish", verifyToken, verifyAdmin, upload.any(), publishBanners);
 adminRouter.get("/banners-get",verifyToken,verifyAdmin,getAllBanners);
 
 export default adminRouter;

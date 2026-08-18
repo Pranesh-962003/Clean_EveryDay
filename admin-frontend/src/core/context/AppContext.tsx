@@ -1711,8 +1711,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
 
       const bannersToSave = updatedBanners.slice(0, 4).map((b, index) => {
-        const dImg = b.img === null || b.img === '' ? '' : (typeof b.img === 'string' && b.img.startsWith('http') ? b.img : (b.desktopImage || ''));
-        const mImg = b.mobileImg === null || b.mobileImg === '' ? '' : (typeof b.mobileImg === 'string' && b.mobileImg.startsWith('http') ? b.mobileImg : (b.mobileImage || ''));
+        // Strip data: base64 preview URLs from text JSON payload so payload remains lightweight
+        const dImg = (typeof b.desktopImage === 'string' && b.desktopImage.startsWith('http'))
+          ? b.desktopImage
+          : (typeof b.img === 'string' && b.img.startsWith('http') ? b.img : '');
+        const mImg = (typeof b.mobileImage === 'string' && b.mobileImage.startsWith('http'))
+          ? b.mobileImage
+          : (typeof b.mobileImg === 'string' && b.mobileImg.startsWith('http') ? b.mobileImg : '');
 
         return {
           label: b.label || `Banner ${index + 1}`,
@@ -1734,51 +1739,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const formData = new FormData();
       formData.append('banners', JSON.stringify(bannersToSave));
 
-      const hasNewDesktopFiles = (desktopFiles && desktopFiles.some((f) => f !== null)) ||
-        updatedBanners.some((b) => typeof b.img === 'string' && b.img.startsWith('data:'));
-      const hasNewMobileFiles = (mobileFiles && mobileFiles.some((f) => f !== null)) ||
-        updatedBanners.some((b) => typeof b.mobileImg === 'string' && b.mobileImg.startsWith('data:'));
-
-      if (hasNewDesktopFiles) {
-        for (let i = 0; i < bannersToSave.length; i++) {
-          const dFile = desktopFiles?.[i];
-          if (dFile) {
-            formData.append('desktopImages', dFile);
-          } else if (updatedBanners[i]?.img && typeof updatedBanners[i].img === 'string' && updatedBanners[i].img?.startsWith('data:')) {
+      // Append new files per slot
+      for (let i = 0; i < bannersToSave.length; i++) {
+        const dFile = desktopFiles?.[i];
+        if (dFile instanceof File || dFile instanceof Blob) {
+          formData.append(`desktopImage_${i}`, dFile);
+        } else if (updatedBanners[i]?.img && typeof updatedBanners[i].img === 'string' && updatedBanners[i].img.startsWith('data:')) {
+          try {
             const blob = await (await fetch(updatedBanners[i].img as string)).blob();
-            const file = new File([blob], `desktop_banner_${i + 1}.png`, { type: blob.type || 'image/png' });
-            formData.append('desktopImages', file);
-          } else if (bannersToSave[i].desktopImage && bannersToSave[i].desktopImage.startsWith('http')) {
-            try {
-              const res = await fetch(bannersToSave[i].desktopImage);
-              const blob = await res.blob();
-              const file = new File([blob], `desktop_banner_${i + 1}.jpg`, { type: blob.type || 'image/jpeg' });
-              formData.append('desktopImages', file);
-            } catch (err) {
-              console.warn(`Could not fetch existing desktop image for slot ${i}`, err);
-            }
+            formData.append(`desktopImage_${i}`, blob, `desktop_banner_${i + 1}.png`);
+          } catch (err) {
+            console.warn(`Could not convert desktop data URL for slot ${i}`, err);
           }
         }
-      }
 
-      if (hasNewMobileFiles) {
-        for (let i = 0; i < bannersToSave.length; i++) {
-          const mFile = mobileFiles?.[i];
-          if (mFile) {
-            formData.append('mobileImages', mFile);
-          } else if (updatedBanners[i]?.mobileImg && typeof updatedBanners[i].mobileImg === 'string' && updatedBanners[i].mobileImg?.startsWith('data:')) {
+        const mFile = mobileFiles?.[i];
+        if (mFile instanceof File || mFile instanceof Blob) {
+          formData.append(`mobileImage_${i}`, mFile);
+        } else if (updatedBanners[i]?.mobileImg && typeof updatedBanners[i].mobileImg === 'string' && updatedBanners[i].mobileImg.startsWith('data:')) {
+          try {
             const blob = await (await fetch(updatedBanners[i].mobileImg as string)).blob();
-            const file = new File([blob], `mobile_banner_${i + 1}.png`, { type: blob.type || 'image/png' });
-            formData.append('mobileImages', file);
-          } else if (bannersToSave[i].mobileImage && bannersToSave[i].mobileImage.startsWith('http')) {
-            try {
-              const res = await fetch(bannersToSave[i].mobileImage);
-              const blob = await res.blob();
-              const file = new File([blob], `mobile_banner_${i + 1}.jpg`, { type: blob.type || 'image/jpeg' });
-              formData.append('mobileImages', file);
-            } catch (err) {
-              console.warn(`Could not fetch existing mobile image for slot ${i}`, err);
-            }
+            formData.append(`mobileImage_${i}`, blob, `mobile_banner_${i + 1}.png`);
+          } catch (err) {
+            console.warn(`Could not convert mobile data URL for slot ${i}`, err);
           }
         }
       }

@@ -583,6 +583,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           isActive: b.isActive !== undefined ? b.isActive : true
         }));
         setBanners(mappedBanners);
+      } else {
+        fetchBanners();
       }
     };
 
@@ -673,6 +675,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
+    const handleConnect = () => {
+      fetchBanners();
+      fetchProducts();
+    };
+
+    socket.on("connect", handleConnect);
     socket.on(SOCKET_EVENTS.PRODUCT_CREATED, handleProductCreated);
     socket.on(SOCKET_EVENTS.PRODUCT_UPDATED, handleProductUpdated);
     socket.on(SOCKET_EVENTS.PRODUCT_DELETED, handleProductDeleted);
@@ -701,6 +709,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return () => {
+      socket.off("connect", handleConnect);
       socket.off(SOCKET_EVENTS.PRODUCT_CREATED, handleProductCreated);
       socket.off(SOCKET_EVENTS.PRODUCT_UPDATED, handleProductUpdated);
       socket.off(SOCKET_EVENTS.PRODUCT_DELETED, handleProductDeleted);

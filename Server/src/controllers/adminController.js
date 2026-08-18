@@ -529,8 +529,26 @@ export const publishBanners = async (req, res) => {
 
         const banners = JSON.parse(req.body.banners || "[]");
 
-        const desktopImages = req.files?.desktopImages || [];
-        const mobileImages = req.files?.mobileImages || [];
+        // Helper to extract uploaded file for slot index i
+        const getUploadedFile = (prefix, index) => {
+            if (!req.files) return null;
+            if (Array.isArray(req.files)) {
+                // Find by slot-specific fieldname (e.g. desktopImage_0)
+                const exact = req.files.find(f => f.fieldname === `${prefix}_${index}`);
+                if (exact) return exact;
+                // Fallback to array fieldname (e.g. desktopImages)
+                const arrayMatches = req.files.filter(f => f.fieldname === `${prefix}s`);
+                return arrayMatches[index] || null;
+            } else if (typeof req.files === "object") {
+                if (req.files[`${prefix}_${index}`]?.[0]) {
+                    return req.files[`${prefix}_${index}`][0];
+                }
+                if (req.files[`${prefix}s`]?.[index]) {
+                    return req.files[`${prefix}s`][index];
+                }
+            }
+            return null;
+        };
 
         if (!Array.isArray(banners) || banners.length === 0) {
             return res.status(400).json({
@@ -552,17 +570,20 @@ export const publishBanners = async (req, res) => {
 
             const banner = banners[i];
 
-            let desktopImage = banner.desktopImage || "";
+            let desktopImage = (banner.desktopImage && banner.desktopImage.startsWith("http")) ? banner.desktopImage : "";
             let desktopImagePublicId = banner.desktopImagePublicId || "";
 
-            let mobileImage = banner.mobileImage || "";
+            let mobileImage = (banner.mobileImage && banner.mobileImage.startsWith("http")) ? banner.mobileImage : "";
             let mobileImagePublicId = banner.mobileImagePublicId || "";
 
-            // Upload Desktop Image
-            if (desktopImages[i] && desktopImages[i].buffer) {
+            const desktopFile = getUploadedFile("desktopImage", i);
+            const mobileFile = getUploadedFile("mobileImage", i);
+
+            // Upload Desktop Image if new buffer provided
+            if (desktopFile && desktopFile.buffer) {
 
                 const result = await uploadToCloudinary(
-                    desktopImages[i].buffer,
+                    desktopFile.buffer,
                     "banners/desktop"
                 );
 
@@ -570,11 +591,11 @@ export const publishBanners = async (req, res) => {
                 desktopImagePublicId = result.public_id;
             }
 
-            // Upload Mobile Image
-            if (mobileImages[i] && mobileImages[i].buffer) {
+            // Upload Mobile Image if new buffer provided
+            if (mobileFile && mobileFile.buffer) {
 
                 const result = await uploadToCloudinary(
-                    mobileImages[i].buffer,
+                    mobileFile.buffer,
                     "banners/mobile"
                 );
 
@@ -582,16 +603,18 @@ export const publishBanners = async (req, res) => {
                 mobileImagePublicId = result.public_id;
             }
 
+            const slotOrder = banner.displayOrder || (i + 1);
+
             const savedBanner = await Banner.findOneAndUpdate(
                 {
-                    displayOrder: banner.displayOrder
+                    displayOrder: slotOrder
                 },
                 {
-                    label: banner.label,
-                    title: banner.title,
-                    subtitle: banner.subtitle,
-                    ctaText: banner.ctaText,
-                    ctaLink: banner.ctaLink,
+                    label: banner.label || `Banner ${slotOrder}`,
+                    title: banner.title || "Organic Clean Solutions",
+                    subtitle: banner.subtitle || "",
+                    ctaText: banner.ctaText || "",
+                    ctaLink: banner.ctaLink || "products",
 
                     desktopImage,
                     desktopImagePublicId,
@@ -599,12 +622,12 @@ export const publishBanners = async (req, res) => {
                     mobileImage,
                     mobileImagePublicId,
 
-                    displayOrder: banner.displayOrder,
+                    displayOrder: slotOrder,
 
                     scheduleStart: banner.scheduleStart || null,
                     scheduleEnd: banner.scheduleEnd || null,
 
-                    isActive: banner.isActive ?? true,
+                    isActive: banner.isActive !== undefined ? banner.isActive : true,
                     isDeleted: false
                 },
                 {
@@ -618,7 +641,7 @@ export const publishBanners = async (req, res) => {
             updated.push(savedBanner);
         }
 
-        // Real-time synchronization
+        // Real-time synchronization: Broadcast to all connected customer and admin clients
         emitToAll("banners:updated", { banners: updated, total: updated.length });
 
         return res.status(200).json({
