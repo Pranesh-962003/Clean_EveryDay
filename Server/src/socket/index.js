@@ -2,6 +2,9 @@ import { Server } from "socket.io";
 import { getAuth } from "firebase-admin/auth";
 import { User } from "../models/User.js";
 
+export const RUNTIME_INSTANCE_ID =
+  "inst_" + Math.random().toString(36).substring(2, 8) + "_" + Date.now().toString(36);
+
 let io = null;
 
 /**
@@ -10,6 +13,10 @@ let io = null;
  */
 export const initSocket = (httpServer) => {
   if (io) return io;
+
+  console.log(
+    `[SOCKET INIT] instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} timestamp=${new Date().toISOString()}`
+  );
 
   const parseOrigins = (val) => {
     if (!val) return [];
@@ -54,6 +61,18 @@ export const initSocket = (httpServer) => {
     pingInterval: 25000,
   });
 
+  io.engine.on("connection", (rawSocket) => {
+    console.log(
+      `[SOCKET ENGINE CONNECT] sid=${rawSocket.id} transport=${rawSocket.transport?.name} instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} timestamp=${new Date().toISOString()}`
+    );
+
+    rawSocket.on("upgrade", () => {
+      console.log(
+        `[SOCKET ENGINE UPGRADE] sid=${rawSocket.id} newTransport=${rawSocket.transport?.name} instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} timestamp=${new Date().toISOString()}`
+      );
+    });
+  });
+
   // Authentication Middleware for connection
   io.use(async (socket, next) => {
     try {
@@ -90,14 +109,30 @@ export const initSocket = (httpServer) => {
   });
 
   io.on("connection", (socket) => {
+    console.log(
+      `[SOCKET CONNECT] sid=${socket.conn.id} socketId=${socket.id} transport=${socket.conn.transport?.name} instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} timestamp=${new Date().toISOString()}`
+    );
+
+    socket.conn.on("upgrade", (transport) => {
+      console.log(
+        `[SOCKET UPGRADE] sid=${socket.conn.id} socketId=${socket.id} transport=${transport?.name} instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} timestamp=${new Date().toISOString()}`
+      );
+    });
+
     // Join authenticated rooms
     if (socket.userId) {
       socket.join(`user:${socket.userId}`);
       socket.join(`user:${socket.uid}`);
+      console.log(
+        `[SOCKET ROOM JOIN] socketId=${socket.id} room=user:${socket.userId} instance=${RUNTIME_INSTANCE_ID} pid=${process.pid}`
+      );
     }
 
     if (socket.isAdmin) {
       socket.join("admin");
+      console.log(
+        `[SOCKET ROOM JOIN] socketId=${socket.id} room=admin instance=${RUNTIME_INSTANCE_ID} pid=${process.pid}`
+      );
     }
 
     // Dynamic authentication listener
@@ -128,8 +163,13 @@ export const initSocket = (httpServer) => {
         socket.join(`user:${socket.userId}`);
         socket.join(`user:${socket.uid}`);
 
+        console.log(
+          `[SOCKET AUTH SUCCESS] socketId=${socket.id} userId=${user._id} isAdmin=${socket.isAdmin} instance=${RUNTIME_INSTANCE_ID}`
+        );
+
         if (socket.isAdmin) {
           socket.join("admin");
+          console.log(`[SOCKET ROOM JOIN] socketId=${socket.id} room=admin instance=${RUNTIME_INSTANCE_ID}`);
         }
 
         if (typeof callback === "function") {
@@ -152,6 +192,7 @@ export const initSocket = (httpServer) => {
     socket.on("join:product", (productId) => {
       if (productId) {
         socket.join(`product:${productId}`);
+        console.log(`[SOCKET ROOM JOIN] socketId=${socket.id} room=product:${productId} instance=${RUNTIME_INSTANCE_ID}`);
       }
     });
 
@@ -162,7 +203,9 @@ export const initSocket = (httpServer) => {
     });
 
     socket.on("disconnect", (reason) => {
-      // Clean socket reference automatically managed by socket.io
+      console.log(
+        `[SOCKET DISCONNECT] sid=${socket.conn.id} socketId=${socket.id} reason=${reason} instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} timestamp=${new Date().toISOString()}`
+      );
     });
   });
 
@@ -183,6 +226,10 @@ export const getIO = () => {
  * @param {any} data
  */
 export const emitToAll = (event, data) => {
+  const count = io?.sockets?.sockets?.size || 0;
+  console.log(
+    `[SOCKET EMIT] event=${event} room=ALL instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} localSocketsCount=${count} timestamp=${new Date().toISOString()}`
+  );
   if (io) {
     io.emit(event, data);
   }
@@ -195,6 +242,10 @@ export const emitToAll = (event, data) => {
  * @param {any} data
  */
 export const emitToRoom = (room, event, data) => {
+  const count = io?.sockets?.sockets?.size || 0;
+  console.log(
+    `[SOCKET EMIT] event=${event} room=${room} instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} localSocketsCount=${count} timestamp=${new Date().toISOString()}`
+  );
   if (io) {
     io.to(room).emit(event, data);
   }
@@ -207,6 +258,10 @@ export const emitToRoom = (room, event, data) => {
  * @param {any} data
  */
 export const emitToUser = (userId, event, data) => {
+  const count = io?.sockets?.sockets?.size || 0;
+  console.log(
+    `[SOCKET EMIT] event=${event} room=user:${userId} instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} localSocketsCount=${count} timestamp=${new Date().toISOString()}`
+  );
   if (io && userId) {
     io.to(`user:${userId.toString()}`).emit(event, data);
   }
@@ -218,7 +273,12 @@ export const emitToUser = (userId, event, data) => {
  * @param {any} data
  */
 export const emitToAdmin = (event, data) => {
+  const count = io?.sockets?.sockets?.size || 0;
+  console.log(
+    `[SOCKET EMIT] event=${event} room=admin instance=${RUNTIME_INSTANCE_ID} pid=${process.pid} localSocketsCount=${count} timestamp=${new Date().toISOString()}`
+  );
   if (io) {
     io.to("admin").emit(event, data);
   }
 };
+
