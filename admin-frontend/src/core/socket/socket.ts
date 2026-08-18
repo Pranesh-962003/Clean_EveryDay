@@ -22,8 +22,7 @@ export const getSocket = (token?: string | null): Socket => {
       auth: {
         token: token || undefined,
       },
-      transports: ["polling", "websocket"],
-      upgrade: true,
+      transports: ["websocket"],
       reconnection: true,
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,

@@ -1,4 +1,6 @@
 import { Server } from "socket.io";
+import { createAdapter } from "@socket.io/mongo-adapter";
+import mongoose from "mongoose";
 import { getAuth } from "firebase-admin/auth";
 import { User } from "../models/User.js";
 
@@ -6,6 +8,42 @@ export const RUNTIME_INSTANCE_ID =
   "inst_" + Math.random().toString(36).substring(2, 8) + "_" + Date.now().toString(36);
 
 let io = null;
+let adapterAttached = false;
+
+/**
+ * Attach MongoDB change stream adapter for cross-instance event broadcasting
+ */
+export const attachMongoAdapter = async () => {
+  if (adapterAttached || !io) return;
+  try {
+    if (mongoose.connection && mongoose.connection.readyState === 1 && mongoose.connection.db) {
+      const db = mongoose.connection.db;
+      const collectionName = "socket.io-adapter-events";
+
+      try {
+        const collections = await db.listCollections({ name: collectionName }).toArray();
+        if (collections.length === 0) {
+          await db.createCollection(collectionName, {
+            capped: true,
+            size: 1e6, // 1MB
+            max: 5000,
+          });
+        }
+      } catch (collErr) {
+        // Collection already exists
+      }
+
+      const mongoCollection = db.collection(collectionName);
+      io.adapter(createAdapter(mongoCollection));
+      adapterAttached = true;
+      console.log(
+        `[SOCKET ADAPTER] MongoDB adapter successfully attached on instance=${RUNTIME_INSTANCE_ID} pid=${process.pid}`
+      );
+    }
+  } catch (err) {
+    console.warn(`[SOCKET ADAPTER] Could not attach Mongo adapter:`, err.message);
+  }
+};
 
 /**
  * Initialize Socket.IO with HTTP Server
