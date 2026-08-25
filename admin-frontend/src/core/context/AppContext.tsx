@@ -1742,11 +1742,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Append new files per slot
       for (let i = 0; i < bannersToSave.length; i++) {
         const dFile = desktopFiles?.[i];
-        if (dFile instanceof File || dFile instanceof Blob) {
+        const currentBanner = updatedBanners[i];
+
+        if (dFile && dFile instanceof Blob) {
           formData.append(`desktopImage_${i}`, dFile);
-        } else if (updatedBanners[i]?.img && typeof updatedBanners[i].img === 'string' && updatedBanners[i].img.startsWith('data:')) {
+        } else if (currentBanner?.img && typeof currentBanner.img === 'string' && currentBanner.img.startsWith('data:')) {
           try {
-            const blob = await (await fetch(updatedBanners[i].img as string)).blob();
+            const blob = await (await fetch(currentBanner.img)).blob();
             formData.append(`desktopImage_${i}`, blob, `desktop_banner_${i + 1}.png`);
           } catch (err) {
             console.warn(`Could not convert desktop data URL for slot ${i}`, err);
@@ -1754,11 +1756,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
 
         const mFile = mobileFiles?.[i];
-        if (mFile instanceof File || mFile instanceof Blob) {
+        if (mFile && mFile instanceof Blob) {
           formData.append(`mobileImage_${i}`, mFile);
-        } else if (updatedBanners[i]?.mobileImg && typeof updatedBanners[i].mobileImg === 'string' && updatedBanners[i].mobileImg.startsWith('data:')) {
+        } else if (currentBanner?.mobileImg && typeof currentBanner.mobileImg === 'string' && currentBanner.mobileImg.startsWith('data:')) {
           try {
-            const blob = await (await fetch(updatedBanners[i].mobileImg as string)).blob();
+            const blob = await (await fetch(currentBanner.mobileImg)).blob();
             formData.append(`mobileImage_${i}`, blob, `mobile_banner_${i + 1}.png`);
           } catch (err) {
             console.warn(`Could not convert mobile data URL for slot ${i}`, err);
