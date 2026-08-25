@@ -36,7 +36,7 @@ export const register = async (req, res) => {
 
         if (existingUser) {
             existingUser.lastLogin = new Date();
-            if (!existingUser.uid && uid) {
+            if (uid && existingUser.uid !== uid) {
                 existingUser.uid = uid;
             }
             await existingUser.save();
@@ -124,11 +124,15 @@ export const login = async (req, res) => {
 
     try {
 
-        const { uid } = req.user;
+        const { uid, email } = req.user;
+
+        const orConditions = [];
+        if (uid) orConditions.push({ uid });
+        if (email) orConditions.push({ email });
 
         const user = await User.findOne({
-            uid,
             isDeleted: false,
+            ...(orConditions.length > 0 ? { $or: orConditions } : { uid }),
         });
 
         if (!user) {
@@ -138,6 +142,9 @@ export const login = async (req, res) => {
             });
         }
 
+        if (uid && user.uid !== uid) {
+            user.uid = uid;
+        }
         user.lastLogin = new Date();
 
         await user.save();
