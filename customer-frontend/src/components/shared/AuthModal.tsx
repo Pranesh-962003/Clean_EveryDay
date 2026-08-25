@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../core/context/AppContext';
 import { X, Sparkles, Eye, EyeOff, Mail, Lock, User, Phone, CheckCircle, Shield, KeyRound } from 'lucide-react';
-import { signInWithPopup, signInWithRedirect, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
+import { signInWithPopup, signInWithEmailAndPassword, createUserWithEmailAndPassword, sendEmailVerification } from "firebase/auth";
 // @ts-ignore
 import { auth, googleProvider } from "../../../firebase";
 import axios from 'axios';
@@ -275,70 +275,66 @@ const AuthModal: React.FC = () => {
     setErrorMsg(null);
     setIsLoading(true);
     try {
-      let result;
-      try {
-        result = await signInWithPopup(auth, googleProvider);
-      } catch (popupErr: any) {
-        console.warn("signInWithPopup failed or blocked by browser shields/COOP, switching to redirect:", popupErr);
-        if (
-          popupErr.code === 'auth/popup-blocked' ||
-          popupErr.code === 'auth/popup-closed-by-user' ||
-          popupErr.code === 'auth/cancelled-popup-request' ||
-          popupErr.message?.includes('Cross-Origin-Opener-Policy') ||
-          popupErr.message?.includes('popup')
-        ) {
-          await signInWithRedirect(auth, googleProvider);
-          return;
-        }
-        throw popupErr;
-      }
-
+      const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       const token = await user.getIdToken();
       console.log("Firebase Access Token:", token);
       
-      const payload = {
-        name: user.displayName || fullName.trim() || "User",
-        email: user.email || "",
-        phone: user.phoneNumber || phone.trim() || "",
-      };
-
-      let userData;
-      try {
-        const loginRes = await axios.post(
-          `${import.meta.env.VITE_BACKEND_URI}/auth/login`,
-          {},
-          {
-            headers: { Authorization: `Bearer ${token}` },
-            withCredentials: true,
-          }
-        );
-        userData = loginRes.data.user;
-      } catch (loginErr: any) {
-        const regRes = await axios.post(
+      if (isRegister) {
+        // Registration Flow with Google
+        const response = await axios.post(
           `${import.meta.env.VITE_BACKEND_URI}/auth/register`,
-          payload,
+          {
+            name: user.displayName || fullName.trim() || "User",
+            email: user.email || "",
+            phone: user.phoneNumber || phone.trim() || "",
+          },
           {
             headers: { Authorization: `Bearer ${token}` },
             withCredentials: true,
           }
         );
-        userData = regRes.data.user;
-      }
-
-      if (userData) {
-        await fetchCurrentUser(userData);
+        await fetchCurrentUser(response.data.user);
+      } else {
+        // Login Flow with Google — try login first, fallback to register if user not in DB
+        try {
+          const loginRes = await axios.post(
+            `${import.meta.env.VITE_BACKEND_URI}/auth/login`,
+            {},
+            {
+              headers: { Authorization: `Bearer ${token}` },
+              withCredentials: true,
+            }
+          );
+          await fetchCurrentUser(loginRes.data.user);
+        } catch (loginErr: any) {
+          if (loginErr.response?.status === 404) {
+            const regRes = await axios.post(
+              `${import.meta.env.VITE_BACKEND_URI}/auth/register`,
+              {
+                name: user.displayName || "User",
+                email: user.email || "",
+                phone: user.phoneNumber || "",
+              },
+              {
+                headers: { Authorization: `Bearer ${token}` },
+                withCredentials: true,
+              }
+            );
+            await fetchCurrentUser(regRes.data.user);
+          } else {
+            throw loginErr;
+          }
+        }
       }
 
       setIsLoading(false);
       closeAuthModal();
     } catch (error: any) {
       console.error("Google Auth error:", error);
-      let friendlyMessage = error.response?.data?.message || error.message || 'Google sign-in failed';
+      let friendlyMessage = error.message;
       if (error.code === 'auth/popup-closed-by-user') {
         friendlyMessage = 'Sign-in popup was closed before completing.';
-      } else if (error.code === 'auth/unauthorized-domain') {
-        friendlyMessage = 'This domain (clean-every-day.vercel.app) is not authorized in Firebase Console.';
       }
       setErrorMsg(friendlyMessage);
       setIsLoading(false);
