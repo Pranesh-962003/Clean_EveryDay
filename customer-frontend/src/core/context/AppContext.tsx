@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import axios from 'axios';
 import type { Product, Review, User, Lead, Banner, CartItem, Order, Staff, LeadActivity } from '../types';
+import { getRedirectResult } from 'firebase/auth';
 // @ts-ignore
 import { auth } from '../../../firebase';
 import { getSocket, updateSocketAuth } from '../socket/socket';
@@ -459,6 +460,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   useEffect(() => {
+    getRedirectResult(auth).then(async (result) => {
+      if (result && result.user) {
+        const token = await result.user.getIdToken();
+        const payload = {
+          name: result.user.displayName || "User",
+          email: result.user.email || "",
+          phone: result.user.phoneNumber || "",
+        };
+        try {
+          const loginRes = await axios.post(`${import.meta.env.VITE_BACKEND_URI}/auth/login`, {}, {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true,
+          });
+          await fetchCurrentUser(loginRes.data.user);
+        } catch {
+          const regRes = await axios.post(`${import.meta.env.VITE_BACKEND_URI}/auth/register`, payload, {
+            headers: { Authorization: `Bearer ${token}` },
+            withCredentials: true,
+          });
+          await fetchCurrentUser(regRes.data.user);
+        }
+      }
+    }).catch(console.error);
+
     fetchCurrentUser();
     fetchProducts();
     fetchBanners();
