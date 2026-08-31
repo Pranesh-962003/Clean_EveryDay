@@ -1,10 +1,10 @@
+import mongoose from "mongoose";
 import { User } from "../models/User.js";
 import { getAuth } from "firebase-admin/auth";
 import nodemailer from "nodemailer";
 
 export const register = async (req, res) => {
     try {
-
         const {
             uid,
             name,
@@ -13,12 +13,6 @@ export const register = async (req, res) => {
             phone_number,
             email_verified
         } = req.user;
-        console.log(  uid,
-            name,
-            email,
-            picture,
-            phone_number,
-            email_verified);
 
         const bodyName = req.body?.name || req.body?.fullName;
         const bodyPhone = req.body?.phone || req.body?.phoneNumber;
@@ -34,7 +28,25 @@ export const register = async (req, res) => {
             ? await User.findOne({ isDeleted: false, $or: orConditions })
             : null;
 
+        console.log("=== REGISTER DIAGNOSTIC START ===");
+        console.log("mongoose.connection.name:", mongoose.connection.name);
+        console.log("mongoose.connection.host:", mongoose.connection.host);
+        console.log("mongoose.connection.readyState:", mongoose.connection.readyState);
+        console.log("searched email:", userEmail);
+        console.log("searched UID:", uid);
+        console.log("existingUser found:", !!existingUser);
         if (existingUser) {
+            console.log("existingUser DETAILS:", {
+                _id: existingUser._id,
+                email: existingUser.email,
+                uid: existingUser.uid,
+                isDeleted: existingUser.isDeleted
+            });
+        }
+        console.log("=== REGISTER DIAGNOSTIC END ===");
+
+        if (existingUser) {
+            console.log("-> TAKING BRANCH: existingUser (HTTP 200)");
             existingUser.lastLogin = new Date();
             if (!existingUser.uid && uid) {
                 existingUser.uid = uid;
@@ -69,6 +81,8 @@ export const register = async (req, res) => {
             });
         }
 
+        console.log("ABOUT TO CREATE USER in DB:", mongoose.connection.name);
+
         // Create new user using decoded token claims + req.body form inputs
         const user = await User.create({
             uid,
@@ -79,6 +93,8 @@ export const register = async (req, res) => {
             isEmailVerified: email_verified,
             lastLogin: new Date(),
         });
+
+        console.log("USER CREATED SUCCESSFULLY with ID:", user._id);
 
         // Set session cookie on successful registration
         try {
