@@ -4,7 +4,11 @@ import { User } from "../models/User.js";
 import { createTransporter } from "./email.js";
 
 
+let schedulerStarted = false;
+
 export const startReminderScheduler = () => {
+    if (schedulerStarted) return;
+    schedulerStarted = true;
 
     // Run every minute
     cron.schedule("* * * * *", async () => {

@@ -17,19 +17,25 @@ export const getSocketUrl = (): string => {
 export const getSocket = (token?: string | null): Socket => {
   if (!socketInstance) {
     const url = getSocketUrl();
+    const isVercelServerless = url.includes("vercel.app") && !import.meta.env.VITE_SOCKET_URL;
+
     socketInstance = io(url, {
       path: "/socket.io/",
       auth: {
         token: token || undefined,
       },
-      transports: ["polling", "websocket"],
-      reconnection: true,
-      reconnectionAttempts: Infinity,
-      reconnectionDelay: 1000,
+      transports: isVercelServerless ? ["websocket"] : ["polling", "websocket"],
+      reconnection: !isVercelServerless,
+      reconnectionAttempts: isVercelServerless ? 2 : Infinity,
+      reconnectionDelay: 2000,
       reconnectionDelayMax: 5000,
-      timeout: 20000,
-      autoConnect: true,
+      timeout: 10000,
+      autoConnect: !isVercelServerless,
     });
+
+    if (!isVercelServerless) {
+      socketInstance.connect();
+    }
 
     socketInstance.on("connect", () => {
       if (import.meta.env.DEV) {
@@ -38,7 +44,9 @@ export const getSocket = (token?: string | null): Socket => {
     });
 
     socketInstance.on("connect_error", (err) => {
-      if (import.meta.env.DEV) {
+      if (isVercelServerless && socketInstance) {
+        socketInstance.disconnect();
+      } else if (import.meta.env.DEV) {
         console.warn("[Admin Socket.IO] Connection error:", err.message);
       }
     });
