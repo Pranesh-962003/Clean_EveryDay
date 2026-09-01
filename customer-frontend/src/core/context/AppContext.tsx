@@ -869,6 +869,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const logoutUser = async () => {
     try {
+      localStorage.removeItem('ce_cur_user');
+      localStorage.removeItem('ce_cart');
+      localStorage.removeItem('ce_orders');
+      localStorage.removeItem('ce_checkout_addresses');
+      sessionStorage.removeItem('ce_access_token');
+    } catch (e) {}
+
+    document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
+    try {
       const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
       await axios.post(`${backendUrl}/auth/logout`, {}, { withCredentials: true });
     } catch (err) {
@@ -881,11 +892,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Firebase signOut failed:', err);
     }
-    sessionStorage.removeItem('ce_access_token');
-    // Clear user-specific data from localStorage on logout
-    localStorage.removeItem('ce_cart');
-    localStorage.removeItem('ce_orders');
-    localStorage.removeItem('ce_checkout_addresses');
     setCart([]);
     setOrders([]);
     setCurUser(null);

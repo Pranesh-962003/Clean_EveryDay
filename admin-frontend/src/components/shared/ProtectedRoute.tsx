@@ -8,13 +8,24 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requireAdmin = false }) => {
-  const { curUser, openAuthModal } = useApp();
+  const { curUser, openAuthModal, isAuthLoading } = useApp();
 
   useEffect(() => {
-    if (!curUser) {
+    if (!isAuthLoading && (!curUser || (requireAdmin && !curUser.isAdmin))) {
       openAuthModal('login');
     }
-  }, [curUser, openAuthModal]);
+  }, [curUser, isAuthLoading, requireAdmin, openAuthModal]);
+
+  if (isAuthLoading) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[80vh] px-4 text-center select-none bg-sur">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-3 border-blk border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs text-mut font-semibold">Verifying Admin Session...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (!curUser || (requireAdmin && !curUser.isAdmin)) {
     return (

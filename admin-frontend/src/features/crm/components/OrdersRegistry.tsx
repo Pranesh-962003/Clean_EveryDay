@@ -14,7 +14,8 @@ import {
   Calendar,
   IndianRupee,
   X,
-  CheckSquare
+  CheckSquare,
+  Loader2
 } from 'lucide-react';
 
 
@@ -29,8 +30,10 @@ const OrdersRegistry: React.FC = () => {
   } = useApp();
 
   const [apiOrders, setApiOrders] = useState<Order[] | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const loadOrders = useCallback(async () => {
+    setIsLoading(true);
     try {
       const firebaseUser = auth.currentUser;
       let token = '';
@@ -91,6 +94,8 @@ const OrdersRegistry: React.FC = () => {
       }
     } catch (err) {
       console.warn('Orders Registry API note:', err);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
@@ -450,7 +455,16 @@ const OrdersRegistry: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-bdrl text-sm">
-              {currentItems.length > 0 ? (
+              {isLoading ? (
+                <tr>
+                  <td colSpan={10} className="py-16 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
+                      <Loader2 className="w-8 h-8 text-primary animate-spin" />
+                      <p className="text-xs font-semibold text-mut">Fetching orders data from server...</p>
+                    </div>
+                  </td>
+                </tr>
+              ) : currentItems.length > 0 ? (
                 currentItems.map((o) => (
                   <tr key={o.id} className="hover:bg-sur/10 transition-colors">
                     {/* ID */}

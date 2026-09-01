@@ -276,15 +276,6 @@ const DEF_STAFF: Staff[] = [
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Purge any existing legacy localStorage keys from browser
-  useEffect(() => {
-    try {
-      localStorage.clear();
-    } catch (e) {
-      // Ignore
-    }
-  }, []);
-
   const [products, setProducts] = useState<Product[]>(DEF_PRODS);
   const [reviews, setReviews] = useState<Review[]>(DEF_REVS);
   const [users, setUsers] = useState<User[]>(DEF_USERS);
@@ -319,18 +310,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       if (preFetchedUser.isAdmin) {
         setCurUser(preFetchedUser);
+        try {
+          localStorage.setItem('ce_cur_user', JSON.stringify(preFetchedUser));
+        } catch (e) {}
         setIsAuthLoading(false);
         return;
       }
     }
     try {
+      await auth.authStateReady();
       const backendUrl = import.meta.env.VITE_BACKEND_URI;
       let response;
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      }
       if (backendUrl) {
         try {
-          response = await axios.get(`${backendUrl}/auth/me`, { withCredentials: true });
+          response = await axios.get(`${backendUrl}/auth/me`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            withCredentials: true
+          });
         } catch {
-          response = await axios.get(`${backendUrl}/users/current-user`, { withCredentials: true });
+          response = await axios.get(`${backendUrl}/users/current-user`, {
+            headers: token ? { Authorization: `Bearer ${token}` } : {},
+            withCredentials: true
+          });
         }
       }
       if (response && response.data && response.data.success && response.data.user) {
@@ -339,19 +344,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           dbUser.avatar = dbUser.photoURL;
         }
         setCurUser(dbUser);
+        try {
+          localStorage.setItem('ce_cur_user', JSON.stringify(dbUser));
+        } catch (e) {}
+      } else if (auth.currentUser) {
+        const fbUser: User = {
+          name: auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || 'Admin',
+          email: auth.currentUser.email || '',
+          avatar: auth.currentUser.photoURL || undefined,
+          isAdmin: true
+        };
+        setCurUser(fbUser);
+        try {
+          localStorage.setItem('ce_cur_user', JSON.stringify(fbUser));
+        } catch (e) {}
       } else {
         const savedUserStr = localStorage.getItem('ce_cur_user');
         const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
         setCurUser(savedUser);
       }
     } catch (error: any) {
-      const savedUserStr = localStorage.getItem('ce_cur_user');
-      const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
-      if (error.response?.status === 401) {
-        setCurUser(null);
+      if (auth.currentUser) {
+        const fbUser: User = {
+          name: auth.currentUser.displayName || auth.currentUser.email?.split('@')[0] || 'Admin',
+          email: auth.currentUser.email || '',
+          avatar: auth.currentUser.photoURL || undefined,
+          isAdmin: true
+        };
+        setCurUser(fbUser);
+        try {
+          localStorage.setItem('ce_cur_user', JSON.stringify(fbUser));
+        } catch (e) {}
       } else {
-        console.error("Error fetching current user session:", error);
-        setCurUser(savedUser);
+        const savedUserStr = localStorage.getItem('ce_cur_user');
+        const savedUser = savedUserStr ? JSON.parse(savedUserStr) : null;
+        if (error.response?.status === 401) {
+          setCurUser(null);
+          try {
+            localStorage.removeItem('ce_cur_user');
+          } catch (e) {}
+        } else {
+          console.error("Error fetching current user session:", error);
+          setCurUser(savedUser);
+        }
       }
     } finally {
       setIsAuthLoading(false);
@@ -632,8 +667,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         } catch {
           updateSocketAuth(null);
         }
+        await fetchCurrentUser();
       } else {
         updateSocketAuth(null);
+        await fetchCurrentUser();
       }
     });
 
@@ -737,6 +774,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const logoutUser = async () => {
+    // Clear user-specific storage BEFORE signOut to prevent auth listeners from restoring session
+    try {
+      localStorage.removeItem('ce_cur_user');
+      localStorage.removeItem('ce_cart');
+      localStorage.removeItem('ce_orders');
+      localStorage.removeItem('ce_checkout_addresses');
+      sessionStorage.removeItem('ce_access_token');
+    } catch (e) {}
+
+    // Expire any client-accessible cookies
+    document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+
     try {
       const backendUrl = import.meta.env.VITE_BACKEND_URI;
       if (backendUrl) {
@@ -745,6 +795,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Backend logout API call failed:', err);
     }
+
     try {
       if (auth.currentUser) {
         await auth.signOut();
@@ -753,19 +804,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       console.warn('Firebase signOut failed:', err);
     }
 
-    // Expire any client-accessible cookies
-    document.cookie = "session=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    document.cookie = "token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-
-    sessionStorage.removeItem('ce_access_token');
-    // Clear user-specific data from localStorage on logout
-    localStorage.removeItem('ce_cart');
-    localStorage.removeItem('ce_orders');
-    localStorage.removeItem('ce_checkout_addresses');
     setCart([]);
     setOrders([]);
     setCurUser(null);
-    setCurPage('home');
     showToast('Signed out successfully.');
   };
 
