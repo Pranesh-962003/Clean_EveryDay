@@ -239,9 +239,28 @@ const ProductDetail: React.FC = () => {
   }, [product?.id, product?._id]);
 
   // Reviews & rating
-  const prodReviews = reviews.filter(
-    (r) => r.approved && (r.product === product.name || (product._id && (r._id === product._id || r.product === product._id)))
-  );
+  const prodReviews = reviews.filter((r) => {
+    if (!r.approved) return false;
+
+    const matchesName =
+      r.product &&
+      product.name &&
+      r.product.toLowerCase().trim() === product.name.toLowerCase().trim();
+
+    const matchesProductId =
+      r.productId !== undefined &&
+      ((product._id && String(r.productId) === String(product._id)) ||
+        (product.id && String(r.productId) === String(product.id)) ||
+        (product.sku && String(r.productId) === String(product.sku)));
+
+    const matchesDirectRef =
+      r.product &&
+      ((product._id && String(r.product) === String(product._id)) ||
+        (product.id && String(r.product) === String(product.id)) ||
+        (product.sku && String(r.product) === String(product.sku)));
+
+    return Boolean(matchesName || matchesProductId || matchesDirectRef);
+  });
   const rating = prodReviews.length
     ? (prodReviews.reduce((sum, r) => sum + r.rating, 0) / prodReviews.length).toFixed(1)
     : product.rating.toFixed(1);

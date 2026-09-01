@@ -595,10 +595,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const handleReviewStatusUpdated = (data: { review: any; status: string }) => {
       if (!data?.review) return;
-      if (data.status === 'Approved') {
-        fetchProductReviews(data.review.product);
+      const rData = data.review;
+      const targetStatus = data.status || rData.status;
+      const revId = String(rData._id || rData.id);
+
+      if (targetStatus === 'Approved') {
+        const authorName = rData.authorName || rData.author || 'Customer';
+        const initials = authorName
+          .split(' ')
+          .map((w: string) => w[0])
+          .join('')
+          .toUpperCase()
+          .substring(0, 2) || 'C';
+
+        let prodName = 'General';
+        const targetProdId = typeof rData.product === 'object' ? (rData.product._id || rData.product.id || rData.product.sku) : rData.product;
+        const matchedProd = products.find(
+          (p) => String(p._id) === String(targetProdId) || String(p.id) === String(targetProdId) || String(p.sku) === String(targetProdId)
+        );
+        if (matchedProd) {
+          prodName = matchedProd.name;
+        } else if (rData.product?.title || rData.product?.name) {
+          prodName = rData.product.title || rData.product.name;
+        }
+
+        const approvedReview: Review = {
+          id: rData._id || rData.id || Date.now(),
+          _id: rData._id || rData.id,
+          author: authorName,
+          ini: initials,
+          role: rData.isVerifiedPurchase || rData.verifiedPurchase ? 'Verified Purchaser' : 'Customer',
+          img: rData.profileImage || rData.img || null,
+          rating: Number(rData.rating) || 5,
+          body: rData.comment || rData.review || rData.body || '',
+          product: prodName,
+          productId: targetProdId || (matchedProd ? (matchedProd._id || matchedProd.id) : undefined),
+          approved: true,
+          status: 'Approved',
+          date: rData.createdAt
+            ? new Date(rData.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
+            : (rData.date || new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }))
+        };
+
+        setReviews((prev) => {
+          const exists = prev.some((item) => String(item._id || item.id) === revId);
+          if (exists) {
+            return prev.map((item) => (String(item._id || item.id) === revId ? approvedReview : item));
+          }
+          return [approvedReview, ...prev];
+        });
+
+        const prodQueryId = typeof rData.product === 'object' ? rData.product?._id : rData.product;
+        if (prodQueryId) {
+          fetchProductReviews(prodQueryId, prodName);
+        }
       } else {
-        setReviews((prev) => prev.filter((r) => r._id !== data.review._id && String(r.id) !== String(data.review._id)));
+        setReviews((prev) => prev.filter((r) => String(r._id || r.id) !== revId));
       }
     };
 
@@ -1262,6 +1314,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             rating: Number(r.rating) || 5,
             body: r.review || r.comment || '',
             product: productName || 'General',
+            productId: productId,
             approved: true,
             status: 'Approved' as const,
             date: r.date
@@ -1271,9 +1324,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
 
         setReviews((prev) => {
-          const existingIds = new Set(prev.map((existing) => String(existing._id || existing.id)));
-          const newItems = fetched.filter((item) => !existingIds.has(String(item._id || item.id)));
-          return [...newItems, ...prev];
+          const fetchedMap = new Map(fetched.map((item) => [String(item._id || item.id), item]));
+          const updatedPrev = prev.map((existing) => {
+            const id = String(existing._id || existing.id);
+            if (fetchedMap.has(id)) {
+              const updated = fetchedMap.get(id)!;
+              fetchedMap.delete(id);
+              return updated;
+            }
+            return existing;
+          });
+          return [...Array.from(fetchedMap.values()), ...updatedPrev];
         });
 
         if (fetched.length > 0) {

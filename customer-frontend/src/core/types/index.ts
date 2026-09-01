@@ -47,6 +47,7 @@ export interface Review {
   rating: number;
   body: string;
   product: string; // Product name or "General"
+  productId?: string | number; // Product ID, SKU, or ObjectId
   approved: boolean;
   date: string;
   reply?: string; // Admin reply text

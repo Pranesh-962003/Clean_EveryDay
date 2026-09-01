@@ -22,6 +22,8 @@ import axios from 'axios';
 // @ts-ignore
 import { auth } from '../../../../firebase';
 import type { User as UserType } from '../../../core/types';
+import { getSocket } from '../../../core/socket/socket';
+import { SOCKET_EVENTS } from '../../../core/socket/socketEvents';
 
 interface SavedAddress {
   id: string;
@@ -189,6 +191,28 @@ const Profile: React.FC = () => {
 
     fetchUserReviews();
   }, [curUser, activeTab]);
+
+  // Real-time synchronization for review status updates
+  useEffect(() => {
+    const socket = getSocket();
+    const handleStatusUpdate = (data: { review: any; status: string }) => {
+      if (!data?.review) return;
+      const updatedRev = data.review;
+      setMyFetchedReviews((prev) =>
+        prev.map((r) => {
+          if (String(r._id || r.id) === String(updatedRev._id || updatedRev.id)) {
+            return { ...r, ...updatedRev, status: data.status || updatedRev.status };
+          }
+          return r;
+        })
+      );
+    };
+
+    socket.on(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleStatusUpdate);
+    return () => {
+      socket.off(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleStatusUpdate);
+    };
+  }, []);
 
   // Combined user reviews list
   const displayReviews = isReviewsFetched 
