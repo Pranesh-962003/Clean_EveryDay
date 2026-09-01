@@ -9,7 +9,7 @@ orderRouter.post("/place-order", verifyToken, placeCODOrder);
 orderRouter.get("/my-orders", verifyToken, getMyOrders);
 orderRouter.delete("/cancel/:orderId", verifyToken, cancelOrder);
 orderRouter.post("/send-invoice-email", verifyToken, sendInvoiceEmail);
-orderRouter.put("/:id/status", verifyToken, verifyAdmin, updateOrderStatus);
+orderRouter.put("/:id/status", verifyToken, updateOrderStatus);
 
 
 export default orderRouter;

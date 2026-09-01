@@ -364,12 +364,12 @@ const Orders: React.FC = () => {
   };
 
   // Handle Return
-  const handleReturnOrder = (orderId: string) => {
+  const handleReturnOrder = async (orderId: string, _id?: string) => {
     if (window.confirm("Are you sure you want to request a return for this order?")) {
-      updateOrderStatus(orderId, 'Returned');
+      const targetId = _id || orderId;
+      await updateOrderStatus(orderId, 'Returned', targetId);
       addOrderTimelineEvent(orderId, 'Returned', 'Return requested by customer');
-      showToast(`Return request logged for order ${orderId}.`);
-      if (activeOrder && activeOrder.id === orderId) {
+      if (activeOrder && (activeOrder.id === orderId || activeOrder._id === _id)) {
         setActiveOrder(prev => prev ? { ...prev, status: 'Returned' } : null);
       }
     }

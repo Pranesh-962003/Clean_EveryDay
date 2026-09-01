@@ -311,6 +311,42 @@ export const updateOrderStatus = async (req, res) => {
         }
 
         // =====================================
+        // Authorization Check
+        // =====================================
+
+        let isUserAdmin = false;
+        let requestingUser = null;
+        if (req.user && req.user.uid) {
+            requestingUser = await User.findOne({ uid: req.user.uid, isDeleted: false });
+            if (requestingUser && requestingUser.isAdmin && requestingUser.role === "Admin") {
+                isUserAdmin = true;
+            }
+        }
+
+        if (!isUserAdmin) {
+            const customerMongoId = (order.customer?._id || order.customer || "").toString();
+            const requestingUserMongoId = (requestingUser?._id || "").toString();
+            const requestingUserUid = req.user?.uid || "";
+            
+            const isOwner = (requestingUserMongoId && customerMongoId === requestingUserMongoId) || 
+                            (order.customer && order.customer.uid === requestingUserUid);
+
+            if (!isOwner) {
+                return res.status(403).json({
+                    success: false,
+                    message: "Access denied. You do not own this order."
+                });
+            }
+
+            if (status !== "Cancelled" && status !== "Returned") {
+                return res.status(403).json({
+                    success: false,
+                    message: "Customers are only allowed to cancel or return their order."
+                });
+            }
+        }
+
+        // =====================================
         // Ensure Shipping Exists
         // =====================================
 
@@ -459,6 +495,12 @@ export const updateOrderStatus = async (req, res) => {
         emitToAdmin("order:statusUpdated", { order, status });
         if (customerId) {
             emitToUser(customerId, "order:statusUpdated", { order, status });
+            if (typeof order.customer === "object" && order.customer?.uid) {
+                emitToUser(order.customer.uid, "order:statusUpdated", { order, status });
+            }
+        }
+        if (req.user?.uid) {
+            emitToUser(req.user.uid, "order:statusUpdated", { order, status });
         }
         if (status === "Cancelled" || status === "Returned") {
             if (Array.isArray(order.items)) {

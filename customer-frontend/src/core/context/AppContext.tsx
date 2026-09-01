@@ -64,7 +64,7 @@ interface AppContextType {
   fetchBanners: () => Promise<void>;
   showToast: (msg: string) => void;
   updateProduct: (product: Product, localDeletedImagePublicIds?: string[]) => Promise<boolean>;
-  updateOrderStatus: (id: string, status: Order['status']) => void;
+  updateOrderStatus: (id: string, status: Order['status'], targetId?: string) => Promise<boolean>;
   cancelOrder: (orderId: string, reason?: string) => Promise<{ success: boolean; message?: string }>;
   updateOrderDetails: (id: string, details: Partial<Order>) => void;
   addOrderTimelineEvent: (id: string, status: string, notes?: string) => void;
@@ -689,11 +689,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const updated = mapBackendOrderToFrontend(data.order);
       setOrders((prev) =>
         prev.map((o) => {
-          if (
-            (data.order.orderNumber && o.orderNumber === data.order.orderNumber) ||
-            (data.order._id && o._id === data.order._id) ||
-            (data.order.orderNumber && o.id === data.order.orderNumber)
-          ) {
+          const match =
+            (data.order._id && (o._id === data.order._id || o.id === data.order._id)) ||
+            (data.order.orderNumber && (o.orderNumber === data.order.orderNumber || o.id === data.order.orderNumber)) ||
+            (data.order.id && (o.id === data.order.id || o._id === data.order.id));
+          if (match) {
             return {
               ...o,
               ...updated,
@@ -1964,6 +1964,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return {
       _id: b._id,
       id: b.orderNumber || b.id || b._id,
+      orderNumber: b.orderNumber || b.id || b._id,
       date: b.createdAt
         ? new Date(b.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })
         : new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
@@ -2127,26 +2128,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateOrderStatus = (id: string, status: Order['status']) => {
+  const updateOrderStatus = async (id: string, status: Order['status'], targetId?: string): Promise<boolean> => {
     const isAllowedSelfAction = status === 'Cancelled' || status === 'Returned';
 
-    if (!isAllowedSelfAction && !checkAdminPermission()) return;
+    if (!isAllowedSelfAction && !curUser?.isAdmin) return false;
 
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id === id) {
-          const nextTimeline = o.timeline ? [...o.timeline] : [];
-          nextTimeline.push({
-            status,
-            date: new Date().toLocaleString('en-IN'),
-            notes: isAllowedSelfAction ? `Status updated to ${status} by customer.` : `Status updated to ${status} by admin.`
-          });
-          return { ...o, status, timeline: nextTimeline };
+    try {
+      if (!auth.currentUser) {
+        await auth.authStateReady();
+      }
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const orderIdToUse = targetId || id;
+
+      const response = await axios.put(
+        `${backendUrl}/orders/${orderIdToUse}/status`,
+        { status },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true
         }
-        return o;
-      })
-    );
-    showToast(`Order status updated to ${status}.`);
+      );
+
+      if (response.data && response.data.success) {
+        setOrders((prev) =>
+          prev.map((o) => {
+            if (o.id === id || o.id === targetId || o._id === id || o._id === targetId || (o.orderNumber && (o.orderNumber === id || o.orderNumber === targetId))) {
+              const nextTimeline = o.timeline ? [...o.timeline] : [];
+              nextTimeline.push({
+                status,
+                date: new Date().toLocaleString('en-IN'),
+                notes: isAllowedSelfAction ? `Status updated to ${status} by customer.` : `Status updated to ${status} by admin.`
+              });
+              return { ...o, status, timeline: nextTimeline };
+            }
+            return o;
+          })
+        );
+        showToast(`Order status updated to ${status}.`);
+        return true;
+      } else {
+        showToast(response.data?.message || 'Failed to update order status.');
+        return false;
+      }
+    } catch (err: any) {
+      console.warn('API updateOrderStatus note:', err);
+      setOrders((prev) =>
+        prev.map((o) => {
+          if (o.id === id || o.id === targetId || o._id === id || o._id === targetId) {
+            const nextTimeline = o.timeline ? [...o.timeline] : [];
+            nextTimeline.push({
+              status,
+              date: new Date().toLocaleString('en-IN'),
+              notes: isAllowedSelfAction ? `Status updated to ${status} by customer.` : `Status updated to ${status} by admin.`
+            });
+            return { ...o, status, timeline: nextTimeline };
+          }
+          return o;
+        })
+      );
+      showToast(`Order status updated to ${status}.`);
+      return true;
+    }
   };
 
   const cancelOrder = async (orderId: string, reason?: string): Promise<{ success: boolean; message?: string }> => {

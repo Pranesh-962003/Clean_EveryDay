@@ -132,7 +132,7 @@ export const initSocket = (httpServer) => {
             socket.user = user;
             socket.userId = user._id.toString();
             socket.uid = decoded.uid;
-            socket.isAdmin = !!(user.isAdmin && user.role === "Admin");
+            socket.isAdmin = !!(user.isAdmin || user.role === "Admin");
           }
         } catch (authErr) {
           console.warn("[Socket.IO] Invalid/expired token during handshake, proceeding as guest:", authErr.message);
@@ -196,7 +196,7 @@ export const initSocket = (httpServer) => {
         socket.user = user;
         socket.userId = user._id.toString();
         socket.uid = decoded.uid;
-        socket.isAdmin = !!(user.isAdmin && user.role === "Admin");
+        socket.isAdmin = !!(user.isAdmin || user.role === "Admin");
 
         socket.join(`user:${socket.userId}`);
         socket.join(`user:${socket.uid}`);
