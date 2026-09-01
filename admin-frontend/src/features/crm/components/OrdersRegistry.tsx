@@ -32,8 +32,8 @@ const OrdersRegistry: React.FC = () => {
   const [apiOrders, setApiOrders] = useState<Order[] | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
-  const loadOrders = useCallback(async () => {
-    setIsLoading(true);
+  const loadOrders = useCallback(async (silent: boolean = false) => {
+    if (!silent) setIsLoading(true);
     try {
       const firebaseUser = auth.currentUser;
       let token = '';
@@ -95,15 +95,15 @@ const OrdersRegistry: React.FC = () => {
     } catch (err) {
       console.warn('Orders Registry API note:', err);
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadOrders();
+    loadOrders(false);
     const socket = getSocket();
     const handleOrderEvent = () => {
-      loadOrders();
+      loadOrders(true);
     };
 
     socket.on(SOCKET_EVENTS.ORDER_CREATED, handleOrderEvent);
@@ -131,8 +131,8 @@ const OrdersRegistry: React.FC = () => {
           : null
       );
       await updateOrderStatus(orderId, newStatus, _id);
-      // Automatically re-fetch API to sync latest data without refreshing page
-      await loadOrders();
+      // Automatically re-fetch API silently to sync latest data without table loading overlay
+      await loadOrders(true);
     } catch (err) {
       console.warn('Status change error:', err);
     } finally {
