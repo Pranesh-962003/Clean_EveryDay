@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '../../../core/context/AppContext';
 import BannerCarousel from '../components/BannerCarousel';
 import ProductCard from '../components/ProductCard';
+import ProductSkeletonCard from '../components/ProductSkeletonCard';
 import ReviewCard from '../components/ReviewCard';
 import {
   ShieldCheck,
@@ -18,6 +19,7 @@ import {
 const Home: React.FC = () => {
   const {
     products,
+    isProductsLoading,
     reviews,
     curUser,
     openAuthModal,
@@ -133,9 +135,13 @@ const Home: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {featuredProducts.map((product) => (
-              <ProductCard key={product.id} product={product} />
-            ))}
+            {isProductsLoading
+              ? Array.from({ length: 4 }).map((_, idx) => (
+                  <ProductSkeletonCard key={idx} />
+                ))
+              : featuredProducts.map((product) => (
+                  <ProductCard key={product.id} product={product} />
+                ))}
           </div>
         </section>
 

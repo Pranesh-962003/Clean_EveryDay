@@ -8,6 +8,7 @@ import { SOCKET_EVENTS } from '../socket/socketEvents';
 
 interface AppContextType {
   products: Product[];
+  isProductsLoading: boolean;
   reviews: Review[];
   users: User[];
   leads: Lead[];
@@ -300,6 +301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const [products, setProducts] = useState<Product[]>(DEF_PRODS);
+  const [isProductsLoading, setIsProductsLoading] = useState<boolean>(true);
   const [reviews, setReviews] = useState<Review[]>(DEF_REVS);
   const [users, setUsers] = useState<User[]>(DEF_USERS);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -388,6 +390,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const fetchProducts = async () => {
+    setIsProductsLoading(true);
     try {
       const response = await axios.get(`${import.meta.env.VITE_BACKEND_URI}/products`, {
         params: { limit: 1000 }
@@ -427,6 +430,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (error) {
       console.error('Error fetching products from API:', error);
+    } finally {
+      setIsProductsLoading(false);
     }
   };
 
@@ -2252,6 +2257,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     <AppContext.Provider
       value={{
         products,
+        isProductsLoading,
         reviews,
         users,
         leads,
