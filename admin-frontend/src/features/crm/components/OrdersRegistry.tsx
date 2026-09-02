@@ -14,9 +14,30 @@ import {
   Calendar,
   IndianRupee,
   X,
-  CheckSquare,
-  Carrot
+  CheckSquare
 } from 'lucide-react';
+
+const RunningTruckParcel: React.FC<{ size?: 'sm' | 'md' }> = ({ size = 'sm' }) => (
+  <div className={`relative overflow-hidden flex items-center justify-center mx-auto ${size === 'sm' ? 'w-20 h-4 mb-0.5' : 'w-28 h-8'}`}>
+    <style>{`
+      @keyframes truckParcelRunVanish {
+        0% { transform: translateX(-24px); opacity: 0; }
+        25% { opacity: 1; }
+        75% { opacity: 1; }
+        100% { transform: translateX(24px); opacity: 0; }
+      }
+    `}</style>
+    <div 
+      className="relative flex items-center text-primary"
+      style={{ animation: 'truckParcelRunVanish 0.85s linear infinite' }}
+    >
+      <div className="relative flex items-center">
+        <Truck size={size === 'sm' ? 14 : 24} className="text-primary stroke-[2.2]" />
+        <div className={size === 'sm' ? "absolute -top-[2px] left-[2px] w-[6px] h-[5px] bg-amber-500 rounded-[1px] border border-amber-700 shadow-xs" : "absolute -top-[4px] left-[3px] w-[10px] h-[8px] bg-amber-500 rounded-[1px] border border-amber-700 shadow-xs"} />
+      </div>
+    </div>
+  </div>
+);
 
 const STORAGE_ORDERS_KEY = 'ce_admin_orders_registry_cache';
 
@@ -559,28 +580,7 @@ const OrdersRegistry: React.FC = () => {
                 <tr>
                   <td colSpan={10} className="py-16 text-center">
                     <div className="flex flex-col items-center justify-center gap-3 select-none">
-                      <style>{`
-                        @keyframes carrotRun {
-                          0%, 100% { transform: translateX(-16px) rotate(-12px) translateY(0); }
-                          50% { transform: translateX(16px) rotate(12px) translateY(-8px); }
-                        }
-                        @keyframes carrotShadow {
-                          0%, 100% { transform: translateX(-16px) scaleX(1); opacity: 0.6; }
-                          50% { transform: translateX(16px) scaleX(0.6); opacity: 0.25; }
-                        }
-                        .animate-carrot-run {
-                          animation: carrotRun 0.75s ease-in-out infinite;
-                        }
-                        .animate-carrot-shadow {
-                          animation: carrotShadow 0.75s ease-in-out infinite;
-                        }
-                      `}</style>
-                      <div className="relative flex items-center justify-center w-20 h-12">
-                        <div className="animate-carrot-run inline-block text-orange-500">
-                          <Carrot className="w-9 h-9 text-orange-500 stroke-[2.2]" />
-                        </div>
-                        <div className="absolute -bottom-1 w-8 h-1.5 bg-orange-200/80 rounded-full animate-carrot-shadow blur-[1px]" />
-                      </div>
+                      <RunningTruckParcel size="md" />
                       <p className="text-xs font-semibold text-mut tracking-wide">Fetching orders data from server...</p>
                     </div>
                   </td>
@@ -621,11 +621,9 @@ const OrdersRegistry: React.FC = () => {
 
                     {/* Order status dropdown */}
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
-                      <div className="inline-flex items-center gap-1.5 justify-center">
+                      <div className="flex flex-col items-center justify-center min-w-[130px]">
                         {Boolean(updatingOrderId && (updatingOrderId === o.id || updatingOrderId === o._id)) ? (
-                          <div className="inline-flex items-center justify-center shrink-0" title="Updating order status...">
-                            <Carrot className="w-4 h-4 text-orange-500 animate-carrot-run" />
-                          </div>
+                          <RunningTruckParcel size="sm" />
                         ) : null}
                         <select
                           disabled={Boolean(updatingOrderId && (updatingOrderId === o.id || updatingOrderId === o._id))}
