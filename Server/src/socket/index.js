@@ -65,6 +65,8 @@ export const initSocket = (httpServer) => {
   };
 
   const allowedOrigins = [
+    "https://cleaneveryday.liftabit.in",
+    "https://cleaneveryday-admin.liftabit.in",
     "https://clean-every-day.vercel.app",
     "https://clean-every-day-244d.vercel.app",
     "http://localhost:5173",

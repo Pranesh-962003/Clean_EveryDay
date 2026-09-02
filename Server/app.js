@@ -59,6 +59,8 @@ const parseOrigins = (val) => {
 };
 
 const allowedOrigins = [
+  "https://cleaneveryday.liftabit.in",
+  "https://cleaneveryday-admin.liftabit.in",
   "https://clean-every-day.vercel.app",
   "https://clean-every-day-244d.vercel.app",
   "http://localhost:5173",
@@ -75,14 +77,16 @@ app.use(
       if (!origin) return callback(null, true);
       const cleanOrigin = origin.replace(/\/+$/, "");
       if (
+        cleanOrigin.endsWith(".liftabit.in") ||
+        cleanOrigin.endsWith(".vercel.app") ||
         cleanOrigin.startsWith("http://localhost:") ||
         cleanOrigin.startsWith("http://127.0.0.1:") ||
         allowedOrigins.includes(cleanOrigin) ||
         allowedOrigins.length === 0
       ) {
-        return callback(null, cleanOrigin);
+        return callback(null, true);
       }
-      return callback(null, cleanOrigin);
+      return callback(null, true);
     },
     credentials: true,
   })
