@@ -1675,42 +1675,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             const fetchedCartItems = response.data.cart.items || [];
             const mappedCart: CartItem[] = fetchedCartItems.map((item: any) => {
               const p = item.product;
-              if (!p) return null;
-              const matchedProd = products.find(prod => prod._id === p._id || prod.sku === p.sku);
+              if (!p || typeof p !== 'object') return null;
+              const matchedProd = products.find(prod => (p._id && prod._id === p._id) || (p.sku && prod.sku === p.sku) || (prod.id && (String(prod.id) === String(p._id) || String(prod.id) === String(p.id))));
+              
+              const prodObj = matchedProd || {
+                id: p.id || p._id || Math.floor(Math.random() * 100000),
+                _id: p._id || String(p.id || ''),
+                name: p.title || p.name || 'Formulated Cleaner',
+                cat: p.category || 'Floor Care',
+                desc: p.description || '',
+                tags: p.tags || [],
+                badge: p.badge === 'None' ? null : (p.badge || null),
+                imgs: p.images?.length > 0 ? p.images.map((im: any) => im.url || im) : (p.imgs || []),
+                price: p.sellingPrice || p.retailPrice || p.price || 299,
+                sku: p.sku || 'CE-PROD',
+                brand: p.brand || 'Clean Everyday',
+                discount: p.discountPercentage || 0,
+                stock: typeof p.stock === 'number' ? p.stock : 50,
+                status: 'Active',
+                createdDate: p.createdAt || '',
+                specs: {},
+                rating: p.averageRating || 4.5,
+                reviewCount: p.totalReviews || 10
+              };
+
+              // Extra safety guard: ensure product price and name are valid
+              if (!prodObj.name || prodObj.price <= 0) return null;
+
               return {
                 _id: item._id,
-                product: matchedProd || {
-                  id: p._id ? p._id : Math.floor(Math.random() * 100000),
-                  _id: p._id,
-                  name: p.title || p.name || 'Formulated Cleaner',
-                  cat: p.category || 'Floor Care',
-                  desc: p.description || '',
-                  tags: p.tags || [],
-                  badge: p.badge === 'None' ? null : (p.badge || null),
-                  imgs: p.images?.length > 0 ? p.images : (p.imgs || []),
-                  price: p.sellingPrice || p.retailPrice || p.price || 299,
-                  sku: p.sku || 'CE-PROD',
-                  brand: p.brand || 'Clean Everyday',
-                  discount: p.discountPercentage || 0,
-                  stock: p.stock || 50,
-                  status: 'Active',
-                  createdDate: p.createdAt || '',
-                  specs: {},
-                  rating: p.averageRating || 4.5,
-                  reviewCount: p.totalReviews || 10
-                },
-                quantity: item.quantity
+                product: prodObj,
+                quantity: item.quantity || 1
               };
             }).filter(Boolean) as CartItem[];
 
-            setCart(prev => {
-              if (mappedCart.length > 0) {
-                const backendProdIds = new Set(mappedCart.map(i => String(i.product._id || i.product.id)));
-                const extraLocalItems = prev.filter(i => !backendProdIds.has(String(i.product._id || i.product.id)));
-                return [...mappedCart, ...extraLocalItems];
-              }
-              return prev.length > 0 ? prev : [];
-            });
+            setCart(mappedCart);
           }
         }
       }
@@ -1761,7 +1760,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       setCart((prev) => {
-        const idx = prev.findIndex((item) => item.product.id === product.id);
+        const idx = prev.findIndex((item) => item.product.id === product.id || item.product._id === product._id);
         if (idx > -1) {
           const next = [...prev];
           next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity };
@@ -1773,7 +1772,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.warn('Could not sync added item to backend cart:', err);
       setCart((prev) => {
-        const idx = prev.findIndex((item) => item.product.id === product.id);
+        const idx = prev.findIndex((item) => item.product.id === product.id || item.product._id === product._id);
         if (idx > -1) {
           const next = [...prev];
           next[idx] = { ...next[idx], quantity: next[idx].quantity + quantity };
@@ -1788,13 +1787,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const updateCartQty = async (productId: number, qty: number) => {
+  const updateCartQty = async (productId: number | string, qty: number) => {
     if (qty <= 0) {
       removeFromCart(productId);
       return;
     }
 
-    const targetItem = cart.find((item) => item.product.id === productId);
+    const targetItem = cart.find((item) => item.product.id === productId || item.product._id === productId || item._id === productId);
     setUpdatingProductId(productId);
     setIsCartLoading(true);
 
@@ -1807,7 +1806,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const token = await firebaseUser.getIdToken();
         if (token) {
           const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
-          const itemId = targetItem?._id || targetItem?.product._id || productId.toString();
+          const itemId = targetItem?.product._id || targetItem?._id || productId.toString();
           await axios.patch(
             `${backendUrl}/carts/item-update/${itemId}`,
             { quantity: qty },
@@ -1825,7 +1824,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       setCart((prev) =>
         prev.map((item) =>
-          item.product.id === productId ? { ...item, quantity: qty } : item
+          item.product.id === productId || item.product._id === productId || item._id === productId ? { ...item, quantity: qty } : item
         )
       );
       showToast('Updated cart quantity.');
@@ -1838,8 +1837,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const removeFromCart = async (productId: number) => {
-    const targetItem = cart.find((item) => item.product.id === productId);
+  const removeFromCart = async (productId: number | string) => {
+    const targetItem = cart.find((item) => item.product.id === productId || item.product._id === productId || item._id === productId);
     setDeletingProductId(productId);
     setIsCartLoading(true);
 
@@ -1852,7 +1851,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const token = await firebaseUser.getIdToken();
         if (token) {
           const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
-          const pId = targetItem?.product._id || productId.toString();
+          const pId = targetItem?.product._id || targetItem?._id || productId.toString();
           await axios.delete(`${backendUrl}/carts/item-remove/${pId}`, {
             headers: { Authorization: `Bearer ${token}` },
             withCredentials: true
@@ -1864,11 +1863,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       }
 
-      setCart((prev) => prev.filter((item) => item.product.id !== productId));
+      setCart((prev) => prev.filter((item) => item.product.id !== productId && item.product._id !== productId && item._id !== productId));
       showToast('Removed item from cart.');
     } catch (err) {
       console.warn('Could not remove item from backend cart:', err);
-      setCart((prev) => prev.filter((item) => item.product.id !== productId));
+      setCart((prev) => prev.filter((item) => item.product.id !== productId && item.product._id !== productId && item._id !== productId));
       showToast('Removed item from cart.');
     } finally {
       setDeletingProductId(null);
