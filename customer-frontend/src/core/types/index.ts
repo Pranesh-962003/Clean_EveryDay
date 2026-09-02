@@ -55,6 +55,9 @@ export interface Review {
 }
 
 export interface User {
+  _id?: string;
+  id?: string | number;
+  uid?: string;
   name: string;
   email: string;
   password?: string;

@@ -15,7 +15,6 @@ import {
   IndianRupee,
   X,
   CheckSquare,
-  Loader2,
   Carrot
 } from 'lucide-react';
 
