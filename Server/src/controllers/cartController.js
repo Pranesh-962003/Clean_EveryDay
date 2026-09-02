@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import { Cart } from "../models/Cart.js";
 import { Product } from "../models/Product.js";
 import { User } from "../models/User.js";
@@ -44,14 +45,24 @@ export const addToCart = async (req, res) => {
         }
 
         // =====================================
-        // Find Product
+        // Find Product (Safely check ObjectId or SKU)
         // =====================================
 
-        const product = await Product.findOne({
-            _id: productId,
-            isDeleted: false,
-            isActive: true
-        });
+        let product = null;
+        if (mongoose.Types.ObjectId.isValid(productId)) {
+            product = await Product.findOne({
+                _id: productId,
+                isDeleted: false,
+                isActive: true
+            });
+        }
+        if (!product) {
+            product = await Product.findOne({
+                $or: [{ sku: productId }, { name: productId }, { title: productId }],
+                isDeleted: false,
+                isActive: true
+            });
+        }
 
         if (!product) {
             return res.status(404).json({

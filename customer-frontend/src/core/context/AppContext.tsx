@@ -1741,10 +1741,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const token = await firebaseUser.getIdToken();
         if (token) {
           const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+          const targetProductId = (product._id && String(product._id).length >= 10) ? product._id : (product.sku ? product.sku : product.id.toString());
           await axios.post(
             `${backendUrl}/carts/add`,
             {
-              productId: product._id || product.id.toString(),
+              productId: targetProductId,
               quantity
             },
             {
