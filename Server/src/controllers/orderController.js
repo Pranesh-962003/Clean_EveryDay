@@ -38,6 +38,7 @@ export const placeCODOrder = async (req, res) => {
         // Real-time synchronization
         const customerId = order.customer?._id || order.customer;
         emitToAdmin("order:created", { order });
+        emitToAll("order:created", { order });
         if (customerId) {
             emitToUser(customerId, "order:created", { order });
             emitToUser(customerId, "cart:updated", { items: [], totalItems: 0, grandTotal: 0 });
@@ -493,6 +494,7 @@ export const updateOrderStatus = async (req, res) => {
         // Real-time synchronization
         const customerId = order.customer?._id || order.customer;
         emitToAdmin("order:statusUpdated", { order, status });
+        emitToAll("order:statusUpdated", { order, status });
         if (customerId) {
             emitToUser(customerId, "order:statusUpdated", { order, status });
             if (typeof order.customer === "object" && order.customer?.uid) {

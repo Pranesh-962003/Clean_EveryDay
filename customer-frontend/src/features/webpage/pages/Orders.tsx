@@ -27,6 +27,8 @@ import {
 } from 'lucide-react';
 import type { Order } from '../../../core/types';
 import { useApp } from '../../../core/context/AppContext';
+import { getSocket } from '../../../core/socket/socket';
+import { SOCKET_EVENTS } from '../../../core/socket/socketEvents';
 
 /* ─── Confetti Particle ─── */
 const ConfettiParticle: React.FC<{ index: number }> = ({ index }) => {
@@ -277,7 +279,51 @@ const Orders: React.FC = () => {
     if (fetchMyOrders) {
       fetchMyOrders();
     }
-  }, []);
+
+    const socket = getSocket();
+    const handleOrderSync = () => {
+      if (fetchMyOrders) {
+        fetchMyOrders();
+      }
+    };
+
+    socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderSync);
+    socket.on(SOCKET_EVENTS.ORDER_CREATED, handleOrderSync);
+    socket.on(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderSync);
+    socket.on(SOCKET_EVENTS.PRODUCT_UPDATED, handleOrderSync);
+    socket.on(SOCKET_EVENTS.INVENTORY_UPDATED, handleOrderSync);
+
+    const handleFocusSync = () => {
+      if (document.visibilityState === 'visible' && fetchMyOrders) {
+        fetchMyOrders();
+      }
+    };
+
+    window.addEventListener('focus', handleFocusSync);
+    document.addEventListener('visibilitychange', handleFocusSync);
+
+    return () => {
+      socket.off(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderSync);
+      socket.off(SOCKET_EVENTS.ORDER_CREATED, handleOrderSync);
+      socket.off(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderSync);
+      socket.off(SOCKET_EVENTS.PRODUCT_UPDATED, handleOrderSync);
+      socket.off(SOCKET_EVENTS.INVENTORY_UPDATED, handleOrderSync);
+      window.removeEventListener('focus', handleFocusSync);
+      document.removeEventListener('visibilitychange', handleFocusSync);
+    };
+  }, [fetchMyOrders]);
+
+  // Keep activeOrder synced with latest state from orders array
+  useEffect(() => {
+    if (activeOrder && orders.length > 0) {
+      const latest = orders.find(
+        (o) => (activeOrder._id && o._id === activeOrder._id) || (activeOrder.id && o.id === activeOrder.id)
+      );
+      if (latest && (latest.status !== activeOrder.status || latest.trackingId !== activeOrder.trackingId)) {
+        setActiveOrder(latest);
+      }
+    }
+  }, [orders, activeOrder]);
 
   useEffect(() => {
     const raw = sessionStorage.getItem('ce_order_just_placed');

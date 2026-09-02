@@ -317,6 +317,7 @@ export const emitToAdmin = (event, data) => {
   );
   if (io) {
     io.to("admin").emit(event, data);
+    io.emit(event, data);
   }
 };
 

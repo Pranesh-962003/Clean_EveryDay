@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import type { Product, Review, User, Lead, Banner, CartItem, Order, Staff, LeadActivity } from '../types';
 // @ts-ignore
@@ -1721,12 +1721,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const curUserId = curUser?._id || curUser?.uid || curUser?.email;
   useEffect(() => {
-    if (curUser) {
+    if (curUserId) {
       fetchUserCart();
       fetchMyOrders();
     }
-  }, [curUser]);
+  }, [curUserId]);
 
   const addToCart = async (product: Product, quantity = 1) => {
     setAddingProductId(product.id);
@@ -1879,7 +1880,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCart([]);
   };
 
-  const fetchMyOrders = async () => {
+  const isFetchingOrdersRef = useRef<boolean>(false);
+
+  const fetchMyOrders = useCallback(async () => {
+    if (isFetchingOrdersRef.current) return;
+    isFetchingOrdersRef.current = true;
     try {
       if (!auth.currentUser) {
         await auth.authStateReady();
@@ -1891,7 +1896,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
           const response = await axios.get(`${backendUrl}/orders/my-orders`, {
             headers: { Authorization: `Bearer ${token}` },
-            withCredentials: true
+            withCredentials: true,
+            timeout: 10000
           });
           if (response.data && response.data.success && Array.isArray(response.data.orders)) {
             const mappedOrders = response.data.orders.map((b: any) => mapBackendOrderToFrontend(b));
@@ -1901,8 +1907,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     } catch (err) {
       console.warn('Could not fetch orders from backend:', err);
+    } finally {
+      isFetchingOrdersRef.current = false;
     }
-  };
+  }, [products]);
 
   const mapBackendOrderToFrontend = (b: any): Order => {
     const rawItems = Array.isArray(b.items) && b.items.length > 0 ? b.items : [];

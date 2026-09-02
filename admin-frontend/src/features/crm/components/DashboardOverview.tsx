@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useApp } from '../../../core/context/AppContext';
 // @ts-ignore
@@ -23,12 +23,36 @@ interface DashboardOverviewProps {
   onTabChange: (tab: 'dashboard' | 'products' | 'orders' | 'reviews' | 'add' | 'banners' | 'leads' | 'users') => void;
 }
 
+const STORAGE_CACHE_KEY = 'ce_admin_dashboard_cache';
+
 const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) => {
   const { orders, products, leads, reviews } = useApp();
-  const [apiDashboardData, setApiDashboardData] = useState<any>(null);
+
+  // Instant SWR cache initialization for low network & fast load
+  const [apiDashboardData, setApiDashboardData] = useState<any>(() => {
+    try {
+      const cached = localStorage.getItem(STORAGE_CACHE_KEY);
+      return cached ? JSON.parse(cached) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const [isSocketConnected, setIsSocketConnected] = useState<boolean>(() => {
+    try {
+      const socket = getSocket();
+      return socket?.connected || false;
+    } catch {
+      return false;
+    }
+  });
+
+  const isMountedRef = useRef<boolean>(true);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    let isMounted = true;
+    isMountedRef.current = true;
+
     const fetchDashboard = async () => {
       try {
         const firebaseUser = auth.currentUser;
@@ -39,43 +63,125 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
         const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
         const response = await axios.get(`${backendUrl}/auth/admin/dashboard`, {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
-          withCredentials: true
+          withCredentials: true,
+          timeout: 10000
         });
 
-        if (isMounted && response.data && response.data.success) {
+        if (isMountedRef.current && response.data && response.data.success) {
           setApiDashboardData(response.data);
+          try {
+            localStorage.setItem(STORAGE_CACHE_KEY, JSON.stringify(response.data));
+          } catch (e) {
+            console.warn('Cache write note:', e);
+          }
         }
       } catch (err) {
-        console.warn('Admin dashboard API note:', err);
+        console.warn('Admin dashboard API note (using cache/context fallback):', err);
       }
     };
 
+    // Debounced fetch to avoid multi-trigger lag when rapid events occur
+    const debouncedFetch = () => {
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      debounceTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          fetchDashboard();
+        }
+      }, 300);
+    };
+
+    // Initial fetch on mount
     fetchDashboard();
 
-    const socket = getSocket();
-    const handleSyncEvent = () => {
-      if (isMounted) {
+    // Background interval sync every 30 seconds for resiliency in poor networks
+    const intervalId = setInterval(() => {
+      if (isMountedRef.current && document.visibilityState === 'visible') {
         fetchDashboard();
+      }
+    }, 30000);
+
+    const socket = getSocket();
+
+    const handleConnect = () => {
+      if (isMountedRef.current) {
+        setIsSocketConnected(true);
+        debouncedFetch();
       }
     };
 
-    socket.on(SOCKET_EVENTS.ORDER_CREATED, handleSyncEvent);
-    socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleSyncEvent);
-    socket.on(SOCKET_EVENTS.ORDER_CANCELLED, handleSyncEvent);
-    socket.on(SOCKET_EVENTS.PRODUCT_CREATED, handleSyncEvent);
-    socket.on(SOCKET_EVENTS.PRODUCT_DELETED, handleSyncEvent);
-    socket.on(SOCKET_EVENTS.REVIEW_CREATED, handleSyncEvent);
-    socket.on(SOCKET_EVENTS.LEAD_CREATED, handleSyncEvent);
+    const handleDisconnect = () => {
+      if (isMountedRef.current) {
+        setIsSocketConnected(false);
+      }
+    };
+
+    const handleSyncEvent = () => {
+      if (isMountedRef.current) {
+        debouncedFetch();
+      }
+    };
+
+    socket.on('connect', handleConnect);
+    socket.on('disconnect', handleDisconnect);
+
+    // Subscribe to all entity update events (both mapped constants and raw event strings)
+    const socketEventsList = Array.from(new Set([
+      SOCKET_EVENTS.ORDER_CREATED,
+      SOCKET_EVENTS.ORDER_STATUS_UPDATED,
+      SOCKET_EVENTS.ORDER_CANCELLED,
+      SOCKET_EVENTS.PRODUCT_CREATED,
+      SOCKET_EVENTS.PRODUCT_UPDATED,
+      SOCKET_EVENTS.PRODUCT_DELETED,
+      SOCKET_EVENTS.INVENTORY_UPDATED,
+      SOCKET_EVENTS.REVIEW_CREATED,
+      SOCKET_EVENTS.REVIEW_STATUS_UPDATED,
+      SOCKET_EVENTS.REVIEW_UPDATED,
+      SOCKET_EVENTS.REVIEW_DELETED,
+      SOCKET_EVENTS.LEAD_CREATED,
+      SOCKET_EVENTS.LEAD_UPDATED,
+      SOCKET_EVENTS.LEAD_ACTIVITY_ADDED,
+      SOCKET_EVENTS.LEAD_TASK_UPDATED,
+      SOCKET_EVENTS.LEAD_REMINDER_ADDED,
+      SOCKET_EVENTS.USER_UPDATED,
+      SOCKET_EVENTS.BANNERS_UPDATED,
+      'order:created',
+      'order:statusUpdated',
+      'order:cancelled',
+      'product:created',
+      'product:updated',
+      'product:deleted',
+      'inventory:updated',
+      'review:created',
+      'review:statusUpdated',
+      'review:updated',
+      'review:deleted',
+      'lead:created',
+      'lead:updated',
+      'lead:activityAdded',
+      'lead:taskUpdated',
+      'lead:reminderAdded',
+      'user:updated',
+      'banners:updated'
+    ].filter(Boolean)));
+
+    socketEventsList.forEach((evt) => {
+      socket.on(evt, handleSyncEvent);
+    });
 
     return () => {
-      isMounted = false;
-      socket.off(SOCKET_EVENTS.ORDER_CREATED, handleSyncEvent);
-      socket.off(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleSyncEvent);
-      socket.off(SOCKET_EVENTS.ORDER_CANCELLED, handleSyncEvent);
-      socket.off(SOCKET_EVENTS.PRODUCT_CREATED, handleSyncEvent);
-      socket.off(SOCKET_EVENTS.PRODUCT_DELETED, handleSyncEvent);
-      socket.off(SOCKET_EVENTS.REVIEW_CREATED, handleSyncEvent);
-      socket.off(SOCKET_EVENTS.LEAD_CREATED, handleSyncEvent);
+      isMountedRef.current = false;
+      if (debounceTimerRef.current) {
+        clearTimeout(debounceTimerRef.current);
+      }
+      clearInterval(intervalId);
+      socket.off('connect', handleConnect);
+      socket.off('disconnect', handleDisconnect);
+
+      socketEventsList.forEach((evt) => {
+        if (evt) socket.off(evt, handleSyncEvent);
+      });
     };
   }, []);
 
@@ -85,6 +191,61 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
   const totalRevenue = stats ? stats.grossRevenue : orders.reduce((sum, o) => sum + (o.total || 0), 0);
   const totalOrders = stats ? stats.totalOrders : orders.length;
   
+  // Helper to parse order timestamps safely
+  const parseOrderTime = (o: any): number => {
+    if (o?.createdAt) {
+      const t = new Date(o.createdAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (o?._id && typeof o._id === 'string' && o._id.length >= 8) {
+      const hex = o._id.substring(0, 8);
+      const ts = parseInt(hex, 16);
+      if (!isNaN(ts) && ts > 0) return ts * 1000;
+    }
+    if (o?.date) {
+      const parts = String(o.date).split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d.getTime();
+      }
+      const t = new Date(o.date).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    return 0;
+  };
+
+  // Gross revenue growth calculation from backend stats or context fallback
+  const rawGrowth = stats?.grossRevenueGrowth !== undefined ? stats.grossRevenueGrowth : (() => {
+    const now = Date.now();
+    const sevenDays = 7 * 24 * 60 * 60 * 1000;
+    const fourteenDays = 14 * 24 * 60 * 60 * 1000;
+
+    const currRev = orders
+      .filter((o) => {
+        const t = parseOrderTime(o);
+        return t > 0 && t >= now - sevenDays && o.status !== 'Cancelled' && o.status !== 'Returned' && o.status !== 'Refunded';
+      })
+      .reduce((sum, o) => sum + (o.total || 0), 0);
+
+    const prevRev = orders
+      .filter((o) => {
+        const t = parseOrderTime(o);
+        return t > 0 && t >= now - fourteenDays && t < now - sevenDays && o.status !== 'Cancelled' && o.status !== 'Returned' && o.status !== 'Refunded';
+      })
+      .reduce((sum, o) => sum + (o.total || 0), 0);
+
+    if (prevRev > 0) {
+      return Number((((currRev - prevRev) / prevRev) * 100).toFixed(1));
+    }
+    return currRev > 0 ? 100.0 : 0.0;
+  })();
+
+  const isGrowthPositive = rawGrowth >= 0;
+  const growthText = `${isGrowthPositive ? '+' : ''}${Number(rawGrowth).toFixed(1)}%`;
+
   // Workflow statuses in Order
   const pendingOrders = stats ? stats.pendingOrders : orders.filter(
     (o) => o.status !== 'Delivered' && o.status !== 'Cancelled' && o.status !== 'Returned' && o.status !== 'Refunded'
@@ -166,8 +327,11 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
           <h2 className="font-display text-3xl font-bold text-blk tracking-tight">Enterprise overview</h2>
           <p className="text-[0.78rem] text-mut mt-0.5">Live store conversions and inquiry dashboard metrics.</p>
         </div>
-        <div className="text-[0.72rem] font-mono bg-wht border border-bdr rounded-md px-3 py-1.5 text-mid w-fit">
-          Server status: <span className="text-primary font-bold">Online</span>
+        <div className="text-[0.72rem] font-mono bg-wht border border-bdr rounded-md px-3 py-1.5 text-mid w-fit flex items-center gap-1.5">
+          <span>Server status:</span>
+          <span className={`font-bold transition-colors duration-300 ${isSocketConnected ? 'text-primary' : 'text-amber-500'}`}>
+            {isSocketConnected ? 'Online' : 'Reconnecting...'}
+          </span>
         </div>
       </div>
 
@@ -182,9 +346,9 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
             </div>
             <div className="w-8 h-8 rounded bg-primary-soft flex items-center justify-center text-primary"><IndianRupee size={15} /></div>
           </div>
-          <div className="flex items-center gap-1 text-[0.74rem] text-primary mt-4 font-medium">
-            <TrendingUp size={12} />
-            <span>+12.4% vs last week</span>
+          <div className={`flex items-center gap-1 text-[0.74rem] font-medium mt-4 ${isGrowthPositive ? 'text-primary' : 'text-red'}`}>
+            <TrendingUp size={12} className={isGrowthPositive ? '' : 'rotate-180'} />
+            <span>{growthText} vs last week</span>
           </div>
         </div>
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
 import { useApp } from '../../../core/context/AppContext';
 import type { Order } from '../../../core/types';
@@ -15,9 +15,11 @@ import {
   IndianRupee,
   X,
   CheckSquare,
-  Loader2
+  Loader2,
+  Carrot
 } from 'lucide-react';
 
+const STORAGE_ORDERS_KEY = 'ce_admin_orders_registry_cache';
 
 const OrdersRegistry: React.FC = () => {
   const {
@@ -29,11 +31,38 @@ const OrdersRegistry: React.FC = () => {
     setInvoiceOrder
   } = useApp();
 
-  const [apiOrders, setApiOrders] = useState<Order[] | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+  // Instant SWR cache initialization for low network & fast load
+  const [apiOrders, setApiOrders] = useState<Order[] | null>(() => {
+    try {
+      const cached = localStorage.getItem(STORAGE_ORDERS_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.warn('Orders cache load note:', e);
+    }
+    return null;
+  });
+
+  const [isLoading, setIsLoading] = useState<boolean>(() => {
+    try {
+      const cached = localStorage.getItem(STORAGE_ORDERS_KEY);
+      return !cached;
+    } catch {
+      return true;
+    }
+  });
+
+  const isMountedRef = useRef<boolean>(true);
+  const debounceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const loadOrders = useCallback(async (silent: boolean = false) => {
-    if (!silent) setIsLoading(true);
+    if (!silent && !localStorage.getItem(STORAGE_ORDERS_KEY)) {
+      setIsLoading(true);
+    }
     try {
       const firebaseUser = auth.currentUser;
       let token = '';
@@ -43,14 +72,16 @@ const OrdersRegistry: React.FC = () => {
       const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
       const response = await axios.get(`${backendUrl}/auth/admin/orders`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
-        withCredentials: true
+        withCredentials: true,
+        timeout: 10000
       });
 
       if (response.data && response.data.success && Array.isArray(response.data.orders)) {
         const fetchedOrders: Order[] = response.data.orders.map((o: any) => ({
           id: o.id || o.orderNumber || o._id,
           _id: o._id,
-          date: o.date ? new Date(o.date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
+          createdAt: o.createdAt || o._id,
+          date: o.date ? new Date(o.date).toLocaleDateString('en-IN') : (o.createdAt ? new Date(o.createdAt).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN')),
           total: o.total || o.grandTotal || 0,
           customerEmail: o.customerEmail || o.customer?.email || '',
           paymentStatus: o.paymentStatus || o.payment?.status || 'Pending',
@@ -90,30 +121,60 @@ const OrdersRegistry: React.FC = () => {
             quantity: item.quantity || 1
           }))
         }));
-        setApiOrders(fetchedOrders);
+
+        if (isMountedRef.current) {
+          setApiOrders(fetchedOrders);
+          try {
+            localStorage.setItem(STORAGE_ORDERS_KEY, JSON.stringify(fetchedOrders));
+          } catch (e) {
+            console.warn('Orders cache write note:', e);
+          }
+        }
       }
     } catch (err) {
-      console.warn('Orders Registry API note:', err);
+      console.warn('Orders Registry API note (using cache/context fallback):', err);
     } finally {
-      if (!silent) setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   }, []);
 
   useEffect(() => {
-    loadOrders(false);
-    const socket = getSocket();
-    const handleOrderEvent = () => {
-      loadOrders(true);
+    isMountedRef.current = true;
+    loadOrders(Boolean(apiOrders && apiOrders.length > 0));
+
+    const debouncedLoad = () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      debounceTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          loadOrders(true);
+        }
+      }, 300);
     };
 
-    socket.on(SOCKET_EVENTS.ORDER_CREATED, handleOrderEvent);
-    socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderEvent);
-    socket.on(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderEvent);
+    const socket = getSocket();
+    socket.on(SOCKET_EVENTS.ORDER_CREATED, debouncedLoad);
+    socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, debouncedLoad);
+    socket.on(SOCKET_EVENTS.ORDER_CANCELLED, debouncedLoad);
+
+    const handleFocusSync = () => {
+      if (isMountedRef.current && document.visibilityState === 'visible') {
+        loadOrders(true);
+      }
+    };
+
+    window.addEventListener('focus', handleFocusSync);
+    document.addEventListener('visibilitychange', handleFocusSync);
 
     return () => {
-      socket.off(SOCKET_EVENTS.ORDER_CREATED, handleOrderEvent);
-      socket.off(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderEvent);
-      socket.off(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderEvent);
+      isMountedRef.current = false;
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      socket.off(SOCKET_EVENTS.ORDER_CREATED, debouncedLoad);
+      socket.off(SOCKET_EVENTS.ORDER_STATUS_UPDATED, debouncedLoad);
+      socket.off(SOCKET_EVENTS.ORDER_CANCELLED, debouncedLoad);
+      window.removeEventListener('focus', handleFocusSync);
+      document.removeEventListener('visibilitychange', handleFocusSync);
     };
   }, [loadOrders]);
 
@@ -133,8 +194,11 @@ const OrdersRegistry: React.FC = () => {
       await updateOrderStatus(orderId, newStatus, _id);
       // Automatically re-fetch API silently to sync latest data without table loading overlay
       await loadOrders(true);
+      // Show notification toast ONLY AFTER whole loading completes!
+      showToast(`Order #${orderId} status updated to ${newStatus}`);
     } catch (err) {
       console.warn('Status change error:', err);
+      showToast(`Failed to update status for order #${orderId}`);
     } finally {
       setUpdatingOrderId(null);
     }
@@ -145,7 +209,7 @@ const OrdersRegistry: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [paymentFilter, setPaymentFilter] = useState('All');
 
-  // Sorting
+  // Sorting - Newest orders first by default
   const [sortField, setSortField] = useState<keyof Order>('date');
   const [sortAsc, setSortAsc] = useState(false);
 
@@ -177,7 +241,7 @@ const OrdersRegistry: React.FC = () => {
       setSortAsc(!sortAsc);
     } else {
       setSortField(field);
-      setSortAsc(true);
+      setSortAsc(false);
     }
   };
 
@@ -198,8 +262,45 @@ const OrdersRegistry: React.FC = () => {
     return matchesSearch && matchesStatus && matchesPayment;
   });
 
-  // Sorted list
+  // Precise timestamp extractor so newest orders are ALWAYS first at the top
+  const getOrderTimestamp = (o: any): number => {
+    if (o?.createdAt) {
+      const t = new Date(o.createdAt).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    if (o?._id && typeof o._id === 'string' && o._id.length >= 8) {
+      const hex = o._id.substring(0, 8);
+      const ts = parseInt(hex, 16);
+      if (!isNaN(ts) && ts > 0) return ts * 1000;
+    }
+    if (o?.date) {
+      const parts = String(o.date).split('/');
+      if (parts.length === 3) {
+        const day = parseInt(parts[0], 10);
+        const month = parseInt(parts[1], 10) - 1;
+        const year = parseInt(parts[2], 10);
+        const d = new Date(year, month, day);
+        if (!isNaN(d.getTime())) return d.getTime();
+      }
+      const t = new Date(o.date).getTime();
+      if (!isNaN(t) && t > 0) return t;
+    }
+    return 0;
+  };
+
+  // Sorted list with newest orders first by default
   const sortedOrders = [...filteredOrders].sort((a, b) => {
+    if (sortField === 'date') {
+      const timeA = getOrderTimestamp(a);
+      const timeB = getOrderTimestamp(b);
+      if (timeA !== timeB) {
+        return sortAsc ? timeA - timeB : timeB - timeA;
+      }
+      const idA = String(a._id || a.id);
+      const idB = String(b._id || b.id);
+      return sortAsc ? idA.localeCompare(idB) : idB.localeCompare(idA);
+    }
+
     let valA = a[sortField];
     let valB = b[sortField];
 
@@ -458,9 +559,30 @@ const OrdersRegistry: React.FC = () => {
               {isLoading ? (
                 <tr>
                   <td colSpan={10} className="py-16 text-center">
-                    <div className="flex flex-col items-center justify-center gap-3">
-                      <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                      <p className="text-xs font-semibold text-mut">Fetching orders data from server...</p>
+                    <div className="flex flex-col items-center justify-center gap-3 select-none">
+                      <style>{`
+                        @keyframes carrotRun {
+                          0%, 100% { transform: translateX(-16px) rotate(-12px) translateY(0); }
+                          50% { transform: translateX(16px) rotate(12px) translateY(-8px); }
+                        }
+                        @keyframes carrotShadow {
+                          0%, 100% { transform: translateX(-16px) scaleX(1); opacity: 0.6; }
+                          50% { transform: translateX(16px) scaleX(0.6); opacity: 0.25; }
+                        }
+                        .animate-carrot-run {
+                          animation: carrotRun 0.75s ease-in-out infinite;
+                        }
+                        .animate-carrot-shadow {
+                          animation: carrotShadow 0.75s ease-in-out infinite;
+                        }
+                      `}</style>
+                      <div className="relative flex items-center justify-center w-20 h-12">
+                        <div className="animate-carrot-run inline-block text-orange-500">
+                          <Carrot className="w-9 h-9 text-orange-500 stroke-[2.2]" />
+                        </div>
+                        <div className="absolute -bottom-1 w-8 h-1.5 bg-orange-200/80 rounded-full animate-carrot-shadow blur-[1px]" />
+                      </div>
+                      <p className="text-xs font-semibold text-mut tracking-wide">Fetching orders data from server...</p>
                     </div>
                   </td>
                 </tr>
@@ -502,7 +624,9 @@ const OrdersRegistry: React.FC = () => {
                     <td className="py-3 px-4 text-center" onClick={(e) => e.stopPropagation()}>
                       <div className="inline-flex items-center gap-1.5 justify-center">
                         {Boolean(updatingOrderId && (updatingOrderId === o.id || updatingOrderId === o._id)) ? (
-                          <div className="w-3.5 h-3.5 border-2 border-primary border-t-transparent rounded-full animate-spin shrink-0" title="Updating order status..." />
+                          <div className="inline-flex items-center justify-center shrink-0" title="Updating order status...">
+                            <Carrot className="w-4 h-4 text-orange-500 animate-carrot-run" />
+                          </div>
                         ) : null}
                         <select
                           disabled={Boolean(updatingOrderId && (updatingOrderId === o.id || updatingOrderId === o._id))}

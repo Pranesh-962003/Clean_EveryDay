@@ -62,12 +62,15 @@ export const adminLogin = async (req, res) => {
 export const getDashboard = async (req, res) => {
     try {
 
-        // =====================================
-        // Dashboard Statistics
-        // =====================================
+        // Time boundaries for weekly growth calculation
+        const now = new Date();
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        const fourteenDaysAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
 
         const [
             revenue,
+            currentWeekRevenueRes,
+            previousWeekRevenueRes,
             totalOrders,
             deliveredOrders,
             pendingOrders,
@@ -94,6 +97,42 @@ export const getDashboard = async (req, res) => {
                         grossRevenue: {
                             $sum: "$grandTotal"
                         }
+                    }
+                }
+            ]),
+
+            Order.aggregate([
+                {
+                    $match: {
+                        isDeleted: false,
+                        status: {
+                            $nin: ["Cancelled", "Returned", "Refunded"]
+                        },
+                        createdAt: { $gte: sevenDaysAgo }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        revenue: { $sum: "$grandTotal" }
+                    }
+                }
+            ]),
+
+            Order.aggregate([
+                {
+                    $match: {
+                        isDeleted: false,
+                        status: {
+                            $nin: ["Cancelled", "Returned", "Refunded"]
+                        },
+                        createdAt: { $gte: fourteenDaysAgo, $lt: sevenDaysAgo }
+                    }
+                },
+                {
+                    $group: {
+                        _id: null,
+                        revenue: { $sum: "$grandTotal" }
                     }
                 }
             ]),
@@ -150,6 +189,18 @@ export const getDashboard = async (req, res) => {
             })
 
         ]);
+
+        const currRev = currentWeekRevenueRes.length > 0 ? currentWeekRevenueRes[0].revenue : 0;
+        const prevRev = previousWeekRevenueRes.length > 0 ? previousWeekRevenueRes[0].revenue : 0;
+
+        let grossRevenueGrowth = 0;
+        if (prevRev > 0) {
+            grossRevenueGrowth = Number((((currRev - prevRev) / prevRev) * 100).toFixed(1));
+        } else if (currRev > 0) {
+            grossRevenueGrowth = 100.0;
+        } else {
+            grossRevenueGrowth = 0.0;
+        }
 
         // =====================================
         // Recent Orders
@@ -208,7 +259,7 @@ export const getDashboard = async (req, res) => {
                         ? revenue[0].grossRevenue
                         : 0,
 
-                grossRevenueGrowth: 0, // Future
+                grossRevenueGrowth,
 
                 totalOrders,
 
