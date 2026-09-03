@@ -342,16 +342,6 @@ const ReviewsModeration: React.FC = () => {
     setSelectedIds([]);
   };
 
-  const handleBulkDelete = async () => {
-    if (selectedIds.length === 0) return;
-    if (confirm(`Are you sure you want to delete ${selectedIds.length} selected reviews?`)) {
-      for (const id of selectedIds) {
-        await handleDeleteReview(id);
-      }
-      setSelectedIds([]);
-    }
-  };
-
   const handleReplySubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (replyReviewId === null || !replyText.trim()) return;
