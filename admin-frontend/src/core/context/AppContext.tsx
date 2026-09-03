@@ -54,6 +54,7 @@ interface AppContextType {
     priority?: Lead['priority']
   ) => Promise<boolean>;
   updateLeadStatus: (id: number | string, status: Lead['status']) => Promise<boolean>;
+  updateLeadPriority: (id: number | string, priority: Lead['priority']) => Promise<boolean>;
   updateLeadNotes: (id: number | string, notes: string) => Promise<boolean>;
   addLeadComment: (id: number | string, commentOrAuthor: string, body?: string) => Promise<boolean>;
   addLeadTask: (id: number | string, title: string) => Promise<boolean>;
@@ -1313,6 +1314,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const updateLeadPriority = async (id: number | string, priority: Lead['priority']): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+
+    const targetLead = leads.find((l) => l._id === String(id) || String(l.id) === String(id));
+    if (!targetLead) {
+      console.warn('Lead not found for priority update:', id);
+      return false;
+    }
+
+    if (targetLead.priority === priority) {
+      return true;
+    }
+
+    const leadMongoId = targetLead._id || id;
+
+    try {
+      let token = '';
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.patch(
+        `${backendUrl}/leads/admin/${leadMongoId}/profile`,
+        { priority },
+        {
+          headers,
+          withCredentials: true
+        }
+      );
+
+      if (response.data && response.data.success) {
+        showToast(response.data.message || `Lead priority updated to ${priority}.`);
+        await fetchLeads();
+        return true;
+      } else {
+        showToast(response.data?.message || 'Failed to update priority.');
+        return false;
+      }
+    } catch (err: any) {
+      console.error('Error updating lead priority:', err);
+      showToast(err.response?.data?.message || 'Failed to update priority.');
+      return false;
+    }
+  };
+
   const updateLeadNotes = async (id: number | string, notes: string): Promise<boolean> => {
     if (!checkAdminPermission()) return false;
 
@@ -2241,6 +2300,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isLeadsLoading,
         addLead,
         updateLeadStatus,
+        updateLeadPriority,
         updateLeadNotes,
         addLeadComment,
         addLeadTask,

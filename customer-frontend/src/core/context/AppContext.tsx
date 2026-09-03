@@ -743,6 +743,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     socket.on(SOCKET_EVENTS.PRODUCT_DELETED, handleProductDeleted);
     socket.on(SOCKET_EVENTS.INVENTORY_UPDATED, handleInventoryUpdated);
     socket.on(SOCKET_EVENTS.BANNERS_UPDATED, handleBannersUpdated);
+    socket.on(SOCKET_EVENTS.REVIEW_CREATED, handleReviewStatusUpdated);
+    socket.on(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewStatusUpdated);
     socket.on(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewStatusUpdated);
     socket.on(SOCKET_EVENTS.REVIEW_DELETED, handleReviewDeleted);
     socket.on(SOCKET_EVENTS.ORDER_CREATED, handleOrderCreated);
@@ -772,6 +774,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       socket.off(SOCKET_EVENTS.PRODUCT_DELETED, handleProductDeleted);
       socket.off(SOCKET_EVENTS.INVENTORY_UPDATED, handleInventoryUpdated);
       socket.off(SOCKET_EVENTS.BANNERS_UPDATED, handleBannersUpdated);
+      socket.off(SOCKET_EVENTS.REVIEW_CREATED, handleReviewStatusUpdated);
+      socket.off(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewStatusUpdated);
       socket.off(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewStatusUpdated);
       socket.off(SOCKET_EVENTS.REVIEW_DELETED, handleReviewDeleted);
       socket.off(SOCKET_EVENTS.ORDER_CREATED, handleOrderCreated);

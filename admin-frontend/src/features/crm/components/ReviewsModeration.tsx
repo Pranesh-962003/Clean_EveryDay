@@ -13,7 +13,10 @@ import {
   Trash2,
   Star,
   CheckSquare,
-  Square
+  Square,
+  Database,
+  Monitor,
+  Loader2
 } from 'lucide-react';
 
 interface ReviewItem {
@@ -31,14 +34,113 @@ interface ReviewItem {
   reply?: string;
 }
 
+// Neat Linear System-to-System Data Transfer Loading Animation Component (Light Blue Theme)
+const LinearSystemDataTransferLoader: React.FC = () => (
+  <div className="relative flex flex-col items-center justify-center select-none py-4 px-6 w-full max-w-[420px]">
+    <style>{`
+      @keyframes linearStreamPulse {
+        0% { stroke-dashoffset: 60; }
+        100% { stroke-dashoffset: 0; }
+      }
+      @keyframes linearPacketMove {
+        0% { transform: translateX(0px); opacity: 0; }
+        15% { opacity: 1; }
+        85% { opacity: 1; }
+        100% { transform: translateX(180px); opacity: 0; }
+      }
+      @keyframes serverGlow {
+        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 3px rgba(2, 132, 199, 0.4)); }
+        50% { transform: scale(1.05); filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.85)); }
+      }
+      @keyframes adminGlow {
+        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 3px rgba(2, 132, 199, 0.4)); }
+        50% { transform: scale(1.05); filter: drop-shadow(0 0 10px rgba(125, 211, 252, 0.9)); }
+      }
+    `}</style>
+
+    <div className="relative flex items-center justify-between w-full h-20 px-2">
+      {/* SYSTEM A: Backend Database / Server Node */}
+      <div 
+        className="flex flex-col items-center gap-1 z-10"
+        style={{ animation: 'serverGlow 2s ease-in-out infinite' }}
+      >
+        <div className="w-12 h-12 rounded-xl bg-slate-900 text-sky-400 border border-sky-400/40 flex items-center justify-center shadow-md relative">
+          <Database size={22} />
+          {/* Active Status Ring */}
+          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-wht animate-ping" />
+          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-wht" />
+        </div>
+        <span className="text-[10px] font-bold text-sky-700/80 tracking-wider uppercase">System A (Server)</span>
+      </div>
+
+      {/* LINEAR CONNECTING DATA PIPE */}
+      <div className="relative flex-1 mx-4 h-12 flex items-center justify-center">
+        {/* Background Track Line */}
+        <div className="absolute w-full h-[3px] bg-sky-100/80 rounded-full" />
+
+        {/* Animated Linear Stream Pipeline */}
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 48" fill="none">
+          <defs>
+            <linearGradient id="lightBluePipeGrad" x1="0" y1="24" x2="200" y2="24" gradientUnits="userSpaceOnUse">
+              <stop stopColor="#0284C7" />
+              <stop offset="0.5" stopColor="#38BDF8" />
+              <stop offset="1" stopColor="#7DD3FC" />
+            </linearGradient>
+          </defs>
+          <line 
+            x1="10" y1="24" x2="190" y2="24" 
+            stroke="url(#lightBluePipeGrad)" 
+            strokeWidth="3.5" 
+            strokeDasharray="10 8" 
+            strokeLinecap="round"
+            style={{ animation: 'linearStreamPulse 1.2s linear infinite' }}
+          />
+        </svg>
+
+        {/* Linear Sliding Data Packets (Light Blue Nodes) */}
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 w-full flex items-center pointer-events-none">
+          <div 
+            className="w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-wht shadow-md shadow-sky-400/50"
+            style={{ animation: 'linearPacketMove 1.6s ease-in-out infinite' }}
+          />
+          <div 
+            className="w-3.5 h-3.5 bg-sky-300 rounded-full border-2 border-wht shadow-md shadow-sky-300/50"
+            style={{ animation: 'linearPacketMove 1.6s ease-in-out infinite 0.5s' }}
+          />
+          <div 
+            className="w-3.5 h-3.5 bg-sky-200 rounded-full border-2 border-wht shadow-md shadow-sky-200/50"
+            style={{ animation: 'linearPacketMove 1.6s ease-in-out infinite 1s' }}
+          />
+        </div>
+      </div>
+
+      {/* SYSTEM B: Admin Console / Dashboard Node */}
+      <div 
+        className="flex flex-col items-center gap-1 z-10"
+        style={{ animation: 'adminGlow 2s ease-in-out infinite 1s' }}
+      >
+        <div className="w-12 h-12 rounded-xl bg-sky-500 text-wht border border-sky-300 flex items-center justify-center shadow-md relative">
+          <Monitor size={22} />
+          {/* Receiving Pulse Indicator */}
+          <span className="absolute -bottom-1 -left-1 w-3.5 h-3.5 bg-sky-200 rounded-full border-2 border-wht animate-pulse" />
+        </div>
+        <span className="text-[10px] font-bold text-sky-700/80 tracking-wider uppercase">System B (Admin)</span>
+      </div>
+    </div>
+  </div>
+);
+
 const ReviewsModeration: React.FC = () => {
   const { showToast } = useApp();
 
   const [apiReviews, setApiReviews] = useState<ReviewItem[] | null>(null);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [deletingIds, setDeletingIds] = useState<string[]>([]);
   const reviews = apiReviews !== null ? apiReviews : [];
 
   // Load reviews from live backend API
-  const loadReviews = useCallback(async () => {
+  const loadReviews = useCallback(async (showFullLoader = false) => {
+    if (showFullLoader) setIsLoading(true);
     try {
       const firebaseUser = auth.currentUser;
       let token = '';
@@ -81,23 +183,27 @@ const ReviewsModeration: React.FC = () => {
       }
     } catch (err) {
       console.warn('Error fetching admin reviews:', err);
+    } finally {
+      setIsLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    loadReviews();
+    loadReviews(true);
     const socket = getSocket();
     const handleReviewEvent = () => {
-      loadReviews();
+      loadReviews(false);
     };
 
     socket.on(SOCKET_EVENTS.REVIEW_CREATED, handleReviewEvent);
     socket.on(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewEvent);
+    socket.on(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewEvent);
     socket.on(SOCKET_EVENTS.REVIEW_DELETED, handleReviewEvent);
 
     return () => {
       socket.off(SOCKET_EVENTS.REVIEW_CREATED, handleReviewEvent);
       socket.off(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewEvent);
+      socket.off(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewEvent);
       socket.off(SOCKET_EVENTS.REVIEW_DELETED, handleReviewEvent);
     };
   }, [loadReviews]);
@@ -111,24 +217,28 @@ const ReviewsModeration: React.FC = () => {
   // Selected for Bulk Actions
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  // Reply Modal State
+  // Reply & Delete Modal State
   const [replyReviewId, setReplyReviewId] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [isBulkDeleteModalOpen, setIsBulkDeleteModalOpen] = useState<boolean>(false);
 
-  // Escape key down to close modal
+  // Escape key down to close modals
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         setReplyReviewId(null);
+        setDeleteConfirmId(null);
+        setIsBulkDeleteModalOpen(false);
       }
     };
-    if (replyReviewId !== null) {
+    if (replyReviewId !== null || deleteConfirmId !== null || isBulkDeleteModalOpen) {
       window.addEventListener('keydown', handleKeyDown);
     }
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [replyReviewId]);
+  }, [replyReviewId, deleteConfirmId, isBulkDeleteModalOpen]);
 
   // Products list from reviews
   const productsList = Array.from(new Set(reviews.map((r) => r.product)));
@@ -193,6 +303,7 @@ const ReviewsModeration: React.FC = () => {
   };
 
   const handleDeleteReview = async (id: string) => {
+    setDeletingIds((prev) => [...prev, id]);
     try {
       const firebaseUser = auth.currentUser;
       let token = '';
@@ -209,6 +320,8 @@ const ReviewsModeration: React.FC = () => {
     } catch (err: any) {
       console.error('Error deleting review:', err);
       showToast(err.response?.data?.message || 'Failed to delete review.');
+    } finally {
+      setDeletingIds((prev) => prev.filter((x) => x !== id));
     }
   };
 
@@ -351,7 +464,7 @@ const ReviewsModeration: React.FC = () => {
                 <X size={12} /> Bulk Reject
               </button>
               <button
-                onClick={handleBulkDelete}
+                onClick={() => setIsBulkDeleteModalOpen(true)}
                 className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 border border-transparent bg-red-bg text-red hover:bg-red-bg/85 rounded cursor-pointer"
               >
                 <Trash2 size={12} /> Bulk Delete
@@ -392,9 +505,21 @@ const ReviewsModeration: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-bdrl text-sm leading-relaxed">
-              {filteredReviews.length > 0 ? (
+              {isLoading || apiReviews === null ? (
+                <tr>
+                  <td colSpan={8} className="py-14 text-center">
+                    <div className="flex flex-col items-center justify-center gap-2">
+                      <LinearSystemDataTransferLoader />
+                      <p className="text-xs font-semibold text-mut tracking-wide animate-pulse">
+                        Syncing Review Data Stream from Backend Server to Admin Console...
+                      </p>
+                    </div>
+                  </td>
+                </tr>
+              ) : filteredReviews.length > 0 ? (
                 filteredReviews.map((r) => {
                   const isSelected = selectedIds.includes(r.id);
+                  const isDeleting = deletingIds.includes(r.id);
                   const status = r.status || (r.approved ? 'Approved' : 'Pending');
 
                   return (
@@ -461,7 +586,8 @@ const ReviewsModeration: React.FC = () => {
                           {status !== 'Approved' && (
                             <button
                               onClick={() => handleUpdateStatus(r.id, 'Approved')}
-                              className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer"
+                              disabled={isDeleting}
+                              className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Approve Review"
                             >
                               <Check size={12} />
@@ -470,7 +596,8 @@ const ReviewsModeration: React.FC = () => {
                           {status === 'Approved' && (
                             <button
                               onClick={() => handleUpdateStatus(r.id, 'Hidden')}
-                              className="p-1 border border-bdr hover:border-accent text-mid hover:text-accent-hover rounded bg-wht cursor-pointer"
+                              disabled={isDeleting}
+                              className="p-1 border border-bdr hover:border-accent text-mid hover:text-accent-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                               title="Hide Review"
                             >
                               <X size={12} />
@@ -481,21 +608,23 @@ const ReviewsModeration: React.FC = () => {
                               setReplyReviewId(r.id);
                               setReplyText(r.reply || '');
                             }}
-                            className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer"
+                            disabled={isDeleting}
+                            className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                             title="Reply to Review"
                           >
                             <MessageSquare size={12} />
                           </button>
                           <button
-                            onClick={() => {
-                              if (confirm('Are you sure you want to delete this review?')) {
-                                handleDeleteReview(r.id);
-                              }
-                            }}
-                            className="p-1 border border-bdr hover:border-red text-mid hover:text-red rounded bg-wht cursor-pointer"
+                            onClick={() => setDeleteConfirmId(r.id)}
+                            disabled={isDeleting}
+                            className="p-1 border border-bdr hover:border-red text-mid hover:text-red rounded bg-wht cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-all"
                             title="Delete Review"
                           >
-                            <Trash2 size={12} />
+                            {isDeleting ? (
+                              <Loader2 size={12} className="animate-spin text-red" />
+                            ) : (
+                              <Trash2 size={12} />
+                            )}
                           </button>
                         </div>
                       </td>
@@ -513,6 +642,114 @@ const ReviewsModeration: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {/* Single Review Delete Confirmation Modal */}
+      {deleteConfirmId !== null && (
+        <div 
+          className="fixed inset-0 z-[999] flex items-center justify-center bg-blk/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setDeleteConfirmId(null);
+            }
+          }}
+        >
+          <div className="bg-wht rounded-2xl border border-bdr shadow-premium-lg max-w-[420px] w-full p-6 text-center animate-slideUp relative my-auto">
+            <button
+              onClick={() => setDeleteConfirmId(null)}
+              className="absolute top-4 right-4 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-12 h-12 bg-red-bg border border-red/10 text-red rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={22} />
+            </div>
+
+            <h3 className="font-display text-lg font-bold text-blk mb-2">
+              Delete Review?
+            </h3>
+
+            <p className="text-xs text-mut leading-relaxed mb-6">
+              Are you sure you want to delete this review? This action will permanently remove it and update store ratings across admin and customer clients in real-time via Socket.IO.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setDeleteConfirmId(null)}
+                className="flex-1 py-2.5 px-4 rounded-lg border border-bdr text-xs font-semibold text-mid hover:bg-sur transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  const targetId = deleteConfirmId;
+                  setDeleteConfirmId(null);
+                  if (targetId) {
+                    await handleDeleteReview(targetId);
+                  }
+                }}
+                className="flex-1 py-2.5 px-4 rounded-lg bg-red text-wht hover:bg-red/90 text-xs font-semibold shadow-premium-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 size={14} /> Yes, Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {isBulkDeleteModalOpen && (
+        <div 
+          className="fixed inset-0 z-[999] flex items-center justify-center bg-blk/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsBulkDeleteModalOpen(false);
+            }
+          }}
+        >
+          <div className="bg-wht rounded-2xl border border-bdr shadow-premium-lg max-w-[420px] w-full p-6 text-center animate-slideUp relative my-auto">
+            <button
+              onClick={() => setIsBulkDeleteModalOpen(false)}
+              className="absolute top-4 right-4 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-12 h-12 bg-red-bg border border-red/10 text-red rounded-full flex items-center justify-center mx-auto mb-4">
+              <Trash2 size={22} />
+            </div>
+
+            <h3 className="font-display text-lg font-bold text-blk mb-2">
+              Delete Selected Reviews?
+            </h3>
+
+            <p className="text-xs text-mut leading-relaxed mb-6">
+              Are you sure you want to delete <strong className="text-blk">{selectedIds.length}</strong> selected review(s)? This action will update all clients in real-time.
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setIsBulkDeleteModalOpen(false)}
+                className="flex-1 py-2.5 px-4 rounded-lg border border-bdr text-xs font-semibold text-mid hover:bg-sur transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setIsBulkDeleteModalOpen(false);
+                  for (const id of selectedIds) {
+                    await handleDeleteReview(id);
+                  }
+                  setSelectedIds([]);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-lg bg-red text-wht hover:bg-red/90 text-xs font-semibold shadow-premium-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <Trash2 size={14} /> Yes, Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Reply Dialog Modal */}
       {replyReviewId !== null && (
@@ -556,7 +793,6 @@ const ReviewsModeration: React.FC = () => {
                 >
                   Save Reply
                 </button>
-                {/* No separate cancel button, top close button and click backdrop close is enough */}
               </div>
             </form>
           </div>

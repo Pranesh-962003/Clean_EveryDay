@@ -71,9 +71,7 @@ export const addToCart = async (req, res) => {
             });
         }
 
-        const availableStock = (typeof product.stock === 'number' && product.stock > 0) ? product.stock : 100;
-
-        if (availableStock < qty) {
+        if (product.stock < qty) {
             return res.status(400).json({
                 success: false,
                 message: "Insufficient stock available."
@@ -113,7 +111,7 @@ export const addToCart = async (req, res) => {
 
             const updatedQty = existingItem.quantity + qty;
 
-            if (updatedQty > availableStock) {
+            if (updatedQty > product.stock) {
 
                 return res.status(400).json({
                     success: false,

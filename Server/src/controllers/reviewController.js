@@ -135,6 +135,8 @@ export const submitReview = async (req, res) => {
 
         // Real-time synchronization
         emitToAdmin("review:created", { review });
+        emitToAll("review:created", { review });
+        emitToAll("review:statusUpdated", { review, status: review.status });
 
         // =====================================
         // Response

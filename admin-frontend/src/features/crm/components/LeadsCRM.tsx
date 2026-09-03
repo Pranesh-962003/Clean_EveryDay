@@ -14,7 +14,8 @@ import {
   User,
   X,
   FileText,
-  Loader2
+  Loader2,
+  Pencil
 } from 'lucide-react';
 
 const LeadsCRM: React.FC = () => {
@@ -24,6 +25,7 @@ const LeadsCRM: React.FC = () => {
     isLeadsLoading,
     addLead,
     updateLeadStatus,
+    updateLeadPriority,
     updateLeadNotes,
     addLeadComment,
     addLeadTask,
@@ -70,6 +72,19 @@ const LeadsCRM: React.FC = () => {
   const [nlService, setNlService] = useState('Floor Care');
   const [nlMessage, setNlMessage] = useState('');
   const [nlPriority, setNlPriority] = useState<Lead['priority']>('Medium');
+
+  // Priority Edit Modal States
+  const [priorityEditLead, setPriorityEditLead] = useState<Lead | null>(null);
+  const [selectedPriority, setSelectedPriority] = useState<Lead['priority']>('Medium');
+  const [isPriorityModalOpen, setIsPriorityModalOpen] = useState<boolean>(false);
+  const [isConfirmPriorityModalOpen, setIsConfirmPriorityModalOpen] = useState<boolean>(false);
+  const [updatingPriorityLeadId, setUpdatingPriorityLeadId] = useState<string | null>(null);
+
+  const openPriorityModal = (lead: Lead) => {
+    setPriorityEditLead(lead);
+    setSelectedPriority(lead.priority || 'Medium');
+    setIsPriorityModalOpen(true);
+  };
 
   // Auto-save Notes State
   const [isNotesSaving, setIsNotesSaving] = useState(false);
@@ -638,15 +653,32 @@ const LeadsCRM: React.FC = () => {
                       </td>
                       <td className="py-3 px-4 text-mut font-medium whitespace-nowrap">{l.source}</td>
                       <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${
-                          l.priority === 'High'
-                            ? 'bg-red-bg text-red'
-                            : l.priority === 'Medium'
-                            ? 'bg-yellow-50 text-amber-700'
-                            : 'bg-sur text-mut'
-                        }`}>
-                          {l.priority}
-                        </span>
+                        <div className="flex items-center justify-center gap-1.5">
+                          <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${
+                            l.priority === 'High'
+                              ? 'bg-red-bg text-red'
+                              : l.priority === 'Medium'
+                              ? 'bg-yellow-50 text-amber-700'
+                              : 'bg-sur text-mut'
+                          }`}>
+                            {l.priority}
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openPriorityModal(l);
+                            }}
+                            disabled={updatingPriorityLeadId === String(l._id || l.id)}
+                            className="p-1 rounded text-mut hover:text-primary hover:bg-sur transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                            title="Edit Lead Priority"
+                          >
+                            {updatingPriorityLeadId === String(l._id || l.id) ? (
+                              <Loader2 size={13} className="animate-spin text-primary" />
+                            ) : (
+                              <Pencil size={13} />
+                            )}
+                          </button>
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-center whitespace-nowrap">
                         <select
@@ -772,15 +804,32 @@ const LeadsCRM: React.FC = () => {
                           onClick={() => openDetailsDrawer(lead)}
                           className="bg-wht border border-bdr rounded-md p-4 hover:border-primary shadow-premium-sm hover:shadow-premium-md cursor-grab active:cursor-grabbing transition-all select-none animate-fadeIn"
                         >
-                          <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded mb-2 capitalize ${
-                            lead.priority === 'High'
-                              ? 'bg-red-bg text-red'
-                              : lead.priority === 'Medium'
-                              ? 'bg-yellow-50 text-amber-700'
-                              : 'bg-sur text-mut'
-                          }`}>
-                            {lead.priority} priority
-                          </span>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded capitalize ${
+                              lead.priority === 'High'
+                                ? 'bg-red-bg text-red'
+                                : lead.priority === 'Medium'
+                                ? 'bg-yellow-50 text-amber-700'
+                                : 'bg-sur text-mut'
+                            }`}>
+                              {lead.priority} priority
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openPriorityModal(lead);
+                              }}
+                              disabled={updatingPriorityLeadId === String(lead._id || lead.id)}
+                              className="p-1 rounded text-mut hover:text-primary hover:bg-sur transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                              title="Edit Lead Priority"
+                            >
+                              {updatingPriorityLeadId === String(lead._id || lead.id) ? (
+                                <Loader2 size={13} className="animate-spin text-primary" />
+                              ) : (
+                                <Pencil size={13} />
+                              )}
+                            </button>
+                          </div>
                           
                           <h4 className="text-sm font-semibold text-blk truncate mb-0.5" title={lead.subject}>
                             {lead.subject}
@@ -853,7 +902,24 @@ const LeadsCRM: React.FC = () => {
                 </div>
                 <div>
                   <span className="text-mut text-xs block">Priority status</span>
-                  <span className="font-semibold text-blk block mt-0.5">{selectedLead.priority} priority • {selectedLead.status}</span>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <span className="font-semibold text-blk block">{selectedLead.priority} priority • {selectedLead.status}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openPriorityModal(selectedLead);
+                      }}
+                      disabled={updatingPriorityLeadId === String(selectedLead._id || selectedLead.id)}
+                      className="p-1 rounded text-mut hover:text-primary hover:bg-sur transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                      title="Edit Lead Priority"
+                    >
+                      {updatingPriorityLeadId === String(selectedLead._id || selectedLead.id) ? (
+                        <Loader2 size={13} className="animate-spin text-primary" />
+                      ) : (
+                        <Pencil size={13} />
+                      )}
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1307,6 +1373,136 @@ const LeadsCRM: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Step 1: Change Priority Selection Modal */}
+      {isPriorityModalOpen && priorityEditLead && createPortal(
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-blk/60 backdrop-blur-xs p-4 overflow-y-auto animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsPriorityModalOpen(false);
+            }
+          }}
+        >
+          <div className="bg-wht rounded-xl border border-bdr shadow-premium-lg w-full max-w-[420px] p-6 relative animate-slideUp my-auto">
+            <button
+              onClick={() => setIsPriorityModalOpen(false)}
+              className="absolute top-4 right-4 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="flex items-center gap-2.5 mb-4 border-b border-bdrl pb-3">
+              <div className="w-9 h-9 rounded-lg bg-primary-soft text-primary flex items-center justify-center font-bold">
+                <Pencil size={18} />
+              </div>
+              <div>
+                <h3 className="font-display text-base font-bold text-blk">Change Lead Priority</h3>
+                <p className="text-xs text-mut truncate max-w-[260px]">{priorityEditLead.subject}</p>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-4 text-xs mb-6">
+              <div className="flex flex-col gap-1.5">
+                <label className="font-medium text-mut">Select Priority Level</label>
+                <select
+                  className="border border-bdr focus:border-primary rounded-lg px-3 py-2 text-sm text-blk font-semibold bg-wht outline-none cursor-pointer"
+                  value={selectedPriority}
+                  onChange={(e) => setSelectedPriority(e.target.value as Lead['priority'])}
+                >
+                  <option value="High">High Priority</option>
+                  <option value="Medium">Medium Priority</option>
+                  <option value="Low">Low Priority</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setIsPriorityModalOpen(false)}
+                className="px-4 py-2 rounded-lg border border-bdr text-xs font-semibold text-mid hover:bg-sur transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setIsPriorityModalOpen(false);
+                  setIsConfirmPriorityModalOpen(true);
+                }}
+                className="px-4 py-2 rounded-lg bg-primary text-wht hover:bg-primary-hover text-xs font-semibold shadow-premium-sm transition-colors cursor-pointer"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* Step 2: Confirm Priority Change Modal */}
+      {isConfirmPriorityModalOpen && priorityEditLead && createPortal(
+        <div 
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-blk/60 backdrop-blur-xs p-4 overflow-y-auto animate-fadeIn"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setIsConfirmPriorityModalOpen(false);
+              setIsPriorityModalOpen(true);
+            }
+          }}
+        >
+          <div className="bg-wht rounded-2xl border border-bdr shadow-premium-xl w-full max-w-[400px] p-6 text-center relative animate-slideUp my-auto">
+            <button
+              onClick={() => {
+                setIsConfirmPriorityModalOpen(false);
+                setIsPriorityModalOpen(true);
+              }}
+              className="absolute top-4 right-4 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+            >
+              <X size={18} />
+            </button>
+
+            <div className="w-12 h-12 bg-primary-soft border border-primary-light/40 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
+              <Pencil size={22} />
+            </div>
+
+            <h3 className="font-display text-lg font-bold text-blk mb-2">
+              Confirm Priority Update
+            </h3>
+
+            <p className="text-xs text-mut leading-relaxed mb-6">
+              Are you sure you want to update priority for <strong className="text-blk">"{priorityEditLead.subject}"</strong> to <span className="font-bold text-primary">{selectedPriority} Priority</span>?
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setIsConfirmPriorityModalOpen(false);
+                  setIsPriorityModalOpen(true);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-lg border border-bdr text-xs font-semibold text-mid hover:bg-sur transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  setIsConfirmPriorityModalOpen(false);
+                  const targetId = priorityEditLead._id || priorityEditLead.id;
+                  if (targetId) {
+                    setUpdatingPriorityLeadId(String(targetId));
+                    await updateLeadPriority(targetId, selectedPriority);
+                    setUpdatingPriorityLeadId(null);
+                  }
+                  setPriorityEditLead(null);
+                }}
+                className="flex-1 py-2.5 px-4 rounded-lg bg-primary text-wht hover:bg-primary-hover text-xs font-semibold shadow-premium-sm transition-colors cursor-pointer"
+              >
+                OK
+              </button>
+            </div>
           </div>
         </div>,
         document.body
