@@ -79,8 +79,8 @@ interface AppContextType {
   fetchUserCart: () => Promise<void>;
   fetchMyOrders: () => Promise<void>;
   addToCart: (product: Product, quantity?: number) => Promise<void>;
-  updateCartQty: (productId: number, qty: number) => Promise<void>;
-  removeFromCart: (productId: number) => Promise<void>;
+  updateCartQty: (productId: number | string, qty: number) => Promise<void>;
+  removeFromCart: (productId: number | string) => Promise<void>;
   clearCart: () => void;
   placeOrder: (
     address: Order['address'] & { _id?: string; id?: string },
@@ -115,7 +115,7 @@ const DEF_PRODS: Product[] = [
     desc: 'A natural, plant-based floor cleaner suitable for marble, tiles, and wood. Just one cap in half a bucket of water leaves your floors shiny, streak-free, and clean with a mild eucalyptus fragrance.',
     tags: ['Safe for kids & pets', 'Streak-free shine', 'Natural fragrance', 'All Hard Floors'],
     badge: 'Bestseller',
-    imgs: ['https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?w=600&auto=format&fit=crop&q=80'],
+    imgs: [],
     price: 299,
     sku: 'CE-FL-01',
     brand: 'Clean Everyday',
@@ -141,7 +141,7 @@ const DEF_PRODS: Product[] = [
     desc: 'A powerful dishwashing liquid that cuts grease and food residues from all pots and pans. Infused with natural aloe vera, it is very gentle on hands and keeps them soft even after long washes.',
     tags: ['Aloe Vera Infused', 'Cuts grease easily', 'Soft on hands', 'Concentrated formula'],
     badge: null,
-    imgs: ['https://images.unsplash.com/photo-1584634731339-252c581abfc5?w=600&auto=format&fit=crop&q=80'],
+    imgs: [],
     price: 199,
     sku: 'CE-DH-02',
     brand: 'Clean Everyday',
@@ -167,7 +167,7 @@ const DEF_PRODS: Product[] = [
     desc: 'A gentle laundry wash that removes dirt and stains while protecting fabric colors and fibers. Safe for both top-load and front-load washing machines, and suitable for all types of clothing.',
     tags: ['Protects colors', 'Removes tough stains', 'Machine & hand wash', 'Clean scent'],
     badge: 'New',
-    imgs: ['https://images.unsplash.com/photo-1610557892470-55d9e80c0bce?w=600&auto=format&fit=crop&q=80'],
+    imgs: [],
     price: 349,
     sku: 'CE-LD-03',
     brand: 'Clean Everyday',
@@ -193,7 +193,7 @@ const DEF_PRODS: Product[] = [
     desc: 'A food-safe kitchen surface spray for cleaning countertops, dining tables, cutting boards, and kitchen tiles. Cleans effectively without leaving chemical residues or toxic fumes, making it safe for food preparation areas.',
     tags: ['Food-contact safe', 'No rinsing needed', 'Clean kitchen surfaces', 'Ready to use'],
     badge: null,
-    imgs: ['https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=600&auto=format&fit=crop&q=80'],
+    imgs: [],
     price: 249,
     sku: 'CE-DH-04',
     brand: 'Clean Everyday',
@@ -1794,13 +1794,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const updateCartQty = async (productId: number | string, qty: number) => {
     if (qty <= 0) {
-      removeFromCart(productId);
+      await removeFromCart(productId);
       return;
     }
 
-    const targetItem = cart.find((item) => item.product.id === productId || item.product._id === productId || item._id === productId);
+    const targetItem = cart.find(
+      (item) =>
+        item.product.id === productId ||
+        item.product._id === productId ||
+        item._id === productId ||
+        String(item.product.id) === String(productId) ||
+        String(item.product._id) === String(productId) ||
+        String(item._id) === String(productId)
+    );
+
     setUpdatingProductId(productId);
     setIsCartLoading(true);
+
+    // Optimistically update local cart state immediately for fast, smooth UI response
+    setCart((prev) =>
+      prev.map((item) =>
+        item.product.id === productId ||
+        item.product._id === productId ||
+        item._id === productId ||
+        String(item.product.id) === String(productId) ||
+        String(item.product._id) === String(productId) ||
+        String(item._id) === String(productId)
+          ? { ...item, quantity: qty }
+          : item
+      )
+    );
 
     try {
       if (!auth.currentUser) {
@@ -1811,7 +1834,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const token = await firebaseUser.getIdToken();
         if (token) {
           const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
-          const itemId = targetItem?.product._id || targetItem?._id || productId.toString();
+          const itemId = targetItem?._id || targetItem?.product._id || productId.toString();
           await axios.patch(
             `${backendUrl}/carts/item-update/${itemId}`,
             { quantity: qty },
@@ -1820,18 +1843,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               withCredentials: true
             }
           );
-          // Re-fetch total cart details from http://localhost:5002/api/carts/get-cart after update
           await fetchUserCart();
           showToast('Updated cart quantity.');
           return;
         }
       }
 
-      setCart((prev) =>
-        prev.map((item) =>
-          item.product.id === productId || item.product._id === productId || item._id === productId ? { ...item, quantity: qty } : item
-        )
-      );
       showToast('Updated cart quantity.');
     } catch (err) {
       console.warn('Could not update cart item quantity on backend:', err);
@@ -1843,9 +1860,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const removeFromCart = async (productId: number | string) => {
-    const targetItem = cart.find((item) => item.product.id === productId || item.product._id === productId || item._id === productId);
+    const targetItem = cart.find(
+      (item) =>
+        item.product.id === productId ||
+        item.product._id === productId ||
+        item._id === productId ||
+        String(item.product.id) === String(productId) ||
+        String(item.product._id) === String(productId) ||
+        String(item._id) === String(productId)
+    );
+
     setDeletingProductId(productId);
     setIsCartLoading(true);
+
+    // Optimistically update local cart state immediately
+    setCart((prev) =>
+      prev.filter(
+        (item) =>
+          item.product.id !== productId &&
+          item.product._id !== productId &&
+          item._id !== productId &&
+          String(item.product.id) !== String(productId) &&
+          String(item.product._id) !== String(productId) &&
+          String(item._id) !== String(productId)
+      )
+    );
 
     try {
       if (!auth.currentUser) {
@@ -1856,24 +1895,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const token = await firebaseUser.getIdToken();
         if (token) {
           const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
-          const pId = targetItem?.product._id || targetItem?._id || productId.toString();
+          const pId = targetItem?.product._id || targetItem?.product.id || productId.toString();
           await axios.delete(`${backendUrl}/carts/item-remove/${pId}`, {
             headers: { Authorization: `Bearer ${token}` },
             withCredentials: true
           });
-          // Re-fetch cart items of the user after deletion process is done
           await fetchUserCart();
           showToast('Removed item from cart.');
           return;
         }
       }
 
-      setCart((prev) => prev.filter((item) => item.product.id !== productId && item.product._id !== productId && item._id !== productId));
       showToast('Removed item from cart.');
     } catch (err) {
       console.warn('Could not remove item from backend cart:', err);
-      setCart((prev) => prev.filter((item) => item.product.id !== productId && item.product._id !== productId && item._id !== productId));
-      showToast('Removed item from cart.');
+      await fetchUserCart();
     } finally {
       setDeletingProductId(null);
       setIsCartLoading(false);

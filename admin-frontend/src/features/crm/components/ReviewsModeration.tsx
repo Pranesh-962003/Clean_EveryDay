@@ -136,6 +136,8 @@ const ReviewsModeration: React.FC = () => {
   const [apiReviews, setApiReviews] = useState<ReviewItem[] | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [deletingIds, setDeletingIds] = useState<string[]>([]);
+  const [updatingStatusIds, setUpdatingStatusIds] = useState<string[]>([]);
+  const [isBulkUpdating, setIsBulkUpdating] = useState<boolean>(false);
   const reviews = apiReviews !== null ? apiReviews : [];
 
   // Load reviews from live backend API
@@ -279,6 +281,7 @@ const ReviewsModeration: React.FC = () => {
 
   // API Status & Action Handlers
   const handleUpdateStatus = async (id: string, newStatus: string) => {
+    setUpdatingStatusIds((prev) => [...prev, id]);
     try {
       const firebaseUser = auth.currentUser;
       let token = '';
@@ -299,6 +302,8 @@ const ReviewsModeration: React.FC = () => {
     } catch (err: any) {
       console.error('Error updating review status:', err);
       showToast(err.response?.data?.message || 'Failed to update review status.');
+    } finally {
+      setUpdatingStatusIds((prev) => prev.filter((x) => x !== id));
     }
   };
 
@@ -328,18 +333,28 @@ const ReviewsModeration: React.FC = () => {
   // Bulk Actions
   const handleBulkApprove = async () => {
     if (selectedIds.length === 0) return;
-    for (const id of selectedIds) {
-      await handleUpdateStatus(id, 'Approved');
+    setIsBulkUpdating(true);
+    try {
+      for (const id of selectedIds) {
+        await handleUpdateStatus(id, 'Approved');
+      }
+      setSelectedIds([]);
+    } finally {
+      setIsBulkUpdating(false);
     }
-    setSelectedIds([]);
   };
 
   const handleBulkReject = async () => {
     if (selectedIds.length === 0) return;
-    for (const id of selectedIds) {
-      await handleUpdateStatus(id, 'Rejected');
+    setIsBulkUpdating(true);
+    try {
+      for (const id of selectedIds) {
+        await handleUpdateStatus(id, 'Rejected');
+      }
+      setSelectedIds([]);
+    } finally {
+      setIsBulkUpdating(false);
     }
-    setSelectedIds([]);
   };
 
   const handleReplySubmit = (e: React.FormEvent) => {
@@ -443,15 +458,17 @@ const ReviewsModeration: React.FC = () => {
             <div className="flex gap-2">
               <button
                 onClick={handleBulkApprove}
-                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 border border-primary-light/40 text-primary-hover hover:bg-primary-soft rounded cursor-pointer"
+                disabled={isBulkUpdating}
+                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 border border-primary-light/40 text-primary-hover hover:bg-primary-soft rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <Check size={12} /> Bulk Approve
+                {isBulkUpdating ? <Loader2 size={12} className="animate-spin text-primary" /> : <Check size={12} />} Bulk Approve
               </button>
               <button
                 onClick={handleBulkReject}
-                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 border border-transparent bg-sur text-mid hover:bg-sur/80 rounded cursor-pointer"
+                disabled={isBulkUpdating}
+                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 border border-transparent bg-sur text-mid hover:bg-sur/80 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <X size={12} /> Bulk Reject
+                {isBulkUpdating ? <Loader2 size={12} className="animate-spin text-mid" /> : <X size={12} />} Bulk Reject
               </button>
               <button
                 onClick={() => setIsBulkDeleteModalOpen(true)}
@@ -510,6 +527,7 @@ const ReviewsModeration: React.FC = () => {
                 filteredReviews.map((r) => {
                   const isSelected = selectedIds.includes(r.id);
                   const isDeleting = deletingIds.includes(r.id);
+                  const isUpdatingStatus = updatingStatusIds.includes(r.id);
                   const status = r.status || (r.approved ? 'Approved' : 'Pending');
 
                   return (
@@ -576,21 +594,29 @@ const ReviewsModeration: React.FC = () => {
                           {status !== 'Approved' && (
                             <button
                               onClick={() => handleUpdateStatus(r.id, 'Approved')}
-                              disabled={isDeleting}
-                              className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={isDeleting || isUpdatingStatus}
+                              className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                               title="Approve Review"
                             >
-                              <Check size={12} />
+                              {isUpdatingStatus ? (
+                                <Loader2 size={12} className="animate-spin text-primary" />
+                              ) : (
+                                <Check size={12} />
+                              )}
                             </button>
                           )}
                           {status === 'Approved' && (
                             <button
                               onClick={() => handleUpdateStatus(r.id, 'Hidden')}
-                              disabled={isDeleting}
-                              className="p-1 border border-bdr hover:border-accent text-mid hover:text-accent-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              disabled={isDeleting || isUpdatingStatus}
+                              className="p-1 border border-bdr hover:border-accent text-mid hover:text-accent-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                               title="Hide Review"
                             >
-                              <X size={12} />
+                              {isUpdatingStatus ? (
+                                <Loader2 size={12} className="animate-spin text-accent" />
+                              ) : (
+                                <X size={12} />
+                              )}
                             </button>
                           )}
                           <button

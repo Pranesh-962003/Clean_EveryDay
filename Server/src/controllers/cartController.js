@@ -561,7 +561,12 @@ export const updateCartQuantity = async (req, res) => {
         // Find Cart Item
         // =====================================
 
-        const item = cart.items.id(itemId);
+        let item = cart.items.id(itemId);
+        if (!item) {
+            item = cart.items.find(
+                i => i.product.toString() === itemId || i._id.toString() === itemId
+            );
+        }
 
         if (!item) {
             return res.status(404).json({

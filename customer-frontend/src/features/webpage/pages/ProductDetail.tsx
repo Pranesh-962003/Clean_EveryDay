@@ -11,7 +11,7 @@ import {
 interface ReviewModalProps {
   productName: string;
   onClose: () => void;
-  onSubmit: (name: string, email: string, stars: number, body: string) => void;
+  onSubmit: (name: string, email: string, stars: number, body: string) => Promise<boolean | void> | void;
 }
 
 const ReviewModal: React.FC<ReviewModalProps> = ({ productName, onClose, onSubmit }) => {
@@ -21,6 +21,7 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ productName, onClose, onSubmi
   const [hoverStars, setHoverStars] = useState(0);
   const [body, setBody] = useState('');
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
 
   const starLabels = ['', 'Poor', 'Fair', 'Good', 'Very Good', 'Excellent'];
@@ -34,12 +35,19 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ productName, onClose, onSubmi
     return e;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const errs = validate();
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
-    onSubmit(name.trim(), email.trim(), stars, body.trim());
-    setSubmitted(true);
+    setIsSubmitting(true);
+    try {
+      await onSubmit(name.trim(), email.trim(), stars, body.trim());
+      setSubmitted(true);
+    } catch (error) {
+      console.error("Error submitting review:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -170,9 +178,19 @@ const ReviewModal: React.FC<ReviewModalProps> = ({ productName, onClose, onSubmi
                 </p>
                 <button
                   type="submit"
-                  className="btn-primary flex items-center gap-2 shrink-0"
+                  disabled={isSubmitting}
+                  className="btn-primary flex items-center gap-2 shrink-0 disabled:opacity-75 disabled:cursor-not-allowed transition-all duration-200"
                 >
-                  <Send size={13} /> Submit Review
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 size={14} className="animate-spin text-wht" />
+                      <span>Submitting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send size={13} /> Submit Review
+                    </>
+                  )}
                 </button>
               </div>
             </form>
@@ -213,9 +231,19 @@ const ProductDetail: React.FC = () => {
   const [rBody, setRBody] = useState('');
   const [guestName, setGuestName] = useState('');
   const [ratingError, setRatingError] = useState(false);
+  const [isSubmittingInlineReview, setIsSubmittingInlineReview] = useState(false);
 
   const product = products.find((p) => p.id === selectedProductId);
-  const cartItem = product ? cart.find((item) => item.product.id === product.id) : null;
+  const cartItem = product
+    ? cart.find(
+        (item) =>
+          item.product.id === product.id ||
+          item.product._id === product._id ||
+          (product._id && String(item.product.id) === String(product._id)) ||
+          (product.id && String(item.product._id) === String(product.id)) ||
+          (product._id && String(item.product._id) === String(product._id))
+      )
+    : null;
   const quantityInCart = cartItem ? cartItem.quantity : 0;
 
   if (!product) {
@@ -308,14 +336,19 @@ const ProductDetail: React.FC = () => {
     if (rStars === 0) { setRatingError(true); return; }
     if (!rBody.trim()) return;
 
-    const targetId = product._id || product.sku || product.id;
-    const authorName = curUser ? curUser.name : (guestName.trim() || 'Customer');
-    const res = await submitReview(authorName, rStars, rBody.trim(), product.name, product._id || String(product.id));
-    if (res && res.success) {
-      setRStars(0); setRBody(''); setGuestName(''); setRatingError(false);
-      setTimeout(() => {
-        fetchProductReviews(targetId, product.name);
-      }, 500);
+    setIsSubmittingInlineReview(true);
+    try {
+      const targetId = product._id || product.sku || product.id;
+      const authorName = curUser ? curUser.name : (guestName.trim() || 'Customer');
+      const res = await submitReview(authorName, rStars, rBody.trim(), product.name, product._id || String(product.id));
+      if (res && res.success) {
+        setRStars(0); setRBody(''); setGuestName(''); setRatingError(false);
+        setTimeout(() => {
+          fetchProductReviews(targetId, product.name);
+        }, 500);
+      }
+    } finally {
+      setIsSubmittingInlineReview(false);
     }
   };
 
@@ -327,7 +360,9 @@ const ProductDetail: React.FC = () => {
       setTimeout(() => {
         fetchProductReviews(targetId, product.name);
       }, 500);
+      return true;
     }
+    return false;
   };
 
   return (
@@ -505,11 +540,12 @@ const ProductDetail: React.FC = () => {
                   <div className="flex items-center justify-between border border-primary rounded-md overflow-hidden bg-primary-soft/30 flex-1 min-w-[130px] h-[48px] select-none">
                     <button
                       onClick={() => {
+                        const targetId = product._id || product.id;
                         if (quantityInCart === 1) {
-                          removeFromCart(product.id);
+                          removeFromCart(targetId);
                           showToast(`${product.name} removed from cart.`);
                         } else {
-                          updateCartQty(product.id, quantityInCart - 1);
+                          updateCartQty(targetId, quantityInCart - 1);
                         }
                       }}
                       className="flex-1 h-full flex items-center justify-center text-primary hover:bg-primary/15 transition-colors font-bold text-lg cursor-pointer border-none bg-transparent"
@@ -521,7 +557,8 @@ const ProductDetail: React.FC = () => {
                     </span>
                     <button
                       onClick={() => {
-                        updateCartQty(product.id, quantityInCart + 1);
+                        const targetId = product._id || product.id;
+                        updateCartQty(targetId, quantityInCart + 1);
                       }}
                       className="flex-1 h-full flex items-center justify-center text-primary hover:bg-primary/15 transition-colors font-bold text-lg cursor-pointer border-none bg-transparent"
                     >
@@ -672,8 +709,22 @@ const ProductDetail: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-4 flex-wrap">
-                  <button type="submit" className="flex items-center gap-2 bg-primary text-wht rounded-xl py-3 px-6 text-sm font-bold hover:bg-primary-hover transition-colors cursor-pointer">
-                    <Send size={13} /> Post Review
+                  <button
+                    type="submit"
+                    disabled={isSubmittingInlineReview}
+                    className="flex items-center gap-2 bg-primary text-wht rounded-xl py-3 px-6 text-sm font-bold hover:bg-primary-hover transition-all duration-200 cursor-pointer disabled:opacity-75 disabled:cursor-not-allowed"
+                  >
+                    {isSubmittingInlineReview ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-wht" />
+                        <span>Posting Review...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={13} />
+                        <span>Post Review</span>
+                      </>
+                    )}
                   </button>
                   <span className="text-xs text-mut italic">Subject to admin moderation.</span>
                 </div>

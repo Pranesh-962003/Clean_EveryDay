@@ -10,7 +10,14 @@ interface ProductCardProps {
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const { setCurPage, setSelectedProductId, reviews, cart, addToCart, updateCartQty, removeFromCart, addingProductId } = useApp();
 
-  const cartItem = cart.find((item) => item.product.id === product.id);
+  const cartItem = cart.find(
+    (item) =>
+      item.product.id === product.id ||
+      item.product._id === product._id ||
+      (product._id && String(item.product.id) === String(product._id)) ||
+      (product.id && String(item.product._id) === String(product.id)) ||
+      (product._id && String(item.product._id) === String(product._id))
+  );
   const quantityInCart = cartItem ? cartItem.quantity : 0;
 
   const prodReviews = reviews.filter((r) => r.approved && r.product === product.name);
@@ -57,14 +64,17 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     >
       {/* Image Container */}
       <div className="aspect-[4/5] bg-primary-soft/50 relative overflow-hidden">
-        <img
-          src={(product.imgs && product.imgs.length > 0 && product.imgs[0]) ? product.imgs[0] : 'https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?w=600&auto=format&fit=crop&q=80'}
-          alt={product.name}
-          onError={(e) => {
-            (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1585421514284-efb74c2b69ba?w=600&auto=format&fit=crop&q=80';
-          }}
-          className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-106"
-        />
+        {product.imgs && product.imgs.length > 0 ? (
+          <img
+            src={product.imgs[0]}
+            alt={product.name}
+            className="w-full h-full object-cover transition-transform duration-500 ease-out group-hover:scale-106"
+          />
+        ) : (
+          <div className="w-full h-full bg-gradient-to-br from-primary-soft to-primary-xlight/40 flex items-center justify-center">
+            <span className="font-display italic text-xl text-primary-hover opacity-30 font-light">Clean</span>
+          </div>
+        )}
 
         {/* Top-left badge */}
         {product.badge && (
@@ -120,10 +130,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
+                const targetId = product._id || product.id;
                 if (quantityInCart === 1) {
-                  removeFromCart(product.id);
+                  removeFromCart(targetId);
                 } else {
-                  updateCartQty(product.id, quantityInCart - 1);
+                  updateCartQty(targetId, quantityInCart - 1);
                 }
               }}
               className="flex-1 h-full flex items-center justify-center text-primary hover:bg-primary-hover hover:text-white transition-all font-bold text-base cursor-pointer border-none bg-transparent"
@@ -136,7 +147,8 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                updateCartQty(product.id, quantityInCart + 1);
+                const targetId = product._id || product.id;
+                updateCartQty(targetId, quantityInCart + 1);
               }}
               className="flex-1 h-full flex items-center justify-center text-primary hover:bg-primary-hover hover:text-white transition-all font-bold text-base cursor-pointer border-none bg-transparent"
             >

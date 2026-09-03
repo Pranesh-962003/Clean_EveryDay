@@ -13,7 +13,8 @@ import {
   MapPin,
   Send,
   Star,
-  ChevronRight
+  ChevronRight,
+  Loader2
 } from 'lucide-react';
 
 const Home: React.FC = () => {
@@ -41,6 +42,7 @@ const Home: React.FC = () => {
   const [rStars, setRStars] = useState(0);
   const [rHoverStars, setRHoverStars] = useState(0);
   const [rBody, setRBody] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
 
   // Filter & Go to Products Page
   const handleFilterGo = (cat: string) => {
@@ -72,7 +74,7 @@ const Home: React.FC = () => {
   };
 
   // Submit Testimonial Review
-  const handleReviewSubmit = (e: React.FormEvent) => {
+  const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!curUser) {
       openAuthModal('login');
@@ -81,9 +83,14 @@ const Home: React.FC = () => {
     if (rStars === 0 || !rBody.trim()) {
       return;
     }
-    submitReview(curUser.name, rStars, rBody.trim(), 'General');
-    setRStars(0);
-    setRBody('');
+    setIsSubmittingReview(true);
+    try {
+      await submitReview(curUser.name, rStars, rBody.trim(), 'General');
+      setRStars(0);
+      setRBody('');
+    } finally {
+      setIsSubmittingReview(false);
+    }
   };
 
   // Get featured products & reviews
@@ -305,10 +312,21 @@ const Home: React.FC = () => {
                 />
                 <div className="flex items-center gap-4 flex-wrap justify-between">
                   <button
-                    className="btn-primary"
+                    className="btn-primary flex items-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed transition-all duration-200"
                     type="submit"
+                    disabled={isSubmittingReview}
                   >
-                    Publish review
+                    {isSubmittingReview ? (
+                      <>
+                        <Loader2 size={14} className="animate-spin text-wht" />
+                        <span>Publishing review...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send size={13} />
+                        <span>Publish review</span>
+                      </>
+                    )}
                   </button>
                   <span className="text-xs text-mut italic">
                     All reviews undergo standard administrative verification.
