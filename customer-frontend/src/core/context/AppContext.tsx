@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import axios from 'axios';
-import type { Product, Review, User, Lead, Banner, CartItem, Order, Staff, LeadActivity } from '../types';
+import type { Product, Review, Story, User, Lead, Banner, CartItem, Order, Staff, LeadActivity } from '../types';
 // @ts-ignore
 import { auth } from '../../../firebase';
 import { getSocket, updateSocketAuth } from '../socket/socket';
@@ -10,6 +10,9 @@ interface AppContextType {
   products: Product[];
   isProductsLoading: boolean;
   reviews: Review[];
+  stories: Story[];
+  fetchStories: () => Promise<void>;
+  submitStory: (rating: number, body: string, authorName?: string, role?: string) => Promise<any>;
   users: User[];
   leads: Lead[];
   banners: Banner[];
@@ -303,6 +306,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [products, setProducts] = useState<Product[]>(DEF_PRODS);
   const [isProductsLoading, setIsProductsLoading] = useState<boolean>(true);
   const [reviews, setReviews] = useState<Review[]>(DEF_REVS);
+  const [stories, setStories] = useState<Story[]>([]);
   const [users, setUsers] = useState<User[]>(DEF_USERS);
   const [leads, setLeads] = useState<Lead[]>([]);
   const [banners, setBanners] = useState<Banner[]>(DEF_BANNERS);
@@ -463,10 +467,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const fetchStories = async () => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      const response = await axios.get(`${backendUrl}/stories`);
+      if (response.data && response.data.success && Array.isArray(response.data.stories)) {
+        setStories(response.data.stories);
+      }
+    } catch (error) {
+      console.warn('Error fetching stories from API, fallback to default:', error);
+    }
+  };
+
+  const submitStory = async (rating: number, body: string, authorName?: string, role?: string) => {
+    try {
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      let headers: any = {};
+      if (auth.currentUser) {
+        try {
+          const token = await auth.currentUser.getIdToken();
+          if (token) {
+            headers.Authorization = `Bearer ${token}`;
+          }
+        } catch (e) {
+          // Token fetch error
+        }
+      }
+      const payload = {
+        rating,
+        body,
+        authorName: authorName || curUser?.name || 'Customer One',
+        role: role || (curUser?.address?.city ? `${curUser.address.city}, Home User` : 'Home User')
+      };
+
+      const response = await axios.post(`${backendUrl}/stories`, payload, { headers });
+      if (response.data && response.data.success && response.data.story) {
+        const newStory = response.data.story;
+        setStories((prev) => {
+          const sId = String(newStory._id || newStory.id);
+          const exists = prev.some((s) => String(s._id || s.id) === sId);
+          if (exists) return prev;
+          return [newStory, ...prev];
+        });
+        return response.data;
+      }
+    } catch (error: any) {
+      console.error('Error submitting story to API:', error);
+      throw error;
+    }
+  };
+
   useEffect(() => {
     fetchCurrentUser();
     fetchProducts();
     fetchBanners();
+    fetchStories();
   }, []);
 
   // Real-time synchronization with Socket.IO
@@ -723,6 +778,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     };
 
+    const handleStoryCreated = (data: { story: any }) => {
+      if (!data?.story) return;
+      setStories((prev) => {
+        const sId = String(data.story._id || data.story.id);
+        const exists = prev.some((s) => String(s._id || s.id) === sId);
+        if (exists) {
+          return prev.map((s) => (String(s._id || s.id) === sId ? data.story : s));
+        }
+        return [data.story, ...prev];
+      });
+    };
+
+    const handleStoryDeleted = (data: { id?: string }) => {
+      if (!data?.id) return;
+      setStories((prev) => prev.filter((s) => String(s._id || s.id) !== String(data.id)));
+    };
+
     const handleUserUpdated = (data: { user: any }) => {
       if (data?.user) {
         setCurUser((prev) => {
@@ -735,6 +807,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const handleConnect = () => {
       fetchBanners();
       fetchProducts();
+      fetchStories();
     };
 
     socket.on("connect", handleConnect);
@@ -747,6 +820,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     socket.on(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewStatusUpdated);
     socket.on(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewStatusUpdated);
     socket.on(SOCKET_EVENTS.REVIEW_DELETED, handleReviewDeleted);
+    socket.on(SOCKET_EVENTS.STORY_CREATED, handleStoryCreated);
+    socket.on(SOCKET_EVENTS.STORY_DELETED, handleStoryDeleted);
     socket.on(SOCKET_EVENTS.ORDER_CREATED, handleOrderCreated);
     socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderStatusUpdated);
     socket.on(SOCKET_EVENTS.ORDER_CANCELLED, handleOrderStatusUpdated);
@@ -2422,6 +2497,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         products,
         isProductsLoading,
         reviews,
+        stories,
+        fetchStories,
+        submitStory,
         users,
         leads,
         banners,

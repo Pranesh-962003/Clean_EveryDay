@@ -54,6 +54,21 @@ export interface Review {
   status?: 'Approved' | 'Pending' | 'Rejected' | 'Hidden';
 }
 
+export interface Story {
+  id?: number | string;
+  _id?: string;
+  author: string;
+  ini: string;
+  role: string;
+  img?: string | null;
+  rating: number;
+  body: string;
+  approved: boolean;
+  date: string;
+  status?: 'Approved' | 'Pending' | 'Rejected' | 'Hidden';
+  isVerified?: boolean;
+}
+
 export interface User {
   _id?: string;
   id?: string | number;

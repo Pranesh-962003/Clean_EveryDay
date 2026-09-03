@@ -22,6 +22,7 @@ import orderRouter from "./src/routes/orderRoutes.js";
 import reviewRouter from "./src/routes/reviewRoutes.js";
 import cartRouter from "./src/routes/cartRoutes.js";
 import leadRouter from "./src/routes/leadRoutes.js";
+import storyRouter from "./src/routes/storyRoutes.js";
 import { startReminderScheduler } from "./src/utils/reminderScheduler.js";
 
 
@@ -173,6 +174,9 @@ app.use("/reviews", reviewRouter);
 
 app.use("/api/leads", leadRouter);
 app.use("/leads", leadRouter);
+
+app.use("/api/stories", storyRouter);
+app.use("/stories", storyRouter);
 // console.log(Cloudinary.api);
 
 // =========================

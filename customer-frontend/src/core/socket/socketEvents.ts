@@ -6,6 +6,9 @@ export const SOCKET_EVENTS = {
   INVENTORY_UPDATED: "inventory:updated",
   BANNERS_UPDATED: "banners:updated",
   REVIEW_STATUS_UPDATED: "review:statusUpdated",
+  STORY_CREATED: "story:created",
+  STORY_UPDATED: "story:updated",
+  STORY_DELETED: "story:deleted",
 
   // Private Customer Events
   ORDER_CREATED: "order:created",

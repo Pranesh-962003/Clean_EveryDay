@@ -24,7 +24,7 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ review, showQuoteIcon = false }
   };
 
   return (
-    <div className="bg-wht border border-bdr rounded-xl overflow-hidden flex flex-col hover:shadow-premium-md transition-all duration-300">
+    <div className="bg-wht border border-bdr rounded-xl overflow-hidden flex flex-col h-full min-h-[220px] justify-between hover:shadow-premium-md transition-all duration-300">
       {/* Photo Review — if customer attached a photo */}
       {review.img && (
         <div className="w-full aspect-[16/9] overflow-hidden bg-primary-soft/40">
@@ -36,22 +36,32 @@ const ReviewCard: React.FC<ReviewCardProps> = ({ review, showQuoteIcon = false }
         </div>
       )}
 
-      <div className="p-5 flex flex-col flex-1 relative">
+      <div className="p-5 flex flex-col flex-1 justify-between relative">
         {showQuoteIcon && (
           <div className="font-display text-[3rem] text-primary-light/40 leading-none absolute top-2 left-4 select-none italic pointer-events-none">
             "
           </div>
         )}
 
-        {/* Stars */}
-        <div className="flex gap-0.5 mb-3 relative z-10">
-          {renderStars(review.rating)}
-        </div>
+        <div>
+          {/* Stars */}
+          <div className="flex gap-0.5 mb-3 relative z-10">
+            {renderStars(review.rating)}
+          </div>
 
-        {/* Review Body */}
-        <p className="text-[0.85rem] leading-relaxed text-ink mb-4 flex-1 relative z-10">
-          "{review.body}"
-        </p>
+          {/* Review Body - Clamped to 4 lines max */}
+          <p
+            className="text-[0.85rem] leading-relaxed text-ink mb-4 relative z-10 line-clamp-4"
+            style={{
+              display: '-webkit-box',
+              WebkitLineClamp: 4,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden'
+            }}
+          >
+            "{review.body}"
+          </p>
+        </div>
 
         {/* Author Row */}
         <div className="flex items-center gap-2.5 border-t border-bdrl pt-3.5">

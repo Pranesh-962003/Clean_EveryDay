@@ -4,6 +4,7 @@ import BannerCarousel from '../components/BannerCarousel';
 import ProductCard from '../components/ProductCard';
 import ProductSkeletonCard from '../components/ProductSkeletonCard';
 import ReviewCard from '../components/ReviewCard';
+import HorizontalStoryCarousel from '../components/HorizontalStoryCarousel';
 import {
   ShieldCheck,
   Truck,
@@ -22,9 +23,12 @@ const Home: React.FC = () => {
     products,
     isProductsLoading,
     reviews,
+    stories,
     curUser,
     openAuthModal,
     submitReview,
+    submitStory,
+    showToast,
     addLead,
     setCurPage,
     setCurFilter
@@ -73,7 +77,11 @@ const Home: React.FC = () => {
     setCMessage('');
   };
 
-  // Submit Testimonial Review
+  const MAX_STORY_CHARS = 250;
+  const currentCharCount = rBody.length;
+  const isCharLimitExceeded = currentCharCount > MAX_STORY_CHARS;
+
+  // Submit Testimonial Review / Story
   const handleReviewSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!curUser) {
@@ -81,21 +89,35 @@ const Home: React.FC = () => {
       return;
     }
     if (rStars === 0 || !rBody.trim()) {
+      showToast('Please select a star rating and share your experience details.');
+      return;
+    }
+    if (isCharLimitExceeded) {
+      showToast(`Your story exceeds the ${MAX_STORY_CHARS}-letter limit (${currentCharCount}/${MAX_STORY_CHARS} letters). Please shorten your experience details.`);
       return;
     }
     setIsSubmittingReview(true);
     try {
-      await submitReview(curUser.name, rStars, rBody.trim(), 'General');
+      await submitStory(
+        rStars,
+        rBody.trim(),
+        curUser.name || 'Customer One',
+        curUser.address?.city ? `${curUser.address.city}, Home User` : 'Home User'
+      );
+      showToast('Thank you! Your story has been published successfully.');
       setRStars(0);
       setRBody('');
+    } catch (err: any) {
+      console.error('Error submitting story:', err);
+      showToast(err?.response?.data?.message || err?.message || 'Failed to publish review.');
     } finally {
       setIsSubmittingReview(false);
     }
   };
 
-  // Get featured products & reviews
+  // Get featured products & stories
   const featuredProducts = products.slice(0, 4);
-  const approvedReviews = reviews.filter((r) => r.approved).slice(0, 3);
+  const userStories = (stories || []).filter((s) => s.approved !== false);
 
   return (
     <div className="w-full">
@@ -268,11 +290,7 @@ const Home: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 mb-6">
-            {approvedReviews.map((review) => (
-              <ReviewCard key={review.id} review={review} showQuoteIcon={true} />
-            ))}
-          </div>
+          <HorizontalStoryCarousel stories={userStories} />
 
           {/* Testimonial Writer Form */}
           <div className="bg-wht border border-bdr rounded-xl p-6 sm:p-8 shadow-premium-sm animate-fadeIn">
@@ -302,19 +320,34 @@ const Home: React.FC = () => {
                     })}
                   </div>
                 </div>
-                <textarea
-                  className="textarea-field"
-                  placeholder="Share details of your experience using our botanical solutions..."
-                  rows={4}
-                  value={rBody}
-                  onChange={(e) => setRBody(e.target.value)}
-                  required
-                />
-                <div className="flex items-center gap-4 flex-wrap justify-between">
+                <div className="flex flex-col gap-1.5">
+                  <textarea
+                    className={`textarea-field ${
+                      isCharLimitExceeded ? 'border-red-500 focus:border-red-500 ring-1 ring-red-500/20' : ''
+                    }`}
+                    placeholder="Share details of your experience using our botanical solutions (max 250 letters / ~4 lines)..."
+                    rows={4}
+                    maxLength={MAX_STORY_CHARS}
+                    value={rBody}
+                    onChange={(e) => setRBody(e.target.value)}
+                    required
+                  />
+                  <div className="flex items-center justify-between text-xs px-1">
+                    <span className={isCharLimitExceeded ? 'text-red-500 font-semibold flex items-center gap-1' : 'text-mid'}>
+                      {isCharLimitExceeded ? (
+                        <>⚠️ Letter limit exceeded: <strong className="text-red-600">{currentCharCount}</strong> / {MAX_STORY_CHARS} letters</>
+                      ) : (
+                        <>Letters: <strong className="text-blk">{currentCharCount}</strong> / {MAX_STORY_CHARS} letters max <span className="text-mut">({Math.max(0, MAX_STORY_CHARS - currentCharCount)} remaining)</span></>
+                      )}
+                    </span>
+                    <span className="text-mut text-[0.7rem] italic">Max 4 lines clamped display</span>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 flex-wrap justify-between mt-1">
                   <button
                     className="btn-primary flex items-center gap-2 disabled:opacity-75 disabled:cursor-not-allowed transition-all duration-200"
                     type="submit"
-                    disabled={isSubmittingReview}
+                    disabled={isSubmittingReview || isCharLimitExceeded}
                   >
                     {isSubmittingReview ? (
                       <>
