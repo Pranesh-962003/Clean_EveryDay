@@ -3,7 +3,6 @@ import { useApp } from '../../../core/context/AppContext';
 import BannerCarousel from '../components/BannerCarousel';
 import ProductCard from '../components/ProductCard';
 import ProductSkeletonCard from '../components/ProductSkeletonCard';
-import ReviewCard from '../components/ReviewCard';
 import HorizontalStoryCarousel from '../components/HorizontalStoryCarousel';
 import {
   ShieldCheck,
@@ -22,11 +21,9 @@ const Home: React.FC = () => {
   const {
     products,
     isProductsLoading,
-    reviews,
     stories,
     curUser,
     openAuthModal,
-    submitReview,
     submitStory,
     showToast,
     addLead,
