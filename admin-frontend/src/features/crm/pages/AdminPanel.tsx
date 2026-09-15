@@ -7,16 +7,17 @@ import {
   PlusCircle,
   Image as ImageIcon,
   Users,
-  Home,
   LogOut,
   FileText,
   Inbox,
-  Menu,
   X,
   Search,
-  ArrowRight
+  ArrowRight,
+  PanelLeftClose,
+  PanelLeftOpen
 } from 'lucide-react';
 
+import Navigation from '../../webpage/components/Navigation';
 import DashboardOverview from '../components/DashboardOverview';
 import ProductsCatalog from '../components/ProductsCatalog';
 import AddProductForm from '../components/AddProductForm';
@@ -83,9 +84,9 @@ const AdminPanel: React.FC = () => {
   };
 
   // Badge counts
-  const pendingReviewsCount = reviews.filter((r) => !r.approved).length;
-  const newLeadsCount = leads.filter((l) => l.status === 'New').length;
-  const newOrdersCount = orders.filter((o) => o.status === 'Pending').length;
+  const pendingReviewsCount = (reviews || []).filter((r) => !r.approved).length;
+  const newLeadsCount = (leads || []).filter((l) => l.status === 'New').length;
+  const newOrdersCount = (orders || []).filter((o) => o.status === 'Pending').length;
 
   const renderActiveTabContent = () => {
     switch (activeTab) {
@@ -112,8 +113,9 @@ const AdminPanel: React.FC = () => {
 
   // Command palette search matching logic
   const query = paletteSearch.toLowerCase().trim();
+
   const matchedProducts = query
-    ? products.filter(
+    ? (products || []).filter(
         (p) =>
           p.name.toLowerCase().includes(query) ||
           p.sku.toLowerCase().includes(query) ||
@@ -122,25 +124,25 @@ const AdminPanel: React.FC = () => {
     : [];
 
   const matchedOrders = query
-    ? orders.filter(
+    ? (orders || []).filter(
         (o) =>
           o.id.toLowerCase().includes(query) ||
-          o.customerEmail.toLowerCase().includes(query) ||
+          (o.customerEmail && o.customerEmail.toLowerCase().includes(query)) ||
           o.status.toLowerCase().includes(query)
       ).slice(0, 3)
     : [];
 
   const matchedLeads = query
-    ? leads.filter(
+    ? (leads || []).filter(
         (l) =>
           l.name.toLowerCase().includes(query) ||
           l.email.toLowerCase().includes(query) ||
-          l.service.toLowerCase().includes(query)
+          (l.service && l.service.toLowerCase().includes(query))
       ).slice(0, 3)
     : [];
 
   const matchedStaff = query
-    ? staff.filter(
+    ? (staff || []).filter(
         (s) =>
           s.name.toLowerCase().includes(query) ||
           s.email.toLowerCase().includes(query) ||
@@ -160,209 +162,219 @@ const AdminPanel: React.FC = () => {
     setIsPaletteOpen(false);
   };
 
-  return (
-    <div className="flex flex-col lg:flex-row min-h-[calc(100vh-92px)] bg-sur">
-      
-      {/* Mobile Top Header Bar (Sticky) */}
-      <div className="lg:hidden w-full bg-blk text-wht px-6 py-4 flex items-center justify-between sticky top-[92px] z-30 border-b border-white/5 select-none no-print">
-        <div className="flex items-center gap-2">
-          <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-[11px] text-wht font-semibold">C</div>
-          <span className="font-display font-semibold text-[15px]">Clean CRM</span>
-          <span className="text-[11px] text-primary bg-primary-soft/10 px-2.5 py-0.5 rounded-full font-medium border border-primary/20 capitalize">
-            {activeTab}
-          </span>
-        </div>
-        <button
-          className="p-1 text-fnt hover:text-wht transition-colors cursor-pointer"
-          onClick={() => setIsMobileSidebarOpen(!isMobileSidebarOpen)}
-          aria-label="Toggle Navigation Sidebar"
-        >
-          <Menu size={20} />
-        </button>
-      </div>
+  interface NavItem {
+    id: TabName;
+    label: string;
+    icon: React.ReactNode;
+    badge?: number;
+  }
+  interface NavSection {
+    title: string;
+    items: NavItem[];
+  }
 
+  const navSections: NavSection[] = [
+    {
+      title: 'Overview',
+      items: [
+        { id: 'dashboard' as TabName, label: 'Dashboard', icon: <LayoutDashboard size={16} /> }
+      ]
+    },
+    {
+      title: 'Store',
+      items: [
+        { id: 'products' as TabName, label: 'Products', icon: <ShoppingBag size={16} /> },
+        { id: 'add' as TabName, label: 'Add Product', icon: <PlusCircle size={16} /> },
+        { id: 'banners' as TabName, label: 'Banners', icon: <ImageIcon size={16} /> }
+      ]
+    },
+    {
+      title: 'Customers & Sales',
+      items: [
+        { id: 'orders' as TabName, label: 'Orders', icon: <FileText size={16} />, badge: newOrdersCount },
+        { id: 'leads' as TabName, label: 'Leads', icon: <Inbox size={16} />, badge: newLeadsCount },
+        { id: 'reviews' as TabName, label: 'Reviews', icon: <MessageSquare size={16} />, badge: pendingReviewsCount }
+      ]
+    },
+    {
+      title: 'Team',
+      items: [
+        { id: 'users' as TabName, label: 'Staff', icon: <Users size={16} /> }
+      ]
+    }
+  ];
+
+  return (
+    <div className="w-full h-full flex flex-row overflow-hidden bg-slate-50">
+      
       {/* Mobile Backdrop Overlay */}
       {isMobileSidebarOpen && (
         <div
-          className="fixed inset-0 bg-black/60 backdrop-blur-xs z-[240] lg:hidden no-print"
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs z-[240] lg:hidden no-print animate-fadeIn"
           onClick={() => setIsMobileSidebarOpen(false)}
         />
       )}
 
-      {/* Sidebar - Persistent/Collapsible on Desktop, Drawer on Mobile */}
+      {/* Sidenav - From Top: 0, Full Viewport Height */}
       <aside
-        className={`fixed lg:sticky top-0 lg:top-[92px] left-0 bottom-0 lg:bottom-auto select-none transition-all duration-300 z-[250] lg:z-10 no-print flex flex-col bg-blk py-8 border-r border-white/5 shrink-0 h-full lg:h-[calc(100vh-92px)] overflow-y-auto scrollbar-thin scrollbar-thumb-white/10 ${
+        className={`fixed lg:static top-0 left-0 bottom-0 select-none transition-all duration-300 z-[250] lg:z-10 no-print flex flex-col bg-slate-950 py-4 border-r border-slate-800/90 shrink-0 h-full overflow-y-auto overflow-x-hidden scrollbar-none ${
           isMobileSidebarOpen
-            ? 'translate-x-0 w-[270px]'
-            : `-translate-x-full lg:translate-x-0 ${isSidebarCollapsed ? 'lg:w-[72px]' : 'lg:w-[260px]'}`
+            ? 'translate-x-0 w-[260px]'
+            : `-translate-x-full lg:translate-x-0 ${isSidebarCollapsed ? 'lg:w-[72px] px-2' : 'lg:w-[250px]'}`
         }`}
       >
-        {/* Logo and Close Controls inside Drawer */}
-        <div className="flex items-center justify-between px-6 mb-2 lg:mb-1">
-          <div className="flex items-center gap-2.5 font-display text-[1.15rem] font-bold text-wht">
-            <div className="w-6 h-6 rounded bg-primary flex items-center justify-center text-[0.62rem] text-wht font-mono">C</div>
-            {!isSidebarCollapsed && <span>Clean CRM</span>}
-          </div>
-          <button
-            className="hidden lg:flex text-mut hover:text-wht p-1 cursor-pointer items-center justify-center hover:bg-white/5 rounded"
-            onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-            aria-label={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={isSidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-          >
-            <Menu size={16} />
-          </button>
+        {/* Sidebar Header with Company Name & Expand/Collapse Toggle */}
+        <div className={`flex items-center mb-5 ${isSidebarCollapsed ? 'justify-center' : 'justify-between px-4'}`}>
+          {!isSidebarCollapsed ? (
+            <>
+              <div className="flex items-center gap-2.5 select-none">
+                <div className="w-8 h-8 rounded-xl bg-white text-slate-950 flex items-center justify-center font-black text-sm tracking-tight shadow-sm shrink-0">
+                  E
+                </div>
+                <div className="flex flex-col leading-none">
+                  <span className="font-display text-sm font-extrabold text-white tracking-tight">
+                    Ecommerce
+                  </span>
+                  <span className="text-[10px] text-slate-400 font-medium mt-0.5">
+                    Admin
+                  </span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="hidden lg:flex text-slate-400 hover:text-white p-1.5 cursor-pointer items-center justify-center hover:bg-slate-900 rounded-lg transition-colors"
+                onClick={() => setIsSidebarCollapsed(true)}
+                aria-label="Collapse sidebar"
+                title="Collapse sidebar"
+              >
+                <PanelLeftClose size={18} />
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setIsSidebarCollapsed(false)}
+              className="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-white flex items-center justify-center font-black text-sm shadow-xs cursor-pointer group hover:bg-slate-800 hover:border-slate-700 transition-all relative overflow-hidden"
+              aria-label="Expand sidebar"
+              title="Expand sidebar"
+            >
+              <span className="group-hover:opacity-0 group-hover:scale-75 transition-all duration-150 absolute font-black text-white">
+                E
+              </span>
+              <PanelLeftOpen size={18} className="opacity-0 group-hover:opacity-100 group-hover:scale-100 transition-all duration-150 text-slate-200" />
+            </button>
+          )}
           <button 
-            className="lg:hidden text-mut hover:text-wht p-1 cursor-pointer" 
+            type="button"
+            className="lg:hidden text-slate-400 hover:text-white p-1.5 cursor-pointer rounded-lg hover:bg-slate-900" 
             onClick={() => setIsMobileSidebarOpen(false)}
             aria-label="Close menu"
           >
             <X size={18} />
           </button>
         </div>
-        {!isSidebarCollapsed && (
-          <div className="text-[11px] font-medium text-white/40 px-6 py-2 pb-5 border-b border-white/5 mb-4">
-            Administration
-          </div>
-        )}
 
-        <nav className="flex flex-col gap-4 flex-1 mt-4">
-          {(
-            [
-              {
-                title: 'Overview',
-                items: [
-                  { id: 'dashboard', label: 'Dashboard', icon: <LayoutDashboard size={14} /> }
-                ]
-              },
-              {
-                title: 'Catalog & Marketing',
-                items: [
-                  { id: 'products', label: 'Products Catalogue', icon: <ShoppingBag size={14} /> },
-                  { id: 'add', label: 'Add Product', icon: <PlusCircle size={14} /> },
-                  { id: 'banners', label: 'Hero Banners', icon: <ImageIcon size={14} /> }
-                ]
-              },
-              {
-                title: 'Operations & Sales',
-                items: [
-                  { id: 'orders', label: 'Orders Registry', icon: <FileText size={14} />, badge: newOrdersCount },
-                  { id: 'leads', label: 'Leads CRM', icon: <Inbox size={14} />, badge: newLeadsCount },
-                  { id: 'reviews', label: 'Reviews Moderation', icon: <MessageSquare size={14} />, badge: pendingReviewsCount }
-                ]
-              },
-              {
-                title: 'System Settings',
-                items: [
-                  { id: 'users', label: 'Staff Accounts', icon: <Users size={14} /> }
-                ]
-              }
-            ] as { title: string; items: { id: TabName; label: string; icon: React.ReactNode; badge?: number }[] }[]
-          ).map((sec) => (
-            <div key={sec.title} className="flex flex-col gap-0.5">
+        {/* Navigation Sections */}
+        <nav className={`flex flex-col gap-4 flex-1 ${isSidebarCollapsed ? 'px-0' : 'px-3'} overflow-x-hidden`}>
+          {navSections.map((sec) => (
+            <div key={sec.title} className="flex flex-col gap-1">
               {!isSidebarCollapsed && (
-                <div className="text-[11px] font-medium text-white/40 px-6 mb-1.5 mt-1 select-none">
+                <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 px-3 mb-1 select-none">
                   {sec.title}
                 </div>
               )}
               <div className="flex flex-col gap-0.5">
-                {sec.items.map((item) => (
-                  <button
-                    key={item.id}
-                    title={isSidebarCollapsed ? item.label : undefined}
-                    className={`flex items-center gap-3 px-6 py-2.5 text-[13px] font-medium text-white/60 hover:bg-white/5 hover:text-wht border-l-3 border-transparent transition-all duration-150 w-full text-left relative cursor-pointer ${
-                      activeTab === item.id ? 'text-wht border-l-primary bg-white/5 font-semibold' : ''
-                    } ${isSidebarCollapsed ? 'justify-center px-0' : ''}`}
-                    onClick={() => handleTabChange(item.id as TabName)}
-                  >
-                    {item.icon}
-                    {!isSidebarCollapsed && <span className="truncate pr-8">{item.label}</span>}
-                    {!isSidebarCollapsed && !!item.badge && (
-                      <span className="absolute right-5 text-[11px] font-semibold text-wht bg-primary px-2 py-0.5 rounded-full">
-                        {item.badge}
+                {sec.items.map((item) => {
+                  const isActive = activeTab === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      title={isSidebarCollapsed ? item.label : undefined}
+                      className={`flex items-center gap-3 rounded-xl text-xs font-semibold transition-all duration-150 w-full text-left relative cursor-pointer min-h-[42px] overflow-hidden ${
+                        isSidebarCollapsed ? 'justify-center px-0 py-2.5' : 'px-3.5 py-2.5'
+                      } ${
+                        isActive
+                          ? 'bg-slate-900 text-white font-bold shadow-xs border-l-2 border-white'
+                          : 'text-slate-400 hover:text-white hover:bg-slate-900/60'
+                      }`}
+                      onClick={() => handleTabChange(item.id)}
+                    >
+                      <span className={`shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`}>
+                        {item.icon}
                       </span>
-                    )}
-                    {isSidebarCollapsed && !!item.badge && (
-                      <span className="absolute top-1 right-3 text-[9px] font-semibold text-wht bg-primary w-4 h-4 rounded-full flex items-center justify-center">
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                ))}
+                      {!isSidebarCollapsed && (
+                        <span className="truncate pr-6">{item.label}</span>
+                      )}
+                      {!isSidebarCollapsed && !!item.badge && item.badge > 0 && (
+                        <span className="absolute right-3 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-slate-800 text-slate-200 border border-slate-700">
+                          {item.badge}
+                        </span>
+                      )}
+                      {isSidebarCollapsed && !!item.badge && item.badge > 0 && (
+                        <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ))}
         </nav>
 
-        <div className={`px-6 pt-6 border-t border-white/5 flex flex-col gap-2 ${isSidebarCollapsed ? 'items-center px-0' : ''}`}>
+        {/* Sidebar Footer Controls */}
+        <div className={`pt-3 mt-3 border-t border-slate-800/80 flex flex-col gap-1.5 ${isSidebarCollapsed ? 'items-center px-1' : 'px-3'}`}>
           <button 
-            className="flex items-center gap-2.5 text-[13px] font-medium text-white/60 hover:text-wht cursor-pointer bg-transparent border-none outline-none" 
-            onClick={() => { window.location.href = 'http://localhost:5173/'; }}
-            title={isSidebarCollapsed ? 'Webpage view' : undefined}
-          >
-            <Home size={14} />
-            {!isSidebarCollapsed && <span>Webpage view</span>}
-          </button>
-          <button 
-            className="flex items-center gap-2.5 text-[13px] font-medium text-red/80 hover:text-red cursor-pointer bg-transparent border-none outline-none" 
+            type="button"
+            className={`flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 rounded-xl transition-colors cursor-pointer w-full min-h-[38px] border-none outline-none ${
+              isSidebarCollapsed ? 'justify-center px-0' : ''
+            }`}
             onClick={() => { logoutUser(); setIsMobileSidebarOpen(false); }}
             title={isSidebarCollapsed ? 'Sign Out' : undefined}
           >
-            <LogOut size={14} />
+            <LogOut size={15} />
             {!isSidebarCollapsed && <span>Sign Out</span>}
           </button>
         </div>
       </aside>
 
-      {/* Main CRM workspace content (Independent scroll) */}
-      <main 
-        id="crm-workspace-main"
-        className="flex-1 p-6 sm:p-10 overflow-y-auto w-full"
-      >
-        {/* Workspace Quick Header Bar */}
-        <div className="flex items-center justify-between border-b border-bdrl pb-4 mb-6 select-none no-print">
-          <div className="flex items-center gap-2 text-xs font-semibold text-mut">
-            <span>Workspace</span>
-            <span>/</span>
-            <span className="text-blk capitalize">{activeTab}</span>
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => setIsPaletteOpen(true)}
-              className="flex items-center gap-2 border border-bdr hover:border-mut rounded-md px-3 py-1.5 text-xs text-mut bg-wht cursor-pointer shadow-premium-sm transition-all duration-150"
-              title="Search workspace (Ctrl + K)"
-            >
-              <Search size={13} />
-              <span>Search workspace...</span>
-              <kbd className="bg-sur border border-bdr rounded px-1.5 py-0.5 text-[9px] font-mono select-none">Ctrl K</kbd>
-            </button>
-          </div>
-        </div>
+      {/* Right Column: Top Navigation Bar + Main CRM Workspace */}
+      <div className="flex-1 flex flex-col h-full overflow-hidden w-full min-w-0">
+        <Navigation onMenuClick={() => setIsMobileSidebarOpen(true)} />
 
-        {renderActiveTabContent()}
-      </main>
+        <main 
+          id="crm-workspace-main"
+          className="flex-1 h-full overflow-y-auto w-full p-4 sm:p-6 lg:p-8 bg-slate-50/70"
+        >
+          {/* Tab Module Content (Clean Direct View) */}
+          {renderActiveTabContent()}
+        </main>
+      </div>
 
       {/* Global Command Palette Overlay Dialog */}
       {isPaletteOpen && (
-        <div className="fixed inset-0 bg-blk/40 backdrop-blur-xs z-[300] flex items-start justify-center pt-[15vh] px-4 no-print animate-fadeIn">
+        <div className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm z-[300] flex items-start justify-center pt-[12vh] px-4 no-print animate-fadeIn select-none">
           <div 
             className="fixed inset-0" 
             onClick={() => setIsPaletteOpen(false)}
           />
-          <div className="bg-wht border border-bdr rounded-lg shadow-premium-xl w-full max-w-[640px] flex flex-col overflow-hidden max-h-[70vh] relative z-10 animate-slideUp">
+          <div className="bg-white border border-slate-200 rounded-2xl shadow-2xl w-full max-w-[640px] flex flex-col overflow-hidden max-h-[75vh] relative z-10 animate-scaleIn">
+            
             {/* Search Input field */}
-            <div className="flex items-center gap-3 px-4 py-3 border-b border-bdrl bg-sur">
-              <Search size={16} className="text-mut" />
+            <div className="flex items-center gap-3 px-4 py-3.5 border-b border-slate-200 bg-slate-50">
+              <Search size={18} className="text-slate-500" />
               <input
                 ref={paletteInputRef}
                 type="text"
                 placeholder="Search products, orders, leads, or staff..."
-                className="flex-1 bg-transparent border-none outline-none text-sm text-blk placeholder:text-mut"
+                className="flex-1 bg-transparent border-none outline-none text-sm font-semibold text-slate-950 placeholder:text-slate-500"
                 value={paletteSearch}
                 onChange={(e) => setPaletteSearch(e.target.value)}
               />
               <button 
+                type="button"
                 onClick={() => setIsPaletteOpen(false)}
-                className="text-xs font-semibold text-mut hover:text-blk cursor-pointer border border-bdr rounded-md px-2 py-0.5 bg-wht"
+                className="text-xs font-bold text-slate-600 hover:text-slate-950 cursor-pointer border border-slate-300 rounded-lg px-2 py-1 bg-white"
               >
                 Esc
               </button>
@@ -372,51 +384,53 @@ const AdminPanel: React.FC = () => {
             <div className="overflow-y-auto p-4 flex-1">
               {!query ? (
                 <div>
-                  <h4 className="text-xs font-semibold text-mut mb-3 uppercase tracking-wider">Quick navigation</h4>
-                  <div className="grid grid-cols-2 gap-2">
+                  <h4 className="text-[11px] font-bold text-slate-500 mb-3 uppercase tracking-wider">Quick Navigation</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {[
-                      { id: 'dashboard', label: 'Dashboard Overview', tab: 'dashboard' },
-                      { id: 'products', label: 'Products Catalogue', tab: 'products' },
-                      { id: 'orders', label: 'Orders Registry', tab: 'orders' },
-                      { id: 'leads', label: 'Leads CRM Log', tab: 'leads' }
+                      { id: 'dashboard', label: 'Dashboard Overview', tab: 'dashboard' as TabName },
+                      { id: 'products', label: 'Products Catalogue', tab: 'products' as TabName },
+                      { id: 'orders', label: 'Orders Registry', tab: 'orders' as TabName },
+                      { id: 'leads', label: 'Leads CRM Log', tab: 'leads' as TabName }
                     ].map((n) => (
                       <button
                         key={n.id}
+                        type="button"
                         onClick={() => {
-                          setActiveTab(n.tab as TabName);
+                          setActiveTab(n.tab);
                           setIsPaletteOpen(false);
                         }}
-                        className="flex items-center justify-between p-3 rounded border border-bdr hover:border-primary hover:bg-primary-soft text-left text-xs font-semibold text-blk cursor-pointer transition-all duration-150"
+                        className="flex items-center justify-between p-3.5 rounded-xl border border-slate-200 hover:border-slate-950 hover:bg-slate-50 text-left text-xs font-bold text-slate-950 cursor-pointer transition-all min-h-[44px]"
                       >
                         <span>{n.label}</span>
-                        <ArrowRight size={12} className="text-mut" />
+                        <ArrowRight size={14} className="text-slate-400" />
                       </button>
                     ))}
                   </div>
                 </div>
               ) : !hasMatches ? (
-                <div className="text-center py-8 text-sm text-mut">
-                  No matching workspace results found for &ldquo;{paletteSearch}&rdquo;
+                <div className="text-center py-12 text-sm text-slate-500 font-medium">
+                  No matching workspace records found for &ldquo;{paletteSearch}&rdquo;
                 </div>
               ) : (
-                <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-5">
                   {/* Products */}
                   {matchedProducts.length > 0 && (
                     <div>
-                      <h4 className="text-xs font-semibold text-mut mb-2 uppercase tracking-wider">Products Catalogue</h4>
-                      <div className="flex flex-col gap-1">
+                      <h4 className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider">Products Catalogue</h4>
+                      <div className="flex flex-col gap-1.5">
                         {matchedProducts.map((p) => (
                           <button
                             key={p.id}
+                            type="button"
                             onClick={() => handlePaletteSelect('products', p.sku)}
-                            className="flex justify-between items-center p-2.5 rounded hover:bg-sur border border-transparent hover:border-bdrl text-left text-xs text-blk cursor-pointer transition-all"
+                            className="flex justify-between items-center p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 text-left text-xs text-slate-950 cursor-pointer transition-all"
                           >
                             <div>
-                              <span className="font-semibold block">{p.name}</span>
-                              <span className="text-mut text-[10px]">SKU: {p.sku} | Category: {p.cat}</span>
+                              <span className="font-bold block">{p.name}</span>
+                              <span className="text-slate-500 text-[11px] font-mono">SKU: {p.sku} | Category: {p.cat}</span>
                             </div>
-                            <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded bg-primary-soft">
-                              View catalogue
+                            <span className="text-[11px] font-bold text-slate-950 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200">
+                              View in Catalog
                             </span>
                           </button>
                         ))}
@@ -427,20 +441,21 @@ const AdminPanel: React.FC = () => {
                   {/* Orders */}
                   {matchedOrders.length > 0 && (
                     <div>
-                      <h4 className="text-xs font-semibold text-mut mb-2 uppercase tracking-wider">Orders Registry</h4>
-                      <div className="flex flex-col gap-1">
+                      <h4 className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider">Orders Registry</h4>
+                      <div className="flex flex-col gap-1.5">
                         {matchedOrders.map((o) => (
                           <button
                             key={o.id}
+                            type="button"
                             onClick={() => handlePaletteSelect('orders', o.id)}
-                            className="flex justify-between items-center p-2.5 rounded hover:bg-sur border border-transparent hover:border-bdrl text-left text-xs text-blk cursor-pointer transition-all"
+                            className="flex justify-between items-center p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 text-left text-xs text-slate-950 cursor-pointer transition-all"
                           >
                             <div>
-                              <span className="font-semibold block">{o.id}</span>
-                              <span className="text-mut text-[10px]">{o.customerEmail} | Status: {o.status}</span>
+                              <span className="font-bold font-mono block">{o.id}</span>
+                              <span className="text-slate-500 text-[11px]">{o.customerEmail} | Status: {o.status}</span>
                             </div>
-                            <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded bg-primary-soft">
-                              View registry
+                            <span className="text-[11px] font-bold text-slate-950 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200">
+                              Open Order
                             </span>
                           </button>
                         ))}
@@ -451,19 +466,20 @@ const AdminPanel: React.FC = () => {
                   {/* Leads */}
                   {matchedLeads.length > 0 && (
                     <div>
-                      <h4 className="text-xs font-semibold text-mut mb-2 uppercase tracking-wider">Leads CRM</h4>
-                      <div className="flex flex-col gap-1">
+                      <h4 className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider">Leads CRM</h4>
+                      <div className="flex flex-col gap-1.5">
                         {matchedLeads.map((l) => (
                           <button
                             key={l.id}
+                            type="button"
                             onClick={() => handlePaletteSelect('leads', l.name)}
-                            className="flex justify-between items-center p-2.5 rounded hover:bg-sur border border-transparent hover:border-bdrl text-left text-xs text-blk cursor-pointer transition-all"
+                            className="flex justify-between items-center p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 text-left text-xs text-slate-950 cursor-pointer transition-all"
                           >
                             <div>
-                              <span className="font-semibold block">{l.name}</span>
-                              <span className="text-mut text-[10px]">{l.email} | Service: {l.service}</span>
+                              <span className="font-bold block">{l.name}</span>
+                              <span className="text-slate-500 text-[11px]">{l.email} | Service: {l.service}</span>
                             </div>
-                            <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded bg-primary-soft">
+                            <span className="text-[11px] font-bold text-slate-950 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200">
                               Open Lead
                             </span>
                           </button>
@@ -475,20 +491,21 @@ const AdminPanel: React.FC = () => {
                   {/* Staff */}
                   {matchedStaff.length > 0 && (
                     <div>
-                      <h4 className="text-xs font-semibold text-mut mb-2 uppercase tracking-wider">Staff Accounts</h4>
-                      <div className="flex flex-col gap-1">
+                      <h4 className="text-[11px] font-bold text-slate-500 mb-2 uppercase tracking-wider">Staff Accounts</h4>
+                      <div className="flex flex-col gap-1.5">
                         {matchedStaff.map((s) => (
                           <button
                             key={s.id}
+                            type="button"
                             onClick={() => handlePaletteSelect('users', s.name)}
-                            className="flex justify-between items-center p-2.5 rounded hover:bg-sur border border-transparent hover:border-bdrl text-left text-xs text-blk cursor-pointer transition-all"
+                            className="flex justify-between items-center p-3 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 text-left text-xs text-slate-950 cursor-pointer transition-all"
                           >
                             <div>
-                              <span className="font-semibold block">{s.name}</span>
-                              <span className="text-mut text-[10px]">{s.email} | Role: {s.role}</span>
+                              <span className="font-bold block">{s.name}</span>
+                              <span className="text-slate-500 text-[11px]">{s.email} | Role: {s.role}</span>
                             </div>
-                            <span className="text-[10px] font-semibold text-primary px-2 py-0.5 rounded bg-primary-soft">
-                              View profile
+                            <span className="text-[11px] font-bold text-slate-950 px-2.5 py-1 rounded-md bg-slate-100 border border-slate-200">
+                              View Staff
                             </span>
                           </button>
                         ))}
@@ -499,10 +516,10 @@ const AdminPanel: React.FC = () => {
               )}
             </div>
 
-            {/* Footer hints */}
-            <div className="px-4 py-2 border-t border-bdrl bg-sur flex items-center justify-between text-[10px] text-mut select-none">
-              <span>Use Ctrl+K to toggle anywhere in clean CRM</span>
-              <span>Clean Everyday Admin Platform</span>
+            {/* Footer */}
+            <div className="px-4 py-2.5 border-t border-slate-200 bg-slate-50 flex items-center justify-between text-[11px] text-slate-500 font-medium select-none">
+              <span>Press <kbd className="font-mono font-bold bg-white px-1.5 py-0.5 rounded border border-slate-200">Ctrl+K</kbd> to toggle</span>
+              <span>Enterprise Admin Console</span>
             </div>
           </div>
         </div>

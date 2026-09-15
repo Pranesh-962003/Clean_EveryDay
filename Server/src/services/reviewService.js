@@ -1,6 +1,7 @@
 import { User } from "../models/User.js";
 import { Review } from "../models/Review.js";
 import { Product } from "../models/Product.js";
+import { Story } from "../models/Story.js";
 
 export const getMyReviewsService = async (req) => {
     const { uid } = req.user;
@@ -24,161 +25,87 @@ export const getMyReviewsService = async (req) => {
         })
         .sort({ createdAt: -1 });
 
-    return reviews;
+    const stories = await Story.find({
+        $or: [
+            { user: user._id },
+            { author: user.name }
+        ],
+        isDeleted: false
+    }).sort({ createdAt: -1 });
+
+    return { reviews, stories };
 };
 
 
 export const deleteReviewService = async (req) => {
-
     const { reviewId } = req.params;
-
     const { uid } = req.user;
 
-    // =====================================
-    // USER
-    // =====================================
-
     const user = await User.findOne({
-
         uid,
         isDeleted: false
-
     });
 
     if (!user) {
-
         throw new Error("User not found.");
-
     }
 
-    // =====================================
-    // REVIEW
-    // =====================================
+    // 1. Check if reviewId belongs to a Story
+    const story = await Story.findOne({ _id: reviewId, isDeleted: false });
+    if (story) {
+        const isOwner = (story.user && story.user.toString() === user._id.toString()) ||
+                        (story.author && story.author.toLowerCase() === user.name?.toLowerCase()) ||
+                        (story.author && story.author.toLowerCase() === `${user.firstName} ${user.lastName}`.trim().toLowerCase());
 
-    const review = await Review.findById(reviewId);
+        if (!isOwner) {
+            throw new Error("You are not authorized to delete this story.");
+        }
+
+        story.isDeleted = true;
+        await story.save();
+        return story;
+    }
+
+    // 2. Fallback to Product Review
+    const review = await Review.findOne({ _id: reviewId, isDeleted: false });
 
     if (!review) {
-
-        throw new Error("Review not found.");
-
+        throw new Error("Review or Story not found.");
     }
 
-    // =====================================
-    // CHECK OWNER
-    // =====================================
-
-    if (review.user.toString() !== user._id.toString()) {
-
+    if (review.user && review.user.toString() !== user._id.toString()) {
         throw new Error("You are not authorized to delete this review.");
-
     }
 
-    // =====================================
-    // REMOVE REVIEW FROM USER
-    // =====================================
+    review.isDeleted = true;
+    await review.save();
 
     await User.findByIdAndUpdate(
-
         user._id,
-
-        {
-
-            $pull: {
-
-                reviews: review._id
-
-            }
-
-        }
-
+        { $pull: { reviews: review._id } }
     );
 
-    // =====================================
-    // REMOVE REVIEW FROM PRODUCT
-    // =====================================
+    if (review.product) {
+        await Product.findByIdAndUpdate(
+            review.product,
+            { $pull: { reviews: review._id } }
+        );
 
-    await Product.findByIdAndUpdate(
+        const approvedReviews = await Review.find({
+            product: review.product,
+            status: "Approved",
+            isDeleted: false
+        });
 
-        review.product,
+        const totalReviews = approvedReviews.length;
+        const totalRating = approvedReviews.reduce((sum, item) => sum + item.rating, 0);
+        const averageRating = totalReviews === 0 ? 0 : Number((totalRating / totalReviews).toFixed(1));
 
-        {
-
-            $pull: {
-
-                reviews: review._id
-
-            }
-
-        }
-
-    );
-
-    // =====================================
-    // DELETE REVIEW
-    // =====================================
-
-    await Review.findByIdAndDelete(reviewId);
-
-    // =====================================
-    // RECALCULATE PRODUCT RATING
-    // =====================================
-
-    const approvedReviews = await Review.find({
-
-        product: review.product,
-
-        status: "Approved",
-
-        isDeleted: false
-
-    });
-
-    const totalReviews = approvedReviews.length;
-
-    const totalRating = approvedReviews.reduce(
-
-        (sum, item) => sum + item.rating,
-
-        0
-
-    );
-
-    const averageRating =
-
-        totalReviews === 0
-
-            ? 0
-
-            : Number(
-
-                (
-
-                    totalRating /
-
-                    totalReviews
-
-                ).toFixed(1)
-
-            );
-
-    // =====================================
-    // UPDATE PRODUCT
-    // =====================================
-
-    await Product.findByIdAndUpdate(
-
-        review.product,
-
-        {
-
-            averageRating,
-
-            totalReviews
-
-        }
-
-    );
+        await Product.findByIdAndUpdate(
+            review.product,
+            { averageRating, totalReviews }
+        );
+    }
 
     return review;
-
 };

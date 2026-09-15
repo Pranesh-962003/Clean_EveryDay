@@ -11,6 +11,7 @@ import ProductDetail from './features/webpage/pages/ProductDetail';
 import Checkout from './features/webpage/pages/Checkout';
 import Orders from './features/webpage/pages/Orders';
 import Profile from './features/webpage/pages/Profile';
+import Login from './features/webpage/pages/Login';
 import ProtectedRoute from './components/shared/ProtectedRoute';
 
 /* Map between URL pathname and curPage key */
@@ -21,6 +22,8 @@ const PATH_TO_PAGE: Record<string, string> = {
   '/checkout': 'checkout',
   '/orders': 'orders',
   '/profile': 'profile',
+  '/login': 'login',
+  '/register': 'register',
 };
 
 const PAGE_TO_PATH: Record<string, string> = {
@@ -30,6 +33,8 @@ const PAGE_TO_PATH: Record<string, string> = {
   'checkout': '/checkout',
   'orders': '/orders',
   'profile': '/profile',
+  'login': '/login',
+  'register': '/register',
 };
 
 const VALID_PAGES = Object.values(PATH_TO_PAGE);
@@ -39,7 +44,7 @@ const pathToPage = (pathname: string): string => {
 };
 
 const HomeCareApp: React.FC = () => {
-  const { curPage, setCurPage } = useApp();
+  const { curPage, setCurPage, hideNavbar } = useApp();
   const curPageRef = useRef(curPage);
 
   useEffect(() => {
@@ -102,23 +107,29 @@ const HomeCareApp: React.FC = () => {
             <Profile />
           </ProtectedRoute>
         );
+      case 'login':
+        return <Login initialTab="signin" />;
+      case 'register':
+        return <Login initialTab="signup" />;
       default:
         return <Home />;
     }
   };
 
+  const isAuthPage = curPage === 'login' || curPage === 'register';
+
   return (
-    <div className="app-wrapper">
-      {/* Sticky header navbar */}
-      <Navigation />
+    <div className={`${isAuthPage ? 'h-screen overflow-hidden' : 'min-h-screen'} flex flex-col bg-slate-50 text-slate-900 overflow-x-clip w-full`}>
+      {/* Sticky header navbar - hidden on checkout completion, login, and register pages */}
+      {!hideNavbar && !isAuthPage && <Navigation />}
 
       {/* Main viewport */}
-      <main className="main-viewport-content">
+      <main className={`flex-1 w-full ${isAuthPage ? 'h-full overflow-hidden' : 'overflow-x-clip'}`}>
         {renderActivePage()}
       </main>
 
-      {/* Footer */}
-      <Footer />
+      {/* Footer (hidden on login and register pages) */}
+      {!isAuthPage && <Footer />}
 
       {/* Global Modals & Alerts */}
       <AuthModal />

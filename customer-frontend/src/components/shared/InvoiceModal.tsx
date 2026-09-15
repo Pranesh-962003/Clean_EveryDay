@@ -29,7 +29,7 @@ const InvoiceModal: React.FC = () => {
   const order: Order = invoiceOrder;
   const onClose = () => setInvoiceOrder(null);
 
-  const recipientEmail = (curUser?.email || order.customerEmail || (order as any).customer?.email || 'customer@cleaneveryday.in').toLowerCase();
+  const recipientEmail = (curUser?.email || order.customerEmail || (order as any).customer?.email || 'customer@ecommerce.com').toLowerCase();
 
   // Invoice variables
   const orderIdStr = String(order.id || (order as any)._id || '');
@@ -214,15 +214,15 @@ const InvoiceModal: React.FC = () => {
           <div className="flex justify-between items-start border-b border-bdrl pb-6 mb-6">
             <div>
               <div className="flex items-center gap-2 mb-2 select-none">
-                <div className="w-8 h-8 rounded bg-primary flex items-center justify-center font-bold text-wht text-xs">CE</div>
-                <span className="font-display font-semibold text-lg text-blk">Clean Everyday</span>
+                <div className="w-8 h-8 rounded bg-slate-900 flex items-center justify-center font-bold text-white text-xs">EC</div>
+                <span className="font-semibold text-lg text-slate-900 tracking-tight">Ecommerce</span>
               </div>
-              <p className="text-xs text-mut leading-normal">
-                Clean Everyday India Private Limited<br />
-                Plot No. 12, Whitefield Industrial Area,<br />
+              <p className="text-xs text-slate-500 leading-normal">
+                Ecommerce Retail India Private Limited<br />
+                Plot No. 12, Industrial Area,<br />
                 Bengaluru, Karnataka - 560066<br />
                 GSTIN: 29AAFCC1920D1Z5<br />
-                support@cleaneveryday.in | +91 80 4321 0987
+                support@ecommerce.com | +91 80 4321 0987
               </p>
             </div>
             <div className="text-right">
@@ -344,8 +344,8 @@ const InvoiceModal: React.FC = () => {
 
           {/* Footer thank you */}
           <div className="text-center border-t border-bdrl pt-5 mt-10 text-xs text-mut">
-            <span className="block font-semibold text-mid mb-0.5">Thank you for choosing Clean Everyday!</span>
-            For customer care, contact support@cleaneveryday.in or call toll-free 1800 123 4567.
+            <span className="block font-semibold text-mid mb-0.5">Thank you for your order!</span>
+            For customer care, contact support@ecommerce.com or call toll-free 1800 123 4567.
           </div>
         </div>
       </div>

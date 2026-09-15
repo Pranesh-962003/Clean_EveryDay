@@ -2,6 +2,7 @@ import { getAuth } from "firebase-admin/auth";
 import { Product } from "../models/Product.js";
 import { Order } from "../models/Order.js";
 import { Review } from "../models/Review.js";
+import { Story } from "../models/Story.js";
 import { User } from "../models/User.js";
 import { Lead } from "../models/Lead.js"; 
 import { Banner } from "../models/Banner.js";
@@ -168,7 +169,7 @@ export const getDashboard = async (req, res) => {
                 isDeleted: false
             }),
 
-            Review.countDocuments({
+            Story.countDocuments({
                 status: "Pending",
                 isDeleted: false
             }),
@@ -352,6 +353,12 @@ export const getOrderRegistry = async (req, res) => {
                         $regex: search,
                         $options: "i"
                     }
+                },
+                {
+                    "shippingAddress.phoneNumber": {
+                        $regex: search,
+                        $options: "i"
+                    }
                 }
             ];
         }
@@ -361,7 +368,11 @@ export const getOrderRegistry = async (req, res) => {
         const orders = await Order.find(filter)
             .populate(
                 "customer",
-                "email"
+                "email address addresses phoneNumber"
+            )
+            .populate(
+                "items.product",
+                "title sku sellingPrice retailPrice price"
             )
             .sort({
                 createdAt: -1
@@ -369,7 +380,12 @@ export const getOrderRegistry = async (req, res) => {
             .skip((page - 1) * limit)
             .limit(Number(limit));
 
-        const registry = orders.map(order => ({
+        const registry = orders.map(order => {
+            const custAddr = order.customer?.address || (Array.isArray(order.customer?.addresses) && order.customer.addresses[0]) || {};
+            const shippingPin = order.shippingAddress?.postalCode || order.shippingAddress?.pincode || order.billingAddress?.postalCode || order.billingAddress?.pincode || custAddr.postalCode || custAddr.pincode || "";
+            const billingPin = order.billingAddress?.postalCode || order.billingAddress?.pincode || order.shippingAddress?.postalCode || order.shippingAddress?.pincode || custAddr.postalCode || custAddr.pincode || "";
+
+            return {
 
             id: order.orderNumber,
 
@@ -388,70 +404,81 @@ export const getOrderRegistry = async (req, res) => {
             status:
                 order.status,
 
+            shippingAddress: order.shippingAddress,
+
+            billingAddressRaw: order.billingAddress,
+
             address: {
 
                 name:
-                    order.shippingAddress.fullName,
+                    order.shippingAddress?.fullName || "",
 
                 phone:
-                    order.shippingAddress.phone,
+                    order.shippingAddress?.phoneNumber || order.shippingAddress?.phone || order.customer?.phoneNumber || "",
 
                 city:
-                    order.shippingAddress.city,
+                    order.shippingAddress?.city || "",
 
                 street:
-                    order.shippingAddress.addressLine1,
+                    order.shippingAddress?.addressLine1 || "",
 
                 addressLine1:
-                    order.shippingAddress.addressLine1,
+                    order.shippingAddress?.addressLine1 || "",
 
                 addressLine2:
-                    order.shippingAddress.addressLine2,
+                    order.shippingAddress?.addressLine2 || "",
 
                 state:
-                    order.shippingAddress.state,
+                    order.shippingAddress?.state || "",
 
-                pincode:
-                    order.shippingAddress.pincode
+                pincode: shippingPin
 
             },
 
             billingAddress: {
 
                 name:
-                    order.billingAddress.fullName,
+                    order.billingAddress?.fullName || order.shippingAddress?.fullName || "",
+
+                phone:
+                    order.billingAddress?.phoneNumber || order.billingAddress?.phone || order.shippingAddress?.phoneNumber || order.shippingAddress?.phone || order.customer?.phoneNumber || "",
 
                 city:
-                    order.billingAddress.city,
+                    order.billingAddress?.city || order.shippingAddress?.city || "",
 
                 state:
-                    order.billingAddress.state,
+                    order.billingAddress?.state || order.shippingAddress?.state || "",
 
                 street:
-                    order.billingAddress.addressLine1,
+                    order.billingAddress?.addressLine1 || order.shippingAddress?.addressLine1 || "",
 
                 addressLine1:
-                    order.billingAddress.addressLine1,
+                    order.billingAddress?.addressLine1 || order.shippingAddress?.addressLine1 || "",
 
                 addressLine2:
-                    order.billingAddress.addressLine2,
+                    order.billingAddress?.addressLine2 || order.shippingAddress?.addressLine2 || "",
 
-                pincode:
-                    order.billingAddress.pincode
+                pincode: billingPin
 
             },
 
             paymentMethod:
-                order.payment.method,
+                order.payment?.method || "COD",
 
             shippingMethod:
-                "Standard Delivery",
+                order.delivery?.title || "Standard Delivery",
+
+            shippingCharge:
+                order.delivery?.charge || 0,
+
+            subtotal:
+                order.subtotal || 0,
 
             taxes:
-                order.tax,
+                typeof order.tax === 'number' ? order.tax : (order.tax?.amount || 0),
 
             discount:
-                order.discount,
+                order.discount || 0,
 
             courierCompany:
                 order.shipping?.courier || "",
@@ -469,25 +496,29 @@ export const getOrderRegistry = async (req, res) => {
                 order.adminNotes,
 
             items:
-                order.items.map(item => ({
-
-                    quantity:
-                        item.quantity,
-
-                    product: {
-
-                        name:
-                            item.title,
-
-                        sku:
-                            item.sku,
-
-                        price:
-                            item.unitPrice
-
-                    }
-
-                })),
+                order.items.map(item => {
+                    const priceVal = item.unitPrice || item.sellingPrice || item.retailPrice || (item.totalPrice && item.quantity ? Math.round(item.totalPrice / item.quantity) : 0) || item.product?.sellingPrice || item.product?.retailPrice || item.product?.price || 0;
+                    return {
+                        quantity:
+                            item.quantity,
+                        unitPrice:
+                            priceVal,
+                        sellingPrice:
+                            item.sellingPrice || priceVal,
+                        retailPrice:
+                            item.retailPrice || priceVal,
+                        totalPrice:
+                            item.totalPrice || (priceVal * item.quantity),
+                        product: {
+                            name:
+                                item.title || item.product?.title || "Product",
+                            sku:
+                                item.sku || item.product?.sku || "N/A",
+                            price:
+                                priceVal
+                        }
+                    };
+                }),
 
             timeline: [
 
@@ -530,7 +561,8 @@ export const getOrderRegistry = async (req, res) => {
 
             ]
 
-        }));
+        };
+    });
 
         return res.status(200).json({
 

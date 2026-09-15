@@ -9,9 +9,9 @@ const Toast: React.FC = () => {
 
   return (
     <div className="fixed bottom-6 right-6 z-[9999] animate-toastSlideUp">
-      <div className="bg-ink text-wht px-5 py-3.5 rounded-xl text-[0.85rem] font-medium flex items-center gap-2.5 shadow-premium-xl border border-white/10 backdrop-blur-md">
-        <CheckCircle className="text-primary shrink-0" size={16} />
-        <span className="tracking-wide">{toastMessage}</span>
+      <div className="bg-slate-900 text-white px-4 py-3 rounded-lg text-sm font-medium flex items-center gap-2.5 shadow-2xl border border-slate-700/80 backdrop-blur-md">
+        <CheckCircle className="text-emerald-400 shrink-0" size={16} />
+        <span className="tracking-normal">{toastMessage}</span>
       </div>
     </div>
   );

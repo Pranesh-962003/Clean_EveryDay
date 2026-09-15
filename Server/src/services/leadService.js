@@ -223,13 +223,15 @@ export const createAdminLeadService = async (req) => {
     // =====================================================
 
     const validCategories = [
-
+        "General Support",
+        "Order & Delivery Inquiry",
+        "Returns & Refunds",
+        "Bulk & Corporate Orders",
         "Floor Care",
-
         "Dish Care",
-
-        "Laundry Care"
-
+        "Laundry Care",
+        "Partner Enquiries",
+        "Other"
     ];
 
 
@@ -630,10 +632,14 @@ export const updateLeadProfileStatusService = async (req) => {
 
     const validCategories = [
         "General Support",
+        "Order & Delivery Inquiry",
+        "Returns & Refunds",
+        "Bulk & Corporate Orders",
         "Floor Care",
         "Dish Care",
         "Laundry Care",
-        "Partner Enquiries"
+        "Partner Enquiries",
+        "Other"
     ];
 
     const validSources = [

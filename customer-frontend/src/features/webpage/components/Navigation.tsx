@@ -1,23 +1,66 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useApp } from '../../../core/context/AppContext';
-import { Leaf, Search, LogOut, ShoppingCart, LayoutDashboard, Menu, X, Loader2 } from 'lucide-react';
+import { 
+  Search, 
+  LogOut, 
+  ShoppingCart, 
+  LayoutDashboard, 
+  Menu, 
+  X, 
+  Loader2, 
+  User, 
+  ChevronDown,
+  Package,
+  Sparkles
+} from 'lucide-react';
 
 const Navigation: React.FC = () => {
   const {
     curUser,
     isAuthLoading,
-    curPage,
     setCurPage,
     setCurFilter,
     setSearchQuery,
-    openAuthModal,
     logoutUser,
     cart,
-    isCartLoading
+    isCartLoading,
+    hideNavbar
   } = useApp();
+
+  if (hideNavbar) return null;
 
   const [inputVal, setInputVal] = useState('');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const userDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on click outside or Escape key
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        userDropdownRef.current &&
+        !userDropdownRef.current.contains(event.target as Node)
+      ) {
+        setIsUserDropdownOpen(false);
+      }
+    };
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsUserDropdownOpen(false);
+      }
+    };
+
+    if (isUserDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('keydown', handleKeyDown);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isUserDropdownOpen]);
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,6 +69,7 @@ const Navigation: React.FC = () => {
     setSearchQuery(inputVal.trim());
     setCurPage('products');
     setIsMobileMenuOpen(false);
+    setIsUserDropdownOpen(false);
   };
 
   const handleLogoClick = () => {
@@ -34,6 +78,7 @@ const Navigation: React.FC = () => {
     setCurFilter('All');
     setCurPage('home');
     setIsMobileMenuOpen(false);
+    setIsUserDropdownOpen(false);
   };
 
   const getUserInitials = (name: string) => {
@@ -47,17 +92,13 @@ const Navigation: React.FC = () => {
 
   const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  const navLinkClass = (page: string) =>
-    `text-sm font-medium transition-colors cursor-pointer hover:text-primary ${
-      curPage === page ? 'text-primary font-semibold' : 'text-mid'
-    }`;
-
   const handleNavClick = (page: string, anchorId?: string) => {
     if (page === 'products') {
       setCurFilter('All');
     }
     setCurPage(page);
     setIsMobileMenuOpen(false);
+    setIsUserDropdownOpen(false);
     if (anchorId) {
       setTimeout(() => {
         document.getElementById(anchorId)?.scrollIntoView({ behavior: 'smooth' });
@@ -66,238 +107,287 @@ const Navigation: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-[200] w-full">
-      {/* Slim Announcement Ticker */}
-      <div className="bg-blk flex items-center overflow-hidden h-[30px] border-b border-white/5">
+    <header className="sticky top-0 z-[200] w-full bg-white border-b border-slate-200/80 shadow-xs">
+      {/* Top Utility Announcement Bar */}
+      <div className="bg-slate-950 text-white flex items-center overflow-hidden h-[30px] border-b border-slate-900 select-none">
         <div className="flex whitespace-nowrap animate-tickerLoop">
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Free shipping on orders above ₹499 <span className="text-primary text-[0.7rem]">✦</span>
+          <span className="inline-flex items-center gap-2 px-8 font-mono text-[10px] uppercase tracking-widest text-slate-300">
+            <Sparkles size={11} className="text-amber-400" /> Free shipping across India on orders above ₹499 <span className="text-slate-600">•</span>
           </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Safe, natural, plant-based ingredients <span className="text-primary text-[0.7rem]">✦</span>
+          <span className="inline-flex items-center gap-2 px-8 font-mono text-[10px] uppercase tracking-widest text-slate-300">
+            100% Genuine &amp; Verified Quality Essentials <span className="text-slate-600">•</span>
           </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Gentle on hands, tough on stains <span className="text-primary text-[0.7rem]">✦</span>
+          <span className="inline-flex items-center gap-2 px-8 font-mono text-[10px] uppercase tracking-widest text-slate-300">
+            Easy 7-Day Doorstep Returns &amp; Replacement <span className="text-slate-600">•</span>
           </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            No harsh chemicals or toxic residues <span className="text-primary text-[0.7rem]">✦</span>
+          <span className="inline-flex items-center gap-2 px-8 font-mono text-[10px] uppercase tracking-widest text-slate-300">
+            256-Bit SSL Encrypted Checkout <span className="text-slate-600">•</span>
           </span>
-          {/* Loop copy */}
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Free shipping on orders above ₹499 <span className="text-primary text-[0.7rem]">✦</span>
+          {/* Loop duplicates */}
+          <span className="inline-flex items-center gap-2 px-8 font-mono text-[10px] uppercase tracking-widest text-slate-300">
+            <Sparkles size={11} className="text-amber-400" /> Free shipping across India on orders above ₹499 <span className="text-slate-600">•</span>
           </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Safe, natural, plant-based ingredients <span className="text-primary text-[0.7rem]">✦</span>
+          <span className="inline-flex items-center gap-2 px-8 font-mono text-[10px] uppercase tracking-widest text-slate-300">
+            100% Genuine &amp; Verified Quality Essentials <span className="text-slate-600">•</span>
           </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Gentle on hands, tough on stains <span className="text-primary text-[0.7rem]">✦</span>
+          <span className="inline-flex items-center gap-2 px-8 font-mono text-[10px] uppercase tracking-widest text-slate-300">
+            Easy 7-Day Doorstep Returns &amp; Replacement <span className="text-slate-600">•</span>
           </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            No harsh chemicals or toxic residues <span className="text-primary text-[0.7rem]">✦</span>
+          <span className="inline-flex items-center gap-2 px-8 font-mono text-[10px] uppercase tracking-widest text-slate-300">
+            256-Bit SSL Encrypted Checkout <span className="text-slate-600">•</span>
           </span>
         </div>
       </div>
 
-      {/* Main Navbar */}
-      <nav className="bg-wht/80 backdrop-blur-lg border-b border-bdrl/80 shadow-premium-sm transition-all duration-200">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 md:px-7 h-[62px] gap-4">
+      {/* Main High-Navbar */}
+      <nav className="bg-white">
+        <div className="max-w-[1440px] mx-auto flex items-center justify-between px-4 sm:px-6 lg:px-8 h-[68px] gap-3 sm:gap-6">
           
-          {/* Mobile Menu Button + Logo */}
-          <div className="flex items-center gap-3">
+          {/* Left: Mobile Menu Trigger + Brand Identity */}
+          <div className="flex items-center gap-3 shrink-0">
             <button
-              className="lg:hidden p-1 -ml-1 text-ink hover:text-primary transition-colors cursor-pointer"
+              className="lg:hidden w-10 h-10 flex items-center justify-center text-slate-700 hover:text-slate-950 transition-colors cursor-pointer rounded-xl hover:bg-slate-100"
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
               aria-label="Toggle mobile menu"
             >
-              {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+              {isMobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
             </button>
-            <div className="flex items-center gap-2.5 cursor-pointer select-none group" onClick={handleLogoClick}>
-              <div className="w-8 h-8 border border-primary rounded-tr-[50%] rounded-tl-[50%] rounded-bl-[50%] rounded-br-[6px] flex items-center justify-center bg-primary-soft transition-transform duration-300 group-hover:-rotate-6">
-                <Leaf className="text-primary" size={15} />
+
+            {/* Brand Logo */}
+            <div
+              className="cursor-pointer select-none flex items-center gap-2.5 group"
+              onClick={handleLogoClick}
+            >
+              <div className="w-9 h-9 rounded-xl bg-slate-950 text-white flex items-center justify-center font-black text-base shadow-sm group-hover:bg-black transition-colors">
+                E
               </div>
-              <div>
-                <div className="font-display text-[1.2rem] font-bold text-blk tracking-wide leading-none hidden sm:block">
-                  Clean <span className="text-primary font-normal italic font-display">Everyday</span>
-                </div>
+              <div className="flex flex-col leading-none">
+                <span className="font-display text-xl sm:text-2xl font-black text-slate-950 tracking-tight">
+                  Ecommerce
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-widest mt-0.5 hidden sm:block">
+                  Storefront
+                </span>
               </div>
             </div>
           </div>
 
-          {/* Nav Links — uniform style, no icons */}
-          <div className="hidden lg:flex items-center gap-7">
-            <button className={navLinkClass('products')} onClick={() => handleNavClick('products')}>
-              Collection
-            </button>
-            <button
-              className={navLinkClass('home')}
-              onClick={() => handleNavClick('home', 'about')}
-            >
-              About
-            </button>
-            <button
-              className={navLinkClass('home')}
-              onClick={() => handleNavClick('home', 'contact')}
-            >
-              Contact
-            </button>
-            <button className={navLinkClass('orders')} onClick={() => handleNavClick('orders')}>
-              My Orders
-            </button>
-
-            {/* Admin link — visually separated */}
-            {curUser?.isAdmin && (
-              <>
-                <span className="w-px h-4 bg-bdr" />
-                <button
-                  className={`flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer hover:text-primary ${curPage === 'admin' ? 'text-primary font-semibold' : 'text-mid'}`}
-                  onClick={() => { window.location.href = 'http://localhost:5174/admin'; }}
-                  title="Admin Dashboard"
-                >
-                  <LayoutDashboard size={13} />
-                  Dashboard
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Right — Search + Auth + Cart */}
-          <div className="flex items-center gap-3.5 flex-1 justify-end max-w-[560px]">
-            {/* Search */}
+          {/* Center: Search Input Bar */}
+          <div className="hidden md:flex flex-1 max-w-[580px] mx-2">
             <form
-              className="hidden md:flex items-center border border-bdr rounded-md overflow-hidden bg-sur/50 focus-within:bg-wht focus-within:border-primary transition-all duration-200 h-[34px] w-full max-w-[260px]"
+              className="flex items-center border border-slate-200 rounded-full overflow-hidden bg-slate-50/80 focus-within:bg-white focus-within:border-slate-950 focus-within:ring-2 focus-within:ring-slate-950/10 transition-all h-11 w-full shadow-2xs"
               onSubmit={handleSearchSubmit}
             >
               <input
-                className="border-none outline-none px-3 text-sm text-ink flex-1 bg-transparent placeholder:text-mut"
+                className="border-none outline-none px-4.5 text-xs sm:text-sm text-slate-900 flex-1 bg-transparent placeholder:text-slate-400 font-medium"
                 type="text"
-                placeholder="Search products..."
+                placeholder="Search products, categories, or essentials..."
                 value={inputVal}
                 onChange={(e) => setInputVal(e.target.value)}
               />
-              <button className="px-3 h-full flex items-center justify-center text-mut hover:text-primary bg-transparent cursor-pointer" type="submit" aria-label="Search">
-                <Search size={13} />
+              {inputVal && (
+                <button
+                  type="button"
+                  onClick={() => setInputVal('')}
+                  className="w-8 h-8 flex items-center justify-center text-slate-400 hover:text-slate-900 cursor-pointer mr-1"
+                  title="Clear search"
+                >
+                  <X size={15} />
+                </button>
+              )}
+              <button
+                className="px-5 h-full flex items-center justify-center bg-slate-950 text-white hover:bg-slate-800 cursor-pointer transition-colors shrink-0"
+                type="submit"
+                aria-label="Search"
+              >
+                <Search size={16} />
               </button>
             </form>
+          </div>
 
-            <div className="flex items-center gap-2">
-              {/* Cart */}
-              <button
-                className="relative w-9 h-9 border border-bdr rounded-full flex items-center justify-center text-ink hover:text-primary hover:bg-sur transition-colors cursor-pointer"
-                onClick={() => setCurPage('checkout')}
-                title="View Shopping Cart"
-              >
-                <ShoppingCart size={15} />
+          {/* Right: Nav Actions with Icons (My Orders, Cart, Profile/Sign In) - Unified Style & Height */}
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
+            
+            {/* Orders Button */}
+            <button
+              type="button"
+              className="h-10 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-800 hover:text-slate-950 text-xs font-bold inline-flex items-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
+              onClick={() => handleNavClick('orders')}
+              title="My Orders & Returns"
+            >
+              <Package size={16} className="text-slate-700 shrink-0" />
+              <span className="hidden sm:inline">Orders</span>
+            </button>
+
+            {/* Shopping Cart Button */}
+            <button
+              type="button"
+              className="h-10 px-3.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-800 hover:text-slate-950 text-xs font-bold inline-flex items-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-[0.98] relative"
+              onClick={() => handleNavClick('checkout')}
+              title="Shopping Cart"
+            >
+              <div className="relative flex items-center">
+                <ShoppingCart size={16} className="text-slate-700 shrink-0" />
                 {isCartLoading ? (
-                  <span className="absolute -top-1 -right-1 bg-primary text-wht text-[9px] w-4 h-4 rounded-full flex items-center justify-center">
-                    <Loader2 size={10} className="animate-spin" />
+                  <span className="absolute -top-2 -right-2.5 bg-emerald-500 text-white text-[9px] w-3.5 h-3.5 rounded-full flex items-center justify-center">
+                    <Loader2 size={8} className="animate-spin" />
                   </span>
                 ) : cartItemsCount > 0 ? (
-                  <span className="absolute -top-1 -right-1 bg-primary text-wht text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-scaleUp">
+                  <span className="absolute -top-2.5 -right-2.5 bg-slate-950 text-white text-[9px] font-black w-4 h-4 rounded-full flex items-center justify-center shadow-xs">
                     {cartItemsCount}
                   </span>
                 ) : null}
-              </button>
+              </div>
+              <span className="hidden sm:inline">Cart</span>
+            </button>
 
-              {isAuthLoading ? (
-                <div className="w-8 h-8 rounded-full border border-bdr bg-sur/50 flex items-center justify-center text-primary" title="Verifying session...">
-                  <Loader2 size={15} className="animate-spin" />
-                </div>
-              ) : curUser ? (
-                <>
-                  <div
-                    className="flex items-center gap-2 bg-bdrl border border-bdr rounded-full py-1 pr-3 pl-1 cursor-pointer transition-all duration-150 hover:bg-bdr/50"
-                    onClick={() => {
-                      if (curUser.isAdmin) {
-                        window.location.href = 'http://localhost:5174/admin';
-                      } else {
-                        setCurPage('profile');
-                      }
-                    }}
-                  >
-                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-xs font-semibold text-wht overflow-hidden shrink-0">
-                      {curUser.avatar ? (
-                        <img src={curUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        getUserInitials(curUser.name)
-                      )}
-                    </div>
-                    <span className="text-xs font-semibold text-ink hidden sm:inline">
-                      {curUser.name.split(' ')[0]}
-                    </span>
-                  </div>
-                  <button
-                    className="w-8 h-8 rounded-full border border-bdr flex items-center justify-center text-mut hover:bg-red-bg hover:text-red hover:border-red/20 transition-all duration-150 cursor-pointer"
-                    onClick={logoutUser}
-                    title="Sign Out"
-                  >
-                    <LogOut size={13} />
-                  </button>
-                </>
-              ) : (
+            {/* Admin Dashboard shortcut if admin */}
+            {curUser?.isAdmin && (
+              <button
+                type="button"
+                className="hidden lg:inline-flex h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-800 hover:text-slate-950 text-xs font-bold items-center gap-1.5 transition-all cursor-pointer shadow-2xs"
+                onClick={() => { window.location.href = 'http://localhost:5174/admin'; }}
+                title="Admin Dashboard"
+              >
+                <LayoutDashboard size={15} className="text-indigo-600" />
+                <span>Admin</span>
+              </button>
+            )}
+
+            {/* Account / User Section */}
+            {isAuthLoading ? (
+              <div className="h-10 w-10 rounded-xl border border-slate-200 bg-slate-50 flex items-center justify-center text-slate-400">
+                <Loader2 size={16} className="animate-spin" />
+              </div>
+            ) : curUser ? (
+              <div className="relative" ref={userDropdownRef}>
                 <button
-                  className="text-xs font-semibold text-wht px-4 py-1.5 bg-primary hover:bg-primary-hover transition-colors rounded-md cursor-pointer"
-                  onClick={() => openAuthModal('login')}
+                  type="button"
+                  onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+                  className="h-10 px-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 text-slate-800 hover:text-slate-950 text-xs font-bold inline-flex items-center gap-2 transition-all cursor-pointer shadow-2xs active:scale-[0.98] select-none"
+                  aria-expanded={isUserDropdownOpen}
+                  aria-haspopup="true"
                 >
-                  Login
+                  <div className="w-6 h-6 rounded-lg bg-slate-900 text-white flex items-center justify-center text-[10px] font-bold shrink-0 overflow-hidden">
+                    {curUser.avatar ? (
+                      <img src={curUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      getUserInitials(curUser.name || 'User')
+                    )}
+                  </div>
+                  <span className="truncate max-w-[85px] hidden sm:inline">
+                    {curUser.name?.split(' ')[0] || 'Profile'}
+                  </span>
+                  <ChevronDown size={14} className={`text-slate-400 transition-transform duration-150 ${isUserDropdownOpen ? 'rotate-180 text-slate-900' : ''}`} />
                 </button>
-              )}
-            </div>
+
+                {/* Dropdown Menu with Backdrop */}
+                {isUserDropdownOpen && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setIsUserDropdownOpen(false)}
+                    />
+                    <div className="absolute right-0 mt-2 w-56 bg-white border border-slate-200 rounded-2xl shadow-xl py-2 z-50 animate-scaleIn">
+                      <div className="px-4 py-3 border-b border-slate-100">
+                        <p className="text-xs font-bold text-slate-950 truncate">{curUser.name}</p>
+                        <p className="text-[11px] text-slate-500 truncate">{curUser.email}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 hover:text-slate-950 flex items-center gap-2.5 cursor-pointer transition-colors"
+                        onClick={() => { handleNavClick('profile'); }}
+                      >
+                        <User size={15} /> My Profile
+                      </button>
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-800 hover:bg-slate-50 hover:text-slate-950 flex items-center gap-2.5 cursor-pointer transition-colors"
+                        onClick={() => { handleNavClick('orders'); }}
+                      >
+                        <Package size={15} /> My Orders &amp; Returns
+                      </button>
+                      {curUser.isAdmin && (
+                        <button
+                          type="button"
+                          className="w-full text-left px-4 py-2.5 text-xs font-semibold text-indigo-700 hover:bg-indigo-50 flex items-center gap-2.5 cursor-pointer transition-colors"
+                          onClick={() => { setIsUserDropdownOpen(false); window.location.href = 'http://localhost:5174/admin'; }}
+                        >
+                          <LayoutDashboard size={15} /> Admin Console
+                        </button>
+                      )}
+                      <div className="border-t border-slate-100 my-1" />
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-600 hover:bg-rose-50 flex items-center gap-2.5 cursor-pointer transition-colors"
+                        onClick={() => { setIsUserDropdownOpen(false); logoutUser(); }}
+                      >
+                        <LogOut size={15} /> Sign Out
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
+            ) : (
+              <button
+                type="button"
+                className="h-10 px-4 rounded-xl border border-slate-950 bg-slate-950 hover:bg-black text-white text-xs font-bold inline-flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs active:scale-[0.98]"
+                onClick={() => setCurPage('login')}
+              >
+                <User size={15} />
+                <span>Sign In</span>
+              </button>
+            )}
           </div>
         </div>
-        
-        {/* Mobile Menu Dropdown */}
+
+        {/* Mobile Search & Menu Drawer */}
         {isMobileMenuOpen && (
-          <div className="lg:hidden border-t border-bdrl bg-wht animate-slideDown shadow-premium-md absolute w-full">
-            <div className="px-4 py-4 flex flex-col gap-4">
-              {/* Mobile Search */}
+          <div className="lg:hidden border-t border-slate-200 bg-white shadow-xl absolute w-full animate-slideDown z-50">
+            <div className="p-4 flex flex-col gap-3">
+              {/* Search Form */}
               <form
-                className="flex items-center border border-bdr rounded-md overflow-hidden bg-sur/50 focus-within:bg-wht focus-within:border-primary transition-all duration-200 h-[40px] w-full"
+                className="flex items-center border border-slate-300 rounded-xl overflow-hidden bg-slate-50 focus-within:bg-white h-11 w-full"
                 onSubmit={handleSearchSubmit}
               >
                 <input
-                  className="border-none outline-none px-3 text-sm text-ink flex-1 bg-transparent placeholder:text-mut"
+                  className="border-none outline-none px-3.5 text-xs text-slate-900 flex-1 bg-transparent"
                   type="text"
                   placeholder="Search products..."
                   value={inputVal}
                   onChange={(e) => setInputVal(e.target.value)}
                 />
-                <button className="px-3 h-full flex items-center justify-center text-mut hover:text-primary bg-transparent cursor-pointer" type="submit" aria-label="Search">
+                <button className="px-4 h-full flex items-center justify-center bg-slate-950 text-white" type="submit">
                   <Search size={16} />
                 </button>
               </form>
 
-              <div className="flex flex-col gap-2">
-                <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('products')}`} onClick={() => handleNavClick('products')}>
-                  Collection
+              {/* Navigation Items */}
+              <div className="flex flex-col gap-1 border-t border-slate-100 pt-2 text-xs">
+                <button
+                  className="text-left py-2.5 px-3 rounded-lg font-bold text-slate-900 hover:bg-slate-100"
+                  onClick={() => handleNavClick('home')}
+                >
+                  Home
                 </button>
-                <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('home')}`} onClick={() => handleNavClick('home', 'about')}>
-                  About
+                <button
+                  className="text-left py-2.5 px-3 rounded-lg font-bold text-slate-900 hover:bg-slate-100"
+                  onClick={() => handleNavClick('products')}
+                >
+                  All Products
                 </button>
-                <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('home')}`} onClick={() => handleNavClick('home', 'contact')}>
-                  Contact
-                </button>
-                <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('orders')}`} onClick={() => handleNavClick('orders')}>
-                  My Orders
+                <button
+                  className="text-left py-2.5 px-3 rounded-lg font-bold text-slate-900 hover:bg-slate-100 flex items-center gap-2"
+                  onClick={() => handleNavClick('orders')}
+                >
+                  <Package size={15} /> My Orders &amp; Tracking
                 </button>
                 {curUser && (
-                  <>
-                    <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('profile')}`} onClick={() => handleNavClick('profile')}>
-                      My Profile
-                    </button>
-                  </>
-                )}
-                {curUser?.isAdmin && (
-                  <button className={`text-left py-2 px-2 rounded-md hover:bg-sur flex items-center gap-2 ${curPage === 'admin' ? 'text-primary font-semibold' : 'text-mid'}`} onClick={() => { window.location.href = 'http://localhost:5174/admin'; }}>
-                    <LayoutDashboard size={14} /> Admin Dashboard
-                  </button>
-                )}
-                {curUser ? (
-                  <button className="text-left py-2 px-2 rounded-md hover:bg-red-bg text-red flex items-center gap-2 font-medium" onClick={() => { logoutUser(); setIsMobileMenuOpen(false); }}>
-                    <LogOut size={14} /> Sign Out
-                  </button>
-                ) : (
-                  <button className="text-left py-2 px-2 rounded-md bg-primary text-wht font-semibold text-center" onClick={() => { openAuthModal('login'); setIsMobileMenuOpen(false); }}>
-                    Login / Sign Up
+                  <button
+                    className="text-left py-2.5 px-3 rounded-lg font-bold text-slate-900 hover:bg-slate-100 flex items-center gap-2"
+                    onClick={() => handleNavClick('profile')}
+                  >
+                    <User size={15} /> My Profile
                   </button>
                 )}
               </div>

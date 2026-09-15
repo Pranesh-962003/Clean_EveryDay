@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import type { Story } from '../../../core/types';
 import ReviewCard from './ReviewCard';
-import { ChevronLeft, ChevronRight, Sparkles, MessageSquareHeart } from 'lucide-react';
+import { ChevronLeft, ChevronRight, MessageSquareHeart } from 'lucide-react';
 
 interface HorizontalStoryCarouselProps {
   stories: Story[];
@@ -73,15 +73,15 @@ const HorizontalStoryCarousel: React.FC<HorizontalStoryCarouselProps> = ({ stori
   // Empty State
   if (totalStories === 0) {
     return (
-      <div className="bg-wht border border-bdr rounded-xl p-8 text-center flex flex-col items-center justify-center my-6 min-h-[200px] shadow-premium-sm">
-        <div className="w-12 h-12 rounded-full bg-primary-soft border border-primary-light flex items-center justify-center text-primary mb-3">
-          <MessageSquareHeart size={22} />
+      <div className="card p-8 text-center flex flex-col items-center justify-center my-6 min-h-[160px]">
+        <div className="empty-state-icon mb-3">
+          <MessageSquareHeart size={20} />
         </div>
-        <h4 className="font-display text-base font-semibold text-blk mb-1">
-          No customer stories yet
+        <h4 className="font-display text-sm font-semibold text-blk mb-1">
+          No customer reviews yet
         </h4>
-        <p className="text-sm text-mut max-w-[420px]">
-          Be the first to share your experience! Write your review below to feature under Clean Everyday stories.
+        <p className="text-xs text-mut max-w-[380px]">
+          Be the first to share your experience with our products! Write your review below.
         </p>
       </div>
     );
@@ -98,8 +98,6 @@ const HorizontalStoryCarousel: React.FC<HorizontalStoryCarouselProps> = ({ stori
     );
   }
 
-  // Calculation for smooth liquid sliding transform
-  // For 3 items: calc(-1 * currentIndex * (100% + 1.5rem) / 3)
   const gapRem = 1.5; // 1.5rem = 24px (gap-6)
   const slideTransform = `calc(-${currentIndex} * (100% + ${gapRem}rem) / ${itemsPerView})`;
 
@@ -112,46 +110,40 @@ const HorizontalStoryCarousel: React.FC<HorizontalStoryCarouselProps> = ({ stori
       onTouchEnd={handleTouchEnd}
     >
       {/* Controls Header Bar */}
-      <div className="flex items-center justify-between bg-primary-soft/50 border border-bdr rounded-t-xl px-4 py-2.5 text-xs text-mid mb-4">
-        <div className="flex items-center gap-2 font-semibold text-primary">
-          <Sparkles size={14} className="animate-pulse" />
-          <span>Liquid story stream ({currentIndex + 1} of {totalStories})</span>
-          {isPaused && (
-            <span className="text-[0.68rem] bg-wht text-mut px-2 py-0.5 rounded border border-bdr">
-              Paused on hover
-            </span>
-          )}
+      <div className="flex items-center justify-between border-b border-bdr pb-3 text-xs text-mid mb-4">
+        <div className="flex items-center gap-2 font-medium text-ink">
+          <span>Customer Stories ({currentIndex + 1} of {totalStories})</span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <button
             onClick={handlePrev}
-            className="w-8 h-8 rounded-full bg-wht border border-bdr flex items-center justify-center text-blk hover:text-primary hover:border-primary transition-all duration-200 cursor-pointer shadow-xs active:scale-95"
-            title="Previous Story"
+            className="w-7 h-7 rounded border border-bdr bg-wht flex items-center justify-center text-blk hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Previous"
             type="button"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={14} />
           </button>
           <button
             onClick={handleNext}
-            className="w-8 h-8 rounded-full bg-wht border border-bdr flex items-center justify-center text-blk hover:text-primary hover:border-primary transition-all duration-200 cursor-pointer shadow-xs active:scale-95"
-            title="Next Story"
+            className="w-7 h-7 rounded border border-bdr bg-wht flex items-center justify-center text-blk hover:bg-slate-50 transition-colors cursor-pointer"
+            title="Next"
             type="button"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={14} />
           </button>
         </div>
       </div>
 
-      {/* Silky Liquid Flow Horizontal Track Viewport */}
-      <div className="overflow-hidden p-1 rounded-xl">
+      {/* Track Viewport */}
+      <div className="overflow-hidden p-0.5">
         <div
-          className="flex gap-6 transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)]"
+          className="flex gap-6 transition-transform duration-500 ease-out"
           style={{ transform: `translateX(${slideTransform})` }}
         >
           {stories.map((story, idx) => (
             <div
               key={story._id || story.id || idx}
-              className="shrink-0 w-full sm:w-[calc((100%-1.5rem)/2)] md:w-[calc((100%-3rem)/3)] flex flex-col h-full transition-all duration-500"
+              className="shrink-0 w-full sm:w-[calc((100%-1.5rem)/2)] md:w-[calc((100%-3rem)/3)] flex flex-col h-full"
             >
               <ReviewCard review={story as any} showQuoteIcon={true} />
             </div>
@@ -159,18 +151,18 @@ const HorizontalStoryCarousel: React.FC<HorizontalStoryCarouselProps> = ({ stori
         </div>
       </div>
 
-      {/* Smooth Liquid Dots Bar */}
-      <div className="flex justify-center items-center gap-1.5 mt-5">
+      {/* Dots Indicator */}
+      <div className="flex justify-center items-center gap-1.5 mt-4">
         {Array.from({ length: maxIndex + 1 }).map((_, idx) => (
           <button
             key={idx}
             onClick={() => setCurrentIndex(idx)}
-            className={`h-2 rounded-full transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] cursor-pointer ${
+            className={`h-1.5 rounded-full transition-all duration-300 cursor-pointer ${
               currentIndex === idx
-                ? 'w-7 bg-primary shadow-sm'
-                : 'w-2 bg-bdr hover:bg-mid/50'
+                ? 'w-6 bg-blk'
+                : 'w-1.5 bg-slate-300 hover:bg-slate-400'
             }`}
-            title={`Slide to index ${idx + 1}`}
+            title={`Slide ${idx + 1}`}
             type="button"
           />
         ))}

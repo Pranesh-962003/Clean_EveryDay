@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import ReactDOM from 'react-dom';
 import {
   MapPin,
   Truck,
@@ -14,252 +13,201 @@ import {
   ChevronRight,
   CheckSquare,
   Search,
-  SlidersHorizontal,
   X,
   AlertTriangle,
   Undo,
-  Info,
   Check,
   Loader2,
-  MessageSquare,
-  User as UserIcon,
-  Home
+  ShieldCheck,
+  CreditCard,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 import type { Order } from '../../../core/types';
 import { useApp } from '../../../core/context/AppContext';
 import { getSocket } from '../../../core/socket/socket';
 import { SOCKET_EVENTS } from '../../../core/socket/socketEvents';
 
-/* ─── Confetti Particle ─── */
-const ConfettiParticle: React.FC<{ index: number }> = ({ index }) => {
-  const colors = ['#287850', '#f59e0b', '#3b82f6', '#ec4899', '#8b5cf6', '#10b981', '#f97316', '#06b6d4', '#84cc16', '#ef4444'];
-  const color = colors[index % colors.length];
-  const left = `${(index * 9.3 + 5) % 95}%`;
-  const delay = `${(index * 0.18) % 1.4}s`;
-  const duration = `${1.4 + (index * 0.15) % 0.8}s`;
-  const size = 6 + (index % 4);
-  return (
-    <div style={{ position: 'fixed', left, top: '-20px', width: size, height: size, borderRadius: index % 3 === 0 ? '50%' : '2px', background: color, animation: `confettiFall ${duration} ${delay} ease-in forwards`, transform: `rotate(${index * 37}deg)`, zIndex: 9998, pointerEvents: 'none' }} />
-  );
-};
-
-/* ─── Order Success Overlay ─── */
-const OrderSuccessOverlay: React.FC<{
-  method: string;
-  total: number;
-  onDismiss: () => void;
-}> = ({ method, total, onDismiss }) => {
-  const [countdown, setCountdown] = useState(6);
-
-  useEffect(() => {
-    const t = setInterval(() => setCountdown(c => {
-      if (c <= 1) { clearInterval(t); onDismiss(); return 0; }
-      return c - 1;
-    }), 1000);
-    return () => clearInterval(t);
-  }, [onDismiss]);
-
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center px-5 bg-blk/60 backdrop-blur-md">
-      {Array.from({ length: 18 }).map((_, i) => <ConfettiParticle key={i} index={i} />)}
-      <div className="bg-wht rounded-2xl shadow-premium-xl max-w-[480px] w-full p-8 text-center animate-scaleIn relative overflow-hidden border border-bdr">
-        <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-primary/30 via-primary to-primary/30" />
-        <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 rounded-full bg-primary-soft border-4 border-primary/10 flex items-center justify-center animate-pulseRing">
-            <svg width="40" height="40" viewBox="0 0 60 60" fill="none">
-              <circle cx="30" cy="30" r="28" stroke="var(--primary)" strokeWidth="3" opacity="0.15" />
-              <path d="M17 30 L25 38 L43 22" stroke="var(--primary)" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" className="animate-checkmarkDraw" fill="none" />
-            </svg>
-          </div>
-        </div>
-        <span className="badge-tag bg-primary-soft text-primary px-3 py-1 mb-4">Order Confirmed</span>
-        <h2 className="font-display text-2xl font-bold text-blk mb-2">Order Confirmed! 🎉</h2>
-        <p className="text-sm text-mut mb-6 leading-relaxed">
-          Your order has been placed successfully. You will receive real-time updates as your eco-clean package gets processed and shipped.
-        </p>
-        <div className="grid grid-cols-2 gap-3.5 bg-sur/80 border border-bdrl rounded-xl p-4 mb-6 text-left">
-          <div>
-            <p className="text-[10px] font-bold text-mut uppercase tracking-wider mb-0.5">Amount Paid</p>
-            <p className="text-sm font-bold text-blk font-mono">₹{total}</p>
-          </div>
-          <div>
-            <p className="text-[10px] font-bold text-mut uppercase tracking-wider mb-0.5">Payment Method</p>
-            <p className="text-xs font-semibold text-mid">{method}</p>
-          </div>
-        </div>
-        <button onClick={onDismiss} className="btn-primary w-full py-3.5">
-          View My Orders <ChevronRight size={14} />
-        </button>
-        <p className="text-[11px] text-mut mt-3">Redirecting automatically in {countdown}s...</p>
-      </div>
-    </div>
-  );
-};
-
 /* ─── Status Design System ─── */
-const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; icon: React.FC<any> }> = {
-  Pending:             { color: 'text-amber-700',   bg: 'bg-amber-50/70',   border: 'border-amber-200/60',  icon: Clock },
-  Confirmed:           { color: 'text-blue-700',    bg: 'bg-blue-50/70',    border: 'border-blue-200/60',   icon: CheckSquare },
-  Packed:              { color: 'text-blue-700',    bg: 'bg-blue-50/70',    border: 'border-blue-200/60',   icon: Package },
-  'Ready for Dispatch':{ color: 'text-indigo-700',  bg: 'bg-indigo-50/70',  border: 'border-indigo-200/60', icon: Package },
-  Shipped:             { color: 'text-indigo-700',  bg: 'bg-indigo-50/70',  border: 'border-indigo-200/60', icon: Truck },
-  'Out for Delivery':  { color: 'text-violet-700',  bg: 'bg-violet-50/70',  border: 'border-violet-200/60', icon: MapPin },
-  Delivered:           { color: 'text-emerald-700', bg: 'bg-emerald-50/70', border: 'border-emerald-200/60',icon: CheckCircle },
-  Cancelled:           { color: 'text-red-700',     bg: 'bg-red-50/70',     border: 'border-red-200/60',    icon: XCircle },
-  'Return Requested':  { color: 'text-rose-700',    bg: 'bg-rose-50/70',    border: 'border-rose-200/60',   icon: RotateCcw },
-  Returned:            { color: 'text-rose-700',    bg: 'bg-rose-50/70',    border: 'border-rose-200/60',   icon: RotateCcw },
-  Refunded:            { color: 'text-rose-700',    bg: 'bg-rose-50/70',    border: 'border-rose-200/60',   icon: RotateCcw },
+const STATUS_CONFIG: Record<string, { color: string; bg: string; border: string; icon: React.FC<any>; label: string }> = {
+  Pending: { color: 'text-amber-900', bg: 'bg-amber-50', border: 'border-amber-300', icon: Clock, label: 'Order Placed' },
+  Confirmed: { color: 'text-blue-900', bg: 'bg-blue-50', border: 'border-blue-300', icon: CheckSquare, label: 'Confirmed' },
+  Packed: { color: 'text-blue-900', bg: 'bg-blue-50', border: 'border-blue-300', icon: Package, label: 'Packed' },
+  'Ready for Dispatch': { color: 'text-indigo-900', bg: 'bg-indigo-50', border: 'border-indigo-300', icon: Package, label: 'Ready for Dispatch' },
+  Shipped: { color: 'text-indigo-900', bg: 'bg-indigo-50', border: 'border-indigo-300', icon: Truck, label: 'Shipped' },
+  'Out for Delivery': { color: 'text-violet-900', bg: 'bg-violet-50', border: 'border-violet-300', icon: MapPin, label: 'Out for Delivery' },
+  Delivered: { color: 'text-emerald-900', bg: 'bg-emerald-50', border: 'border-emerald-300', icon: CheckCircle, label: 'Delivered' },
+  Cancelled: { color: 'text-rose-900', bg: 'bg-rose-50', border: 'border-rose-300', icon: XCircle, label: 'Cancelled' },
+  'Return Requested': { color: 'text-amber-900', bg: 'bg-amber-50', border: 'border-amber-300', icon: RotateCcw, label: 'Return Requested' },
+  Returned: { color: 'text-slate-900', bg: 'bg-slate-100', border: 'border-slate-300', icon: RotateCcw, label: 'Returned' },
+  Refunded: { color: 'text-emerald-900', bg: 'bg-emerald-50', border: 'border-emerald-300', icon: RotateCcw, label: 'Refund Completed' }
 };
 
 const getStatusConfig = (status: string) =>
-  STATUS_CONFIG[status] || { color: 'text-mid', bg: 'bg-sur', border: 'border-bdr', icon: Package };
+  STATUS_CONFIG[status] || { color: 'text-slate-900', bg: 'bg-slate-100', border: 'border-slate-300', icon: Package, label: status };
 
+/* ─── Timeline Events Generator ─── */
+const getTimelineEvents = (order: any) => {
+  if (order.timeline && order.timeline.length > 0) {
+    return [...order.timeline].reverse();
+  }
 
+  const orderDate = new Date(order.date || order.createdAt || Date.now());
+  const events = [];
+
+  events.push({
+    status: 'Order Placed',
+    date: orderDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    notes: 'Order confirmed and registered in ledger.'
+  });
+
+  if (['Confirmed', 'Packed', 'Ready for Dispatch', 'Shipped', 'Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
+    const confirmDate = new Date(orderDate);
+    confirmDate.setMinutes(orderDate.getMinutes() + 20);
+    events.push({
+      status: 'Order Confirmed',
+      date: confirmDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      notes: 'Payment verified and order accepted by fulfillment facility.'
+    });
+  }
+
+  if (['Packed', 'Ready for Dispatch', 'Shipped', 'Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
+    const packDate = new Date(orderDate);
+    packDate.setHours(orderDate.getHours() + 8);
+    events.push({
+      status: 'Packed & Sealed',
+      date: packDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      notes: 'Items packed in protective sustainable casing.'
+    });
+  }
+
+  if (['Ready for Dispatch', 'Shipped', 'Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
+    const readyDate = new Date(orderDate);
+    readyDate.setHours(orderDate.getHours() + 14);
+    events.push({
+      status: 'Dispatched to Carrier Hub',
+      date: readyDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      notes: 'Package handed over to carrier dispatch partner.'
+    });
+  }
+
+  if (['Shipped', 'Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
+    const shipDate = new Date(orderDate);
+    shipDate.setDate(orderDate.getDate() + 1);
+    events.push({
+      status: 'In Transit',
+      date: shipDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      notes: `In transit via ${order.courierCompany || 'Delhivery Express'} (AWB: ${order.trackingId || 'DEL-92841029'}).`
+    });
+  }
+
+  if (['Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
+    const outDate = new Date(orderDate);
+    outDate.setDate(orderDate.getDate() + 3);
+    outDate.setHours(9, 30, 0);
+    events.push({
+      status: 'Out for Delivery',
+      date: outDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      notes: 'Delivery executive is en route to your shipping location.'
+    });
+  }
+
+  if (['Delivered', 'Returned', 'Refunded'].includes(order.status)) {
+    const delDate = new Date(orderDate);
+    delDate.setDate(orderDate.getDate() + 3);
+    delDate.setHours(14, 45, 0);
+    events.push({
+      status: 'Delivered',
+      date: delDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      notes: 'Package signed and successfully delivered.'
+    });
+  }
+
+  if (order.status === 'Cancelled') {
+    const cancelDate = new Date(orderDate);
+    cancelDate.setHours(orderDate.getHours() + 1);
+    events.push({
+      status: 'Cancelled',
+      date: cancelDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      notes: 'Cancellation requested by customer. Any charged amount will be refunded.'
+    });
+  }
+
+  if (['Return Requested', 'Returned', 'Refunded'].includes(order.status)) {
+    const retDate = new Date(orderDate);
+    retDate.setDate(orderDate.getDate() + 4);
+    events.push({
+      status: order.status === 'Refunded' ? 'Refund Completed' : order.status === 'Returned' ? 'Item Picked Up' : 'Return Requested',
+      date: retDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+      notes: order.status === 'Refunded'
+        ? 'Refund transferred to your original payment method.'
+        : order.status === 'Returned'
+        ? 'Item picked up by courier and verification confirmed.'
+        : 'Return request submitted. Pickup scheduled within 48 business hours.'
+    });
+  }
+
+  return events.reverse();
+};
 
 /* ─── Skeleton Loader Component ─── */
 const SkeletonLoader = () => (
   <div className="flex flex-col gap-6 w-full animate-fadeIn">
-    {[1, 2].map(i => (
-      <div key={i} className="card p-6 flex flex-col gap-4 animate-pulse">
-        <div className="flex justify-between items-center pb-4 border-b border-bdrl">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-sur shimmer-bg" />
-            <div className="flex flex-col gap-2">
-              <div className="h-3 w-24 bg-sur shimmer-bg rounded" />
-              <div className="h-2 w-16 bg-sur shimmer-bg rounded" />
-            </div>
+    {[1, 2].map((i) => (
+      <div key={i} className="bg-white border border-slate-200 rounded-xl overflow-hidden animate-pulse">
+        <div className="bg-slate-50 p-4 border-b border-slate-100 flex justify-between items-center">
+          <div className="flex gap-6">
+            <div className="h-3 w-20 bg-slate-200 rounded" />
+            <div className="h-3 w-16 bg-slate-200 rounded" />
+            <div className="h-3 w-24 bg-slate-200 rounded" />
           </div>
-          <div className="h-6 w-20 bg-sur shimmer-bg rounded-full" />
+          <div className="h-3 w-28 bg-slate-200 rounded" />
         </div>
-        <div className="flex gap-4 items-center">
-          <div className="w-16 h-16 rounded bg-sur shimmer-bg animate-pulse" />
-          <div className="flex-1 flex flex-col gap-2">
-            <div className="h-3 w-40 bg-sur shimmer-bg rounded" />
-            <div className="h-2.5 w-64 bg-sur shimmer-bg rounded" />
+        <div className="p-6 flex gap-5 items-center">
+          <div className="w-20 h-20 rounded-lg bg-slate-100 shrink-0" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-48 bg-slate-200 rounded" />
+            <div className="h-3 w-24 bg-slate-100 rounded" />
+            <div className="h-3 w-36 bg-slate-100 rounded" />
           </div>
+          <div className="w-32 h-9 bg-slate-200 rounded" />
         </div>
       </div>
     ))}
   </div>
 );
 
-/* ─── Main Redesigned Orders Page ─── */
-
-/* ─── Timeline Events Generator ─── */
-const getTimelineEvents = (order: any) => {
-  if (order.timeline && order.timeline.length > 0) {
-    return [...order.timeline].reverse(); // Newest first
-  }
-
-  const orderDate = new Date(order.date);
-  const events = [];
-
-  // Placed event
-  events.push({
-    status: 'Order Placed',
-    date: orderDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-    notes: 'Your order was successfully placed.'
-  });
-
-  // Confirmed event
-  if (['Confirmed', 'Packed', 'Ready for Dispatch', 'Shipped', 'Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
-    const confirmDate = new Date(orderDate);
-    confirmDate.setMinutes(orderDate.getMinutes() + 15);
-    events.push({
-      status: 'Order Confirmed',
-      date: confirmDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      notes: 'Clean Everyday approved and confirmed the receipt of payment.'
-    });
-  }
-
-  // Packed event
-  if (['Packed', 'Ready for Dispatch', 'Shipped', 'Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
-    const packDate = new Date(orderDate);
-    packDate.setHours(orderDate.getHours() + 12);
-    events.push({
-      status: 'Packed & Processed',
-      date: packDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      notes: 'Your items have been carefully packaged and sealed.'
-    });
-  }
-
-  // Dispatched/Ready event
-  if (['Ready for Dispatch', 'Shipped', 'Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
-    const readyDate = new Date(orderDate);
-    readyDate.setHours(orderDate.getHours() + 18);
-    events.push({
-      status: 'Ready for Dispatch',
-      date: readyDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      notes: 'Order transferred to logistics carrier hub.'
-    });
-  }
-
-  // Shipped event
-  if (['Shipped', 'Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
-    const shipDate = new Date(orderDate);
-    shipDate.setDate(orderDate.getDate() + 2);
-    events.push({
-      status: 'Shipped',
-      date: shipDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      notes: `In transit via ${order.courierCompany || 'Delhivery Logistics'} (Tracking: ${order.trackingId || 'TRK92841029'}).`
-    });
-  }
-
-  // Out for Delivery event
-  if (['Out for Delivery', 'Delivered', 'Returned', 'Refunded'].includes(order.status)) {
-    const outDate = new Date(orderDate);
-    outDate.setDate(orderDate.getDate() + 4);
-    outDate.setHours(9, 30, 0);
-    events.push({
-      status: 'Out for Delivery',
-      date: outDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      notes: 'Our local delivery agent is out with your package.'
-    });
-  }
-
-  // Delivered event
-  if (['Delivered', 'Returned', 'Refunded'].includes(order.status)) {
-    const delDate = new Date(orderDate);
-    delDate.setDate(orderDate.getDate() + 4);
-    delDate.setHours(14, 15, 0);
-    events.push({
-      status: 'Delivered',
-      date: delDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      notes: 'Order successfully handed over to the customer.'
-    });
-  }
-
-  // Cancelled event
-  if (order.status === 'Cancelled') {
-    const cancelDate = new Date(orderDate);
-    cancelDate.setHours(orderDate.getHours() + 1);
-    events.push({
-      status: 'Order Cancelled',
-      date: cancelDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      notes: 'Order cancelled by customer. Refund process initiated.'
-    });
-  }
-
-  // Returned/Refunded event
-  if (['Returned', 'Refunded'].includes(order.status)) {
-    const retDate = new Date(orderDate);
-    retDate.setDate(orderDate.getDate() + 5);
-    events.push({
-      status: order.status,
-      date: retDate.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
-      notes: order.status === 'Returned' ? 'Item picked up by return shipment courier.' : 'Refund successfully issued to UPI account.'
-    });
-  }
-
-  return events.reverse(); // Newest updates first!
-};
-
+/* ─── Main Returns & Orders Component ─── */
 const Orders: React.FC = () => {
-  const { orders, setCurPage, setInvoiceOrder, addToCart, showToast, updateOrderStatus, cancelOrder, addOrderTimelineEvent, fetchMyOrders, curUser } = useApp();
+  const {
+    orders,
+    setCurPage,
+    setInvoiceOrder,
+    addToCart,
+    showToast,
+    cancelOrder,
+    returnOrder,
+    addOrderTimelineEvent,
+    fetchMyOrders,
+    curUser,
+    setSelectedProductId
+  } = useApp();
 
-  const [successOverlay, setSuccessOverlay] = useState<{ method: string; total: number } | null>(null);
   const [activeOrder, setActiveOrder] = useState<Order | null>(null);
-  
+  const [selectedItemIdx, setSelectedItemIdx] = useState<number>(0);
+  const [selectedImgIdx, setSelectedImgIdx] = useState<number>(0);
+  const [isImgZoomed, setIsImgZoomed] = useState<boolean>(false);
+
+  const handleSelectOrder = (order: Order | null) => {
+    setActiveOrder(order);
+    setSelectedItemIdx(0);
+    setSelectedImgIdx(0);
+    setIsImgZoomed(false);
+    if (order) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  };
+
   // Cancellation Modal States
   const [cancellingOrder, setCancellingOrder] = useState<Order | null>(null);
   const [cancellationReason, setCancellationReason] = useState('');
@@ -267,13 +215,20 @@ const Orders: React.FC = () => {
   const [cancellationStatus, setCancellationStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
   const [cancellationErrorMessage, setCancellationErrorMessage] = useState('');
 
+  // Return Modal States
+  const [returningOrder, setReturningOrder] = useState<Order | null>(null);
+  const [returnStep, setReturnStep] = useState<'reason' | 'confirm'>('reason');
+  const [returnReason, setReturnReason] = useState('');
+  const [returnOtherText, setReturnOtherText] = useState('');
+  const [returnStatus, setReturnStatus] = useState<'idle' | 'processing' | 'success' | 'error'>('idle');
+  const [returnErrorMessage, setReturnErrorMessage] = useState('');
+
   // Filters & State
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusTab, setStatusTab] = useState<'All' | 'Progress' | 'Delivered' | 'Cancelled'>('All');
+  const [statusTab, setStatusTab] = useState<'All' | 'Progress' | 'Delivered' | 'Returns' | 'Cancelled'>('All');
   const [dateFilter, setDateFilter] = useState<'30days' | '6months' | '2026' | 'all'>('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest'>('newest');
   const [isLoading, setIsLoading] = useState(false);
-  const [showTimelineModal, setShowTimelineModal] = useState(false);
 
   useEffect(() => {
     if (fetchMyOrders) {
@@ -313,7 +268,7 @@ const Orders: React.FC = () => {
     };
   }, [fetchMyOrders]);
 
-  // Keep activeOrder synced with latest state from orders array
+  // Keep activeOrder synced with latest state
   useEffect(() => {
     if (activeOrder && orders.length > 0) {
       const latest = orders.find(
@@ -325,24 +280,10 @@ const Orders: React.FC = () => {
     }
   }, [orders, activeOrder]);
 
-  useEffect(() => {
-    const raw = sessionStorage.getItem('ce_order_just_placed');
-    if (raw) {
-      try {
-        const data = JSON.parse(raw);
-        const age = Date.now() - (data.ts || 0);
-        if (age < 30000) {
-          setSuccessOverlay({ method: data.method, total: data.total });
-        }
-      } catch { /* ignore */ }
-      sessionStorage.removeItem('ce_order_just_placed');
-    }
-  }, []);
-
-  // Simulate short loading state on filters changes for clean UX
+  // Simulate short loading state on filter changes
   useEffect(() => {
     setIsLoading(true);
-    const t = setTimeout(() => setIsLoading(false), 250);
+    const t = setTimeout(() => setIsLoading(false), 200);
     return () => clearTimeout(t);
   }, [searchQuery, statusTab, dateFilter, sortBy]);
 
@@ -351,17 +292,23 @@ const Orders: React.FC = () => {
     const items = Array.isArray(order.items)
       ? order.items
       : typeof order.items === 'string'
-      ? (() => { try { return JSON.parse(order.items); } catch { return []; } })()
+      ? (() => {
+          try {
+            return JSON.parse(order.items);
+          } catch {
+            return [];
+          }
+        })()
       : [];
 
     if (items.length === 0) return;
-    
+
     items.forEach((item: any) => {
       if (item.product) {
         addToCart(item.product, item.quantity);
       }
     });
-    showToast("Formulations re-added to cart! Redirecting to checkout...");
+    showToast('Items re-added to cart! Redirecting to checkout...');
     setCurPage('checkout');
     setActiveOrder(null);
   };
@@ -375,11 +322,11 @@ const Orders: React.FC = () => {
     setCancellationErrorMessage('');
   };
 
-  // Confirm cancellation action (with loader and success states)
+  // Confirm cancellation action
   const handleConfirmCancellation = async () => {
     if (!cancellingOrder) return;
     if (!cancellationReason) {
-      showToast("Please choose a reason for cancellation.");
+      showToast('Please choose a reason for cancellation.');
       return;
     }
 
@@ -392,32 +339,141 @@ const Orders: React.FC = () => {
 
       if (res && res.success) {
         addOrderTimelineEvent(cancellingOrder.id, 'Cancelled', `Cancelled by customer. Reason: ${finalReason}`);
-        
-        // Update local activeOrder state if open
+
         if (activeOrder && (activeOrder.id === cancellingOrder.id || activeOrder._id === cancellingOrder._id)) {
-          setActiveOrder(prev => prev ? { ...prev, status: 'Cancelled' } : null);
+          setActiveOrder((prev) => (prev ? { ...prev, status: 'Cancelled' } : null));
         }
 
         setCancellationStatus('success');
       } else {
         setCancellationStatus('error');
-        setCancellationErrorMessage(res?.message || "Unable to process cancellation request. Please try again later.");
+        setCancellationErrorMessage(res?.message || 'Unable to process cancellation request.');
       }
     } catch (err: any) {
       setCancellationStatus('error');
-      setCancellationErrorMessage(err?.response?.data?.message || err?.message || "Unable to process cancellation request. Please try again later.");
+      setCancellationErrorMessage(err?.response?.data?.message || err?.message || 'Cancellation failed.');
     }
   };
 
-  // Handle Return
-  const handleReturnOrder = async (orderId: string, _id?: string) => {
-    if (window.confirm("Are you sure you want to request a return for this order?")) {
-      const targetId = _id || orderId;
-      await updateOrderStatus(orderId, 'Returned', targetId);
-      addOrderTimelineEvent(orderId, 'Returned', 'Return requested by customer');
-      if (activeOrder && (activeOrder.id === orderId || activeOrder._id === _id)) {
-        setActiveOrder(prev => prev ? { ...prev, status: 'Returned' } : null);
+  // Open Return Modal
+  const handleOpenReturnModal = (order: Order) => {
+    setReturningOrder(order);
+    setReturnStep('reason');
+    setReturnReason('');
+    setReturnOtherText('');
+    setReturnStatus('idle');
+    setReturnErrorMessage('');
+  };
+
+  // Check if order is eligible for return (within 7 days of delivery)
+  const isReturnEligible = (order: Order): boolean => {
+    if (!order || order.status !== 'Delivered') return false;
+    if ((order as any).isReturned || (order as any).status === 'Returned' || (order as any).status === 'Cancelled')
+      return false;
+
+    let deliveryTime: number | null = null;
+    const o = order as any;
+
+    if (o.shipping?.deliveredAt) {
+      deliveryTime = new Date(o.shipping.deliveredAt).getTime();
+    } else if (o.deliveredAt) {
+      deliveryTime = new Date(o.deliveredAt).getTime();
+    } else if (o.updatedAt && o.status === 'Delivered') {
+      deliveryTime = new Date(o.updatedAt).getTime();
+    } else if (o.createdAt) {
+      deliveryTime = new Date(o.createdAt).getTime();
+    } else if (o.date) {
+      deliveryTime = new Date(o.date).getTime();
+    }
+
+    if (!deliveryTime || isNaN(deliveryTime)) return true;
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    return Date.now() - deliveryTime <= SEVEN_DAYS_MS;
+  };
+
+  // Compute return policy status
+  const getReturnPolicyStatus = (order: Order) => {
+    if (!order || order.status !== 'Delivered') return null;
+
+    let deliveryTime: number | null = null;
+    const o = order as any;
+
+    if (o.shipping?.deliveredAt) {
+      deliveryTime = new Date(o.shipping.deliveredAt).getTime();
+    } else if (o.deliveredAt) {
+      deliveryTime = new Date(o.deliveredAt).getTime();
+    } else if (o.updatedAt && o.status === 'Delivered') {
+      deliveryTime = new Date(o.updatedAt).getTime();
+    } else if (o.createdAt) {
+      deliveryTime = new Date(o.createdAt).getTime();
+    } else if (o.date) {
+      deliveryTime = new Date(o.date).getTime();
+    }
+
+    if (!deliveryTime || isNaN(deliveryTime)) {
+      const fallbackEnd = new Date();
+      fallbackEnd.setDate(fallbackEnd.getDate() + 7);
+      const formattedEnd = fallbackEnd.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+      return { isLive: true, daysLeft: 7, text: `Return window: 7 days left (${formattedEnd})`, formattedEnd };
+    }
+
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    const policyEndTime = deliveryTime + SEVEN_DAYS_MS;
+    const policyEndDate = new Date(policyEndTime);
+    const formattedEnd = policyEndDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+
+    const now = Date.now();
+    const timeDiff = policyEndTime - now;
+    const daysLeft = Math.ceil(timeDiff / (1000 * 60 * 60 * 24));
+
+    if (timeDiff > 0 && daysLeft > 0) {
+      return {
+        isLive: true,
+        daysLeft,
+        text: `Return window: ${daysLeft} day${daysLeft > 1 ? 's' : ''} left (until ${formattedEnd})`,
+        formattedEnd
+      };
+    }
+
+    return { isLive: false, daysLeft: 0, text: `Return window closed on ${formattedEnd}`, formattedEnd };
+  };
+
+  const handleProceedToConfirmReturn = () => {
+    if (!returnReason) {
+      showToast('Please choose a reason for returning the product.');
+      return;
+    }
+    if (returnReason === 'Other' && !returnOtherText.trim()) {
+      showToast('Please enter your custom return reason.');
+      return;
+    }
+    setReturnStep('confirm');
+  };
+
+  const handleConfirmReturn = async () => {
+    if (!returningOrder) return;
+    setReturnStatus('processing');
+    const finalReason = returnReason === 'Other' ? returnOtherText : returnReason;
+
+    try {
+      const orderIdToReturn = returningOrder._id || returningOrder.id;
+      const res = await returnOrder(orderIdToReturn, finalReason);
+
+      if (res && res.success) {
+        addOrderTimelineEvent(returningOrder.id, 'Returned', `Return requested by customer. Reason: ${finalReason}`);
+
+        if (activeOrder && (activeOrder.id === returningOrder.id || activeOrder._id === returningOrder._id)) {
+          setActiveOrder((prev) => (prev ? { ...prev, status: 'Returned' } : null));
+        }
+
+        setReturnStatus('success');
+      } else {
+        setReturnStatus('error');
+        setReturnErrorMessage(res?.message || 'Unable to process return request.');
       }
+    } catch (err: any) {
+      setReturnStatus('error');
+      setReturnErrorMessage(err?.response?.data?.message || err?.message || 'Return failed.');
     }
   };
 
@@ -436,7 +492,7 @@ const Orders: React.FC = () => {
   };
 
   // Status mapping logic
-  const matchStatus = (orderStatus: string) => {
+  const matchStatus = (orderStatus: string, orderObj?: any) => {
     if (statusTab === 'All') return true;
     if (statusTab === 'Progress') {
       return ['Pending', 'Confirmed', 'Packed', 'Ready for Dispatch', 'Shipped', 'Out for Delivery'].includes(orderStatus);
@@ -444,8 +500,11 @@ const Orders: React.FC = () => {
     if (statusTab === 'Delivered') {
       return orderStatus === 'Delivered';
     }
+    if (statusTab === 'Returns') {
+      return ['Return Requested', 'Returned', 'Refunded'].includes(orderStatus) || Boolean(orderObj?.isReturned);
+    }
     if (statusTab === 'Cancelled') {
-      return ['Cancelled', 'Return Requested', 'Returned', 'Refunded'].includes(orderStatus);
+      return orderStatus === 'Cancelled';
     }
     return true;
   };
@@ -454,11 +513,17 @@ const Orders: React.FC = () => {
   const matchSearch = (order: Order) => {
     if (!searchQuery) return true;
     const q = searchQuery.toLowerCase();
-    const matchId = order.id.toLowerCase().includes(q);
+    const matchId = (order.id || '').toLowerCase().includes(q);
     const items = Array.isArray(order.items)
       ? order.items
       : typeof order.items === 'string'
-      ? (() => { try { return JSON.parse(order.items); } catch { return []; } })()
+      ? (() => {
+          try {
+            return JSON.parse(order.items);
+          } catch {
+            return [];
+          }
+        })()
       : [];
     const matchProducts = items.some((i: any) => i?.product?.name?.toLowerCase().includes(q));
     return matchId || matchProducts;
@@ -478,654 +543,830 @@ const Orders: React.FC = () => {
 
   // Process list
   const processedOrders = (orders || [])
-    .filter((o: any) => matchDate(o.createdAt || o.date) && matchStatus(o.status) && matchSearch(o))
+    .filter((o: any) => matchDate(o.createdAt || o.date) && matchStatus(o.status, o) && matchSearch(o))
     .sort((a: any, b: any) => {
       const timeA = getOrderTime(a);
       const timeB = getOrderTime(b);
-
       if (timeA !== timeB) {
         return sortBy === 'newest' ? timeB - timeA : timeA - timeB;
       }
-
       const idA = String(a.id || a._id || '');
       const idB = String(b.id || b._id || '');
-      return sortBy === 'newest'
-        ? idB.localeCompare(idA, undefined, { numeric: true })
-        : idA.localeCompare(idB, undefined, { numeric: true });
+      return sortBy === 'newest' ? idB.localeCompare(idA, undefined, { numeric: true }) : idA.localeCompare(idB, undefined, { numeric: true });
     });
 
-  // Timeline Index calculation
-  /* const getTimelineStepIndex = (status: string) => {
-    switch (status) {
-      case 'Pending': return 0;
-      case 'Confirmed': return 1;
-      case 'Packed':
-      case 'Ready for Dispatch': return 2;
-      case 'Shipped': return 3;
-      case 'Out for Delivery': return 4;
-      case 'Delivered': return 5;
-      default: return -1;
-    }
-  };
+  // Calculate count metrics for tab badges
+  const totalOrdersCount = (orders || []).length;
+  const inTransitCount = (orders || []).filter((o: any) =>
+    ['Pending', 'Confirmed', 'Packed', 'Ready for Dispatch', 'Shipped', 'Out for Delivery'].includes(o.status)
+  ).length;
+  const deliveredCount = (orders || []).filter((o: any) => o.status === 'Delivered').length;
+  const returnsCount = (orders || []).filter((o: any) =>
+    ['Return Requested', 'Returned', 'Refunded'].includes(o.status) || Boolean(o.isReturned)
+  ).length;
+  const cancelledCount = (orders || []).filter((o: any) => o.status === 'Cancelled').length;
 
-  */ // Compact inline timeline helper for order cards
-  const renderCompactTimeline = (status: string) => {
-    const steps = ['Placed', 'Packed', 'Shipped', 'Delivered'];
-    const activeIdx = status === 'Pending' || status === 'Confirmed' ? 0 
-                    : status === 'Packed' || status === 'Ready for Dispatch' ? 1
-                    : status === 'Shipped' || status === 'Out for Delivery' ? 2
-                    : status === 'Delivered' ? 3 : -1;
-
-    if (activeIdx === -1) return null; // Muted if cancelled or returned
-
+  /* ── Modal Renderers ── */
+  const renderCancelModal = () => {
+    if (!cancellingOrder) return null;
     return (
-      <div className="flex items-center gap-1 text-[10px] font-semibold text-mut">
-        {steps.map((step, idx) => {
-          const isDone = idx <= activeIdx;
-          const isLast = idx === steps.length - 1;
-          return (
-            <React.Fragment key={step}>
-              <span className={isDone ? 'text-primary font-bold' : 'text-mut/40'}>{step}</span>
-              {!isLast && <span className="text-mut/30 font-normal">→</span>}
-            </React.Fragment>
-          );
-        })}
+      <div
+        className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm select-none"
+        onClick={() => {
+          if (cancellationStatus !== 'processing') setCancellingOrder(null);
+        }}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-2xl max-w-[480px] w-full border border-slate-200 p-6 sm:p-7 animate-scaleIn relative overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <h3 className="text-base font-bold text-slate-950">Request Cancellation</h3>
+            <button
+              onClick={() => setCancellingOrder(null)}
+              className="w-10 h-10 min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center text-slate-500 hover:text-slate-950 hover:bg-slate-100 cursor-pointer transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {cancellationStatus === 'idle' && (
+            <div className="mt-4 space-y-4">
+              <p className="text-xs text-slate-700 leading-relaxed">
+                Please tell us why you wish to cancel <span className="font-bold text-slate-950">Order #{cancellingOrder.id}</span>.
+              </p>
+
+              <div>
+                <label className="form-label text-xs font-bold text-slate-900 block mb-1.5">Reason for cancellation</label>
+                <select
+                  value={cancellationReason}
+                  onChange={(e) => setCancellationReason(e.target.value)}
+                  className="select-field text-xs min-h-[44px]"
+                >
+                  <option value="">Select cancellation reason...</option>
+                  <option value="Ordered by mistake">Ordered by mistake</option>
+                  <option value="Found a better price elsewhere">Found a better price elsewhere</option>
+                  <option value="Delivery time is too long">Delivery time is too long</option>
+                  <option value="Need to change shipping address">Need to change shipping address</option>
+                  <option value="Other">Other (specify below)</option>
+                </select>
+              </div>
+
+              {cancellationReason === 'Other' && (
+                <div>
+                  <label className="form-label text-xs font-bold text-slate-900 block mb-1.5">Additional details</label>
+                  <textarea
+                    rows={3}
+                    value={cancellationOtherText}
+                    onChange={(e) => setCancellationOtherText(e.target.value)}
+                    placeholder="Please explain the reason..."
+                    className="textarea-field text-xs"
+                  />
+                </div>
+              )}
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setCancellingOrder(null)}
+                  className="btn-secondary flex-1 text-xs font-bold min-h-[44px]"
+                >
+                  Keep Order
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCancellation}
+                  disabled={!cancellationReason}
+                  className="btn-primary flex-1 text-xs font-bold min-h-[44px] bg-rose-600 hover:bg-rose-700 text-white disabled:opacity-50"
+                >
+                  Confirm Cancel
+                </button>
+              </div>
+            </div>
+          )}
+
+          {cancellationStatus === 'processing' && (
+            <div className="py-12 text-center space-y-3">
+              <Loader2 size={32} className="animate-spin text-slate-950 mx-auto" />
+              <p className="text-xs font-bold text-slate-900">Processing cancellation...</p>
+            </div>
+          )}
+
+          {cancellationStatus === 'success' && (
+            <div className="py-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-300 flex items-center justify-center mx-auto text-emerald-700">
+                <CheckCircle size={26} />
+              </div>
+              <h4 className="text-base font-black text-slate-950">Order Cancelled</h4>
+              <p className="text-xs text-slate-600 max-w-xs mx-auto leading-relaxed">
+                Your order has been cancelled and any paid balance will be refunded within 3-5 business days.
+              </p>
+              <button
+                onClick={() => {
+                  setCancellingOrder(null);
+                  setCancellationStatus('idle');
+                }}
+                className="btn-primary text-xs font-bold px-6 min-h-[44px] mt-2"
+              >
+                Close
+              </button>
+            </div>
+          )}
+
+          {cancellationStatus === 'error' && (
+            <div className="py-8 text-center space-y-3">
+              <AlertTriangle size={32} className="text-rose-600 mx-auto" />
+              <h4 className="text-base font-bold text-slate-950">Cancellation Failed</h4>
+              <p className="text-xs text-slate-600">{cancellationErrorMessage}</p>
+              <button
+                onClick={() => setCancellationStatus('idle')}
+                className="btn-secondary text-xs font-bold px-5 min-h-[44px] mt-2"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     );
   };
 
-  /* ─── DEDICATED SEPARATE DETAILS PAGE VIEW ─── */
+  const renderReturnModal = () => {
+    if (!returningOrder) return null;
+    return (
+      <div
+        className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-sm select-none"
+        onClick={() => {
+          if (returnStatus !== 'processing') setReturningOrder(null);
+        }}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-2xl max-w-[480px] w-full border border-slate-200 p-6 sm:p-7 animate-scaleIn relative overflow-hidden"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+            <div className="flex items-center gap-2">
+              <Undo size={18} className="text-slate-900" />
+              <h3 className="text-base font-bold text-slate-950">Return or Replace</h3>
+            </div>
+            <button
+              onClick={() => setReturningOrder(null)}
+              className="w-10 h-10 min-h-[44px] min-w-[44px] rounded-full flex items-center justify-center text-slate-500 hover:text-slate-950 hover:bg-slate-100 cursor-pointer transition-colors"
+            >
+              <X size={18} />
+            </button>
+          </div>
+
+          {returnStatus === 'idle' && returnStep === 'reason' && (
+            <div className="mt-4 space-y-4">
+              <p className="text-xs text-slate-700 leading-relaxed">
+                Select a verified return reason for <span className="font-bold text-slate-950">Order #{returningOrder.id}</span>:
+              </p>
+
+              <div>
+                <label className="form-label text-xs font-bold text-slate-900 block mb-1.5">Reason for return</label>
+                <select
+                  value={returnReason}
+                  onChange={(e) => setReturnReason(e.target.value)}
+                  className="select-field text-xs min-h-[44px]"
+                >
+                  <option value="">Select reason...</option>
+                  <option value="Defective or damaged product">Defective or damaged product</option>
+                  <option value="Wrong item delivered">Wrong item delivered</option>
+                  <option value="Quality not as expected">Quality not as expected</option>
+                  <option value="Missing items or accessories">Missing items or accessories</option>
+                  <option value="Product no longer needed">Product no longer needed</option>
+                  <option value="Other">Other (custom reason)</option>
+                </select>
+              </div>
+
+              {returnReason === 'Other' && (
+                <div>
+                  <label className="form-label text-xs font-bold text-slate-900 block mb-1.5">Please specify</label>
+                  <textarea
+                    rows={3}
+                    value={returnOtherText}
+                    onChange={(e) => setReturnOtherText(e.target.value)}
+                    placeholder="Provide additional details..."
+                    className="textarea-field text-xs"
+                  />
+                </div>
+              )}
+
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-700 flex items-start gap-2.5">
+                <ShieldCheck size={16} className="text-slate-900 shrink-0 mt-0.5" />
+                <span className="leading-relaxed">Courier will inspect the item at doorstep pickup. Refund is initiated immediately upon handover.</span>
+              </div>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReturningOrder(null)}
+                  className="btn-secondary flex-1 text-xs font-bold min-h-[44px]"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleProceedToConfirmReturn}
+                  disabled={!returnReason || (returnReason === 'Other' && !returnOtherText.trim())}
+                  className="btn-primary flex-1 text-xs font-bold min-h-[44px] disabled:opacity-50"
+                >
+                  Continue
+                </button>
+              </div>
+            </div>
+          )}
+
+          {returnStatus === 'idle' && returnStep === 'confirm' && (
+            <div className="mt-4 space-y-4 animate-fadeIn">
+              <div className="p-4 bg-amber-50 border border-amber-300 rounded-xl text-center space-y-1">
+                <h4 className="text-sm font-bold text-amber-950">Confirm Return Request</h4>
+                <p className="text-xs text-amber-900 font-medium">
+                  Reason: <span className="font-bold">{returnReason === 'Other' ? returnOtherText : returnReason}</span>
+                </p>
+              </div>
+
+              <p className="text-xs text-slate-700 leading-relaxed">
+                Our logistics courier will arrive at your registered address within 48 hours for item pickup.
+              </p>
+
+              <div className="pt-2 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setReturnStep('reason')}
+                  className="btn-secondary flex-1 text-xs font-bold min-h-[44px]"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmReturn}
+                  className="btn-primary flex-1 text-xs font-bold min-h-[44px] bg-slate-950 text-white"
+                >
+                  Confirm Return
+                </button>
+              </div>
+            </div>
+          )}
+
+          {returnStatus === 'processing' && (
+            <div className="py-12 text-center space-y-3">
+              <Loader2 size={32} className="animate-spin text-slate-950 mx-auto" />
+              <p className="text-xs font-bold text-slate-900">Scheduling return pickup...</p>
+            </div>
+          )}
+
+          {returnStatus === 'success' && (
+            <div className="py-8 text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-emerald-50 border border-emerald-300 flex items-center justify-center mx-auto text-emerald-700">
+                <CheckCircle size={26} />
+              </div>
+              <h4 className="text-base font-black text-slate-950">Return Scheduled</h4>
+              <p className="text-xs text-slate-600 max-w-xs mx-auto leading-relaxed">
+                Your return request has been confirmed. A courier representative will contact you for doorstep pickup.
+              </p>
+              <button
+                onClick={() => {
+                  setReturningOrder(null);
+                  setReturnStatus('idle');
+                }}
+                className="btn-primary text-xs font-bold px-6 min-h-[44px] mt-2"
+              >
+                Done
+              </button>
+            </div>
+          )}
+
+          {returnStatus === 'error' && (
+            <div className="py-8 text-center space-y-3">
+              <AlertTriangle size={32} className="text-rose-600 mx-auto" />
+              <h4 className="text-base font-bold text-slate-950">Return Request Failed</h4>
+              <p className="text-xs text-slate-600">{returnErrorMessage || 'Unable to process return request.'}</p>
+              <button
+                onClick={() => setReturnStatus('idle')}
+                className="btn-secondary text-xs font-bold px-5 min-h-[44px] mt-2"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  /* ───────────────────────────────────────────────────────────────────
+     VIEW: DEDICATED MODERN ORDER DETAILS PAGE VIEW
+     ─────────────────────────────────────────────────────────────────── */
   if (activeOrder) {
-
-
     const items = Array.isArray(activeOrder.items)
       ? activeOrder.items
       : typeof activeOrder.items === 'string'
-      ? (() => { try { return JSON.parse(activeOrder.items); } catch { return []; } })()
+      ? (() => {
+          try {
+            return JSON.parse(activeOrder.items);
+          } catch {
+            return [];
+          }
+        })()
       : [];
 
-    const isCancelled = ['Cancelled', 'Return Requested', 'Returned', 'Refunded'].includes(activeOrder.status);
+    const selectedItem = items[selectedItemIdx] || items[0] || {};
+    const selectedProd = selectedItem.product || selectedItem || {};
+    const rawImgs: string[] = Array.isArray(selectedProd.imgs) && selectedProd.imgs.length > 0
+      ? selectedProd.imgs
+      : selectedProd.img
+      ? [selectedProd.img]
+      : [];
+    const activeImg = rawImgs[selectedImgIdx] || rawImgs[0] || '';
+
+    const isCancelled = activeOrder.status === 'Cancelled';
+    const isReturnState = ['Return Requested', 'Returned', 'Refunded'].includes(activeOrder.status);
+    const cfg = getStatusConfig(activeOrder.status);
+    const StatusIcon = cfg.icon;
+
+    // Delivery Stepper Calculation
+    const stepperMilestones = [
+      { key: 'placed', label: 'Order Placed' },
+      { key: 'confirmed', label: 'Confirmed' },
+      { key: 'packed', label: 'Packed' },
+      { key: 'shipped', label: 'Shipped' },
+      { key: 'delivered', label: 'Delivered' }
+    ];
+
+    const getActiveStepperIdx = (status: string) => {
+      switch (status) {
+        case 'Pending':
+          return 0;
+        case 'Confirmed':
+          return 1;
+        case 'Packed':
+        case 'Ready for Dispatch':
+          return 2;
+        case 'Shipped':
+        case 'Out for Delivery':
+          return 3;
+        case 'Delivered':
+        case 'Return Requested':
+        case 'Returned':
+        case 'Refunded':
+          return 4;
+        default:
+          return 0;
+      }
+    };
+
+    const currentStepIdx = getActiveStepperIdx(activeOrder.status);
 
     return (
-      <>
-        {/* Confetti confirmation overlay */}
-        {successOverlay && (
-          <OrderSuccessOverlay
-            method={successOverlay.method}
-            total={successOverlay.total}
-            onDismiss={() => setSuccessOverlay(null)}
-          />
-        )}
+      <div className="w-full min-h-screen bg-[#FAFBFD] pb-24">
+        {/* Cancel & Return Modals */}
+        {renderCancelModal()}
+        {renderReturnModal()}
 
-        {/* ─── Cancel Order confirmation modal experience ─── */}
-        {cancellingOrder && (
-          <div 
-            className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-blk/60 backdrop-blur-xs select-none"
-            onClick={() => {
-              if (cancellationStatus !== 'processing') {
-                setCancellingOrder(null);
-              }
-            }}
-          >
-            <div 
-              className="bg-wht rounded-2xl shadow-premium-xl max-w-[500px] w-full border border-bdr p-6 animate-scaleIn relative overflow-hidden"
-              onClick={e => e.stopPropagation()}
-            >
-              <div className="absolute inset-x-0 top-0 h-1 bg-red/30" />
+        {/* ── Details Header & Breadcrumb ── */}
+        <div className="bg-white border-b border-slate-200 py-6">
+          <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8">
+            <nav className="flex items-center gap-2 text-xs text-slate-600 mb-3 select-none" aria-label="Breadcrumb">
+              <button
+                type="button"
+                onClick={() => setCurPage('home')}
+                className="text-slate-600 hover:text-slate-950 font-medium transition-colors cursor-pointer"
+              >
+                Home
+              </button>
+              <ChevronRight size={12} className="text-slate-400" />
+              <button
+                type="button"
+                onClick={() => handleSelectOrder(null)}
+                className="text-slate-600 hover:text-slate-950 font-medium transition-colors cursor-pointer"
+              >
+                Returns &amp; Orders
+              </button>
+              <ChevronRight size={12} className="text-slate-400" />
+              <span className="text-slate-950 font-mono font-bold">{activeOrder.id}</span>
+            </nav>
 
-              {/* Cancel IDLE State */}
-              {cancellationStatus === 'idle' && (
-                <div className="flex flex-col">
-                  <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2 text-red">
-                      <XCircle size={18} />
-                      <h3 className="font-display text-sm font-bold text-blk">Cancel Order Confirmation</h3>
-                    </div>
-                    <button 
-                      onClick={() => setCancellingOrder(null)} 
-                      className="w-7 h-7 rounded-full hover:bg-sur flex items-center justify-center text-mut hover:text-blk"
-                    >
-                      <X size={14} />
-                    </button>
-                  </div>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 select-none">
+              <div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <h1 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">Order Details</h1>
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
+                    <StatusIcon size={14} />
+                    {cfg.label}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-600 mt-1 font-medium">
+                  Ordered on <span className="font-bold text-slate-900">{activeOrder.date}</span> • Order Reference <span className="font-mono font-bold text-slate-950">{activeOrder.id}</span>
+                </p>
+              </div>
 
-                  <p className="text-xs text-mid mb-5 leading-normal">
-                    Are you sure you want to request cancellation for this order? Below is a summary of the formulation package items:
-                  </p>
+              <div className="flex items-center gap-3 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setInvoiceOrder(activeOrder)}
+                  className="btn-secondary text-xs font-bold min-h-[44px] px-4 flex items-center gap-2 shadow-2xs hover:bg-slate-100 cursor-pointer"
+                >
+                  <Printer size={15} />
+                  <span>Invoice</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSelectOrder(null)}
+                  className="btn-primary text-xs font-bold min-h-[44px] px-5 flex items-center gap-2 shadow-md hover:shadow-lg cursor-pointer"
+                >
+                  <ArrowLeft size={15} />
+                  <span>All Orders</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
 
-                  {/* Compact Product Preview */}
-                  {(() => {
-                    const cancellingItems = Array.isArray(cancellingOrder.items)
-                      ? cancellingOrder.items
-                      : typeof cancellingOrder.items === 'string'
-                      ? (() => { try { return JSON.parse(cancellingOrder.items); } catch { return []; } })()
-                      : [];
-                    const pItem = cancellingItems[0];
-                    return (
-                      <div className="flex items-center gap-4 bg-sur/50 border border-bdrl rounded-xl p-3.5 mb-5 text-xs text-mid">
-                        <div className="w-12 h-12 rounded-lg border border-bdrl bg-wht overflow-hidden shrink-0 flex items-center justify-center">
-                          {pItem?.product?.imgs?.length > 0 ? (
-                            <img src={pItem.product.imgs[0]} alt="" className="w-full h-full object-cover" />
-                          ) : (
-                            <Package size={16} className="text-primary/20" />
-                          )}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-blk truncate">{pItem?.product?.name || 'Organic formulation'}</h4>
-                          <p className="text-[10px] text-mut mt-0.5">Order Reference: {cancellingOrder.id}</p>
-                          <p className="text-[10px] text-mut">Quantity: {pItem?.quantity || 1} item(s)</p>
-                        </div>
-                        <div className="text-right shrink-0">
-                          <span className="font-bold text-blk font-mono">₹{cancellingOrder.total}</span>
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  {/* Cancellation Reason Dropdown */}
-                  <div className="flex flex-col gap-1.5 mb-5 text-xs">
-                    <label className="text-[10px] font-bold text-mut uppercase">Reason for Cancellation</label>
-                    <select 
-                      value={cancellationReason}
-                      onChange={e => setCancellationReason(e.target.value)}
-                      className="input-field py-2"
-                    >
-                      <option value="">Select a reason for cancellation...</option>
-                      <option value="Ordered by mistake">Ordered by mistake</option>
-                      <option value="Found a better price">Found a better price</option>
-                      <option value="Delivery taking too long">Delivery taking too long</option>
-                      <option value="Changed my mind">Changed my mind</option>
-                      <option value="Incorrect product selected">Incorrect product selected</option>
-                      <option value="Payment issue">Payment issue</option>
-                      <option value="Other">Other (Please specify)</option>
-                    </select>
-
-                    {cancellationReason === 'Other' && (
-                      <textarea 
-                        placeholder="Please elaborate on your cancellation request..."
-                        value={cancellationOtherText}
-                        onChange={e => setCancellationOtherText(e.target.value)}
-                        rows={2}
-                        className="textarea-field mt-2"
-                        required
-                      />
+        {/* ── Main Details 2-Column Split Layout ── */}
+        <div className="max-w-[1360px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            
+            {/* ── LEFT COLUMN: STICKY PRODUCT GALLERY & VERTICAL THUMBNAIL RAIL (50% Width) ── */}
+            <div className="lg:col-span-6 xl:col-span-6 lg:sticky lg:top-[90px] self-start space-y-4">
+              <div className="bg-white border border-slate-200/90 rounded-2xl p-5 sm:p-6 shadow-xs">
+                {/* Gallery Header Bar */}
+                <div className="flex items-center justify-between gap-2 mb-4 select-none">
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                      Product Visualizer
+                    </span>
+                    {rawImgs.length > 1 && (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 font-mono">
+                        {Math.min(selectedImgIdx + 1, rawImgs.length)} / {rawImgs.length}
+                      </span>
                     )}
                   </div>
+                  {rawImgs.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsImgZoomed(!isImgZoomed)}
+                      className="text-xs font-semibold text-slate-600 hover:text-slate-950 flex items-center gap-1.5 cursor-pointer py-1 px-2.5 rounded-lg hover:bg-slate-100 transition-colors"
+                      title={isImgZoomed ? "Reset view" : "Zoom view"}
+                    >
+                      {isImgZoomed ? <ZoomOut size={14} /> : <ZoomIn size={14} />}
+                      <span className="text-[11px] font-bold">{isImgZoomed ? 'Reset' : 'Zoom'}</span>
+                    </button>
+                  )}
+                </div>
 
-                  {/* Warning notification message banner */}
-                  <div className="bg-red-bg border border-red/15 rounded-lg p-3 text-[11px] leading-relaxed text-rose-800 mb-6 flex gap-2">
-                    <AlertTriangle size={14} className="text-red shrink-0 mt-0.5" />
-                    <span>
-                      Once cancelled, this order cannot be restored. If you have already made a payment, any applicable refund will be processed according to the refund policy.
+                {/* Gallery Stage: Left-most Vertical Thumbnails + Right Full Hero View */}
+                <div className="flex gap-3 sm:gap-4 items-start">
+                  {/* Left-most Vertical Thumbnails Stacked One Below the Other */}
+                  {(rawImgs.length > 1 || items.length > 1) && (
+                    <div className="flex flex-col gap-2.5 overflow-y-auto max-h-[380px] sm:max-h-[440px] scrollbar-thin pr-1.5 shrink-0 select-none">
+                      {/* Product's multiple images */}
+                      {rawImgs.map((imgUrl, imgIdx) => {
+                        const isSelected = imgIdx === selectedImgIdx;
+                        return (
+                          <button
+                            key={imgIdx}
+                            type="button"
+                            onClick={() => {
+                              setSelectedImgIdx(imgIdx);
+                              setIsImgZoomed(false);
+                            }}
+                            className={`w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-50 border p-1.5 flex items-center justify-center transition-all cursor-pointer relative overflow-hidden group ${
+                              isSelected
+                                ? 'border-slate-950 ring-2 ring-slate-950/20 shadow-xs'
+                                : 'border-slate-200 hover:border-slate-400 opacity-70 hover:opacity-100'
+                            }`}
+                            aria-label={`View image ${imgIdx + 1}`}
+                          >
+                            <img
+                              src={imgUrl}
+                              alt={`Thumbnail ${imgIdx + 1}`}
+                              className="w-full h-full object-contain mix-blend-multiply transition-transform group-hover:scale-105"
+                            />
+                          </button>
+                        );
+                      })}
+
+                      {/* If multi-item order, also show thumbnails of other items */}
+                      {items.length > 1 && (
+                        <>
+                          <div className="h-px bg-slate-200 my-1 w-full" />
+                          {items.map((it: any, itIdx: number) => {
+                            if (itIdx === selectedItemIdx) return null;
+                            const itProd = it.product || it || {};
+                            const itImg = itProd.imgs?.[0] || itProd.img || it.img;
+                            return (
+                              <button
+                                key={`item-${itIdx}`}
+                                type="button"
+                                title={`Switch to ${itProd.name || `Item ${itIdx + 1}`}`}
+                                onClick={() => {
+                                  setSelectedItemIdx(itIdx);
+                                  setSelectedImgIdx(0);
+                                  setIsImgZoomed(false);
+                                }}
+                                className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-slate-50 border border-dashed border-slate-300 hover:border-slate-950 p-1.5 flex items-center justify-center transition-all cursor-pointer relative overflow-hidden group opacity-60 hover:opacity-100"
+                              >
+                                {itImg ? (
+                                  <img
+                                    src={itImg}
+                                    alt={itProd.name}
+                                    className="w-full h-full object-contain mix-blend-multiply transition-transform group-hover:scale-105"
+                                  />
+                                ) : (
+                                  <Package size={18} className="text-slate-400" />
+                                )}
+                                <span className="absolute bottom-0.5 right-0.5 bg-slate-900 text-white text-[9px] font-bold px-1 rounded">
+                                  #{itIdx + 1}
+                                </span>
+                              </button>
+                            );
+                          })}
+                        </>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Main Full View Stage */}
+                  <div className="flex-1 min-w-0">
+                    <div className="aspect-square bg-slate-50/80 border border-slate-200 rounded-2xl flex items-center justify-center p-5 relative overflow-hidden group select-none">
+                      {activeImg ? (
+                        <img
+                          src={activeImg}
+                          alt={selectedProd.name || 'Product Image'}
+                          className={`w-full h-full object-contain mix-blend-multiply transition-all duration-300 ${
+                            isImgZoomed ? 'scale-135 cursor-zoom-out' : 'scale-100 group-hover:scale-105 cursor-zoom-in'
+                          }`}
+                          onClick={() => setIsImgZoomed(!isImgZoomed)}
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-slate-400 gap-2">
+                          <Package size={44} strokeWidth={1.5} />
+                          <span className="text-xs font-medium">No Image Available</span>
+                        </div>
+                      )}
+
+                      {/* Category Badge */}
+                      {selectedProd.cat && (
+                        <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-xs border border-slate-200 px-2.5 py-1 rounded-full text-[10px] font-bold text-slate-700 shadow-2xs">
+                          {selectedProd.cat}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Selected Item Information Strip */}
+                <div className="mt-5 pt-4 border-t border-slate-100 space-y-3">
+                  <div>
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block mb-0.5 select-none">
+                      Selected Item Preview
+                    </span>
+                    <h3 className="text-sm sm:text-base font-bold text-slate-950 leading-snug">
+                      {selectedProd.name || 'Order Item'}
+                    </h3>
+                  </div>
+
+                  <div className="flex items-center justify-between bg-slate-50/90 rounded-xl p-3 border border-slate-100 select-none">
+                    <div className="text-xs text-slate-600">
+                      <span>Qty: <strong className="text-slate-950 font-bold">{selectedItem.quantity || 1}</strong></span>
+                      <span className="mx-2">•</span>
+                      <span>Unit: <strong className="text-slate-950 font-bold font-price">₹{(selectedProd.price || selectedItem.price || 0).toLocaleString('en-IN')}</strong></span>
+                    </div>
+                    <span className="text-sm font-black font-price text-slate-950">
+                      ₹{(((selectedItem.quantity || 1) * (selectedProd.price || selectedItem.price || 0))).toLocaleString('en-IN')}
                     </span>
                   </div>
 
-                  {/* Actions Footer */}
-                  <div className="flex gap-3 justify-end">
-                    <button 
-                      onClick={() => setCancellingOrder(null)} 
-                      className="btn-secondary text-xs px-4"
-                    >
-                      Keep Order
-                    </button>
-                    <button 
-                      onClick={handleConfirmCancellation}
-                      disabled={!cancellationReason}
-                      className={`text-xs px-4 py-2 bg-red text-wht font-bold rounded-lg focus:outline-none transition-all shadow-premium-sm ${
-                        !cancellationReason ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-red/90'
-                      }`}
-                    >
-                      Cancel Order
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {/* Cancel PROCESSING State */}
-              {cancellationStatus === 'processing' && (
-                <div className="flex flex-col items-center justify-center py-10 text-center">
-                  <Loader2 size={36} className="text-red animate-spin mb-4" />
-                  <h4 className="font-display font-bold text-blk mb-2">Cancelling Order...</h4>
-                  <p className="text-xs text-mut max-w-[280px]">Communicating cancellation coordinates to server ledger. Please wait.</p>
-                </div>
-              )}
-
-              {/* Cancel SUCCESS State */}
-              {cancellationStatus === 'success' && (
-                <div className="flex flex-col items-center justify-center py-6 text-center animate-scaleIn">
-                  <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-4 text-emerald-600">
-                    <CheckCircle size={28} className="animate-scaleIn" />
-                  </div>
-                  <h4 className="font-display text-base font-bold text-blk mb-1">✓ Order Cancelled Successfully</h4>
-                  <p className="text-xs text-mut mb-6">Your order has been cancelled.</p>
-                  
-                  {cancellingOrder.paymentStatus === 'Paid' && (
-                    <p className="text-[11px] text-primary bg-primary-soft/30 border border-primary/10 rounded-lg p-2.5 max-w-[340px] leading-relaxed mb-6">
-                      Your refund will be processed according to the original payment method. Refund times range between 3-5 banking business days.
-                    </p>
-                  )}
-
-                  <button 
-                    onClick={() => {
-                      setCancellingOrder(null);
-                      setCancellationStatus('idle');
-                      setCancellationReason('');
-                      setCancellationOtherText('');
-                    }}
-                    className="btn-primary text-xs px-6 py-2.5 shadow-premium-sm"
-                  >
-                    Okay, Done
-                  </button>
-                </div>
-              )}
-
-              {/* Cancel ERROR State */}
-              {cancellationStatus === 'error' && (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <AlertTriangle size={32} className="text-red mb-3" />
-                  <h4 className="font-display font-bold text-blk mb-1">Cancellation Failed</h4>
-                  <p className="text-xs text-mut mb-6">{cancellationErrorMessage}</p>
-                  
-                  <div className="flex gap-3">
-                    <button 
+                  {/* Actions */}
+                  <div className="flex items-center gap-2 pt-1 select-none">
+                    {selectedProd.id && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedProductId(selectedProd.id);
+                          setCurPage('product-detail');
+                        }}
+                        className="btn-secondary text-xs font-bold min-h-[42px] py-2 px-3 flex-1 flex items-center justify-center gap-1.5 shadow-2xs hover:bg-slate-100 cursor-pointer"
+                      >
+                        <span>Product Page</span>
+                      </button>
+                    )}
+                    <button
+                      type="button"
                       onClick={() => {
-                        setCancellingOrder(null);
-                        setCancellationStatus('idle');
+                        addToCart(selectedProd, 1);
+                        showToast(`${selectedProd.name || 'Item'} added to cart!`);
                       }}
-                      className="btn-secondary text-xs px-4"
+                      className="btn-primary text-xs font-bold min-h-[42px] py-2 px-3 flex-1 flex items-center justify-center gap-1.5 shadow-xs cursor-pointer"
                     >
-                      Close
-                    </button>
-                    <button 
-                      onClick={handleConfirmCancellation}
-                      className="btn-primary text-xs px-4 bg-red hover:bg-red/90"
-                    >
-                      Try Again
+                      <RotateCcw size={13} />
+                      <span>Buy Again</span>
                     </button>
                   </div>
                 </div>
-              )}
-
+              </div>
             </div>
-          </div>
-        )}
 
-        <div className="max-w-[1100px] mx-auto px-4 md:px-6 py-6 pb-24 animate-fadeIn">
-          {/* Breadcrumb Navigation */}
-          <div className="flex items-center gap-1 text-[11px] text-mut mb-6 select-none font-semibold">
-            <span className="hover:text-primary cursor-pointer" onClick={() => setCurPage('home')}>Home</span>
-            <span>&gt;</span>
-            <span className="hover:text-primary cursor-pointer" onClick={() => setActiveOrder(null)}>My Account</span>
-            <span>&gt;</span>
-            <span className="hover:text-primary cursor-pointer" onClick={() => setActiveOrder(null)}>My Orders</span>
-            <span>&gt;</span>
-            <span className="text-blk font-mono">{activeOrder.id}</span>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-            {/* Left Column (Main items and timelines) */}
-            <div className="lg:col-span-2 space-y-4">
+            {/* ── RIGHT COLUMN: COMPLETE ORDER DETAILS (50% Width for Visual Balance) ── */}
+            <div className="lg:col-span-6 xl:col-span-6 space-y-6 flex flex-col">
               
-              {/* Product Cards + Timelines */}
-              {items.map((item: any, idx: number) => {
-                // Formulate policy dates based on order date
-                const orderDate = new Date(activeOrder.date);
-                
-                const deliveryDate = new Date(orderDate);
-                deliveryDate.setDate(orderDate.getDate() + 4);
-                
-                const policyEndedDate = new Date(deliveryDate);
-                policyEndedDate.setDate(deliveryDate.getDate() + 7);
-                const formattedPolicyEndedDate = policyEndedDate.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+              {/* 1. Dispatch & Delivery Stepper Card */}
+              {isCancelled ? (
+                <div className="bg-rose-50 border border-rose-300 rounded-2xl p-6 sm:p-7 shadow-xs select-none">
+                  <div className="flex items-center gap-4">
+                    <div className="w-12 h-12 rounded-full bg-rose-100 flex items-center justify-center text-rose-700 shrink-0">
+                      <X size={24} strokeWidth={2.5} />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-bold text-rose-950">Order Has Been Cancelled</h3>
+                      <p className="text-xs text-rose-800 mt-1 leading-relaxed">
+                        This order was cancelled. No packaging, dispatch, or delivery steps will be processed. Any paid balance will be refunded to your source account.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-xs select-none">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-5 border-b border-slate-100 mb-6">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-950">
+                        {isReturnState ? 'Return & Refund Status' : activeOrder.status === 'Delivered' ? 'Delivered' : 'Dispatch & Delivery Progress'}
+                      </h3>
+                      <p className="text-xs text-slate-600 mt-1">
+                        Carrier: <span className="font-bold text-slate-900">{activeOrder.courierCompany || 'Delhivery Express'}</span> • Tracking AWB: <span className="font-mono font-bold text-slate-950">{activeOrder.trackingId || 'DEL-92841029'}</span>
+                      </p>
+                    </div>
+                    {activeOrder.status === 'Delivered' && (
+                      <span className="text-xs font-bold text-emerald-800 bg-emerald-50 border border-emerald-300 px-3.5 py-1 rounded-full self-start sm:self-auto">
+                        Package Delivered
+                      </span>
+                    )}
+                  </div>
 
-                return (
-                  <div key={item.product?.id || idx} className="card p-6 bg-wht border border-bdrl rounded-xl flex flex-col gap-5">
-                    
-                    {/* Header Item Row */}
-                    <div className="flex justify-between items-start gap-4">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-[10px] text-mut font-semibold block mb-0.5 select-none font-mono">
-                          Seller: Clean Everyday India
-                        </span>
-                        <h4 className="text-sm font-bold text-blk leading-normal hover:text-primary cursor-pointer transition-colors select-none">
-                          {item.product?.name || 'Clean Everyday Botanical Formulation'}
-                        </h4>
-                        <div className="flex items-center gap-3 mt-1.5 select-none">
-                          <span className="text-sm font-extrabold text-blk font-mono">₹{item.product?.price || 0}</span>
-                          <span className="text-[10px] font-bold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">1 offer</span>
-                        </div>
-                      </div>
-                      
-                      {/* Product Image on Right */}
-                      <div className="w-16 h-20 rounded-lg border border-bdrl bg-sur/50 p-1 shrink-0 overflow-hidden flex items-center justify-center">
-                        {item.product?.imgs?.length > 0 ? (
-                          <img src={item.product.imgs[0]} alt="" className="w-full h-full object-contain" />
-                        ) : (
-                          <Package size={20} className="text-primary/20" />
-                        )}
-                      </div>
+                  {/* Visual Horizontal Stepper */}
+                  <div className="relative select-none pt-2 pb-1">
+                    {/* Background & Progress Line connecting Circle Centers (10% to 90%) */}
+                    <div className="absolute top-[28px] left-[10%] right-[10%] -translate-y-1/2 h-[3px] bg-slate-200 z-0 rounded-full pointer-events-none">
+                      <div
+                        className="h-full bg-slate-950 transition-all duration-500 rounded-full"
+                        style={{ width: `${(Math.min(currentStepIdx, 4) / 4) * 100}%` }}
+                      />
                     </div>
 
-                    <div className="border-t border-bdrl my-1" />
-
-                    {/* Timeline progress section */}
-                    <div className="flex flex-col select-none gap-0">
-                      {getTimelineEvents(activeOrder).slice(0, 3).map((ev: any, evIdx: number, evArr: any[]) => {
-                        const isLatest = evIdx === 0;
-                        const isLastItem = evIdx === evArr.length - 1;
-                        const isCancelEvent = ev.status.toLowerCase().includes('cancel');
-
+                    <div className="grid grid-cols-5 relative z-10">
+                      {stepperMilestones.map((step, sIdx) => {
+                        const isDone = sIdx <= currentStepIdx;
+                        const isCurrent = sIdx === currentStepIdx;
                         return (
-                          <div key={evIdx} className="flex gap-4.5 text-xs">
-                            {/* Left column: indicator circle & connector line */}
-                            <div className="flex flex-col items-center shrink-0 w-4 relative">
-                              <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                                isLatest 
-                                  ? (isCancelEvent ? 'bg-red text-wht ring-4 ring-red/10' : 'bg-emerald-600 text-wht ring-4 ring-emerald-50')
-                                  : (isCancelEvent ? 'bg-red text-wht' : 'bg-emerald-500 text-wht')
-                              }`}>
-                                {isCancelEvent ? <X size={8} /> : <Check size={8} />}
-                              </div>
-                              {!isLastItem && <div className="w-[1.5px] flex-grow bg-bdr my-1" />}
+                          <div key={step.key} className="flex flex-col items-center text-center">
+                            <div
+                              className={`w-10 h-10 rounded-full flex items-center justify-center text-xs font-bold transition-all shrink-0 ${
+                                isCurrent
+                                  ? 'bg-slate-950 text-white ring-4 ring-slate-200 scale-105 shadow-xs font-mono'
+                                  : isDone
+                                  ? 'bg-slate-950 text-white shadow-xs'
+                                  : 'bg-white border-2 border-slate-300 text-slate-500 shadow-xs font-mono'
+                              }`}
+                            >
+                              {isDone ? (
+                                <Check size={16} strokeWidth={2.5} className="shrink-0 text-white" />
+                              ) : (
+                                <span>{sIdx + 1}</span>
+                              )}
                             </div>
-
-                            {/* Right column: text updates */}
-                            <div className="flex-1 pb-5">
-                              <p className={`font-bold leading-normal ${isLatest ? 'text-blk' : 'text-mut'}`}>
-                                {ev.status}
-                              </p>
-                              <p className="text-[10px] text-mut mt-0.5">{ev.date}</p>
-                              {ev.notes && <p className="text-[10px] text-mut/70 mt-1 italic">{ev.notes}</p>}
-                            </div>
+                            <span className={`text-[10px] sm:text-xs mt-2.5 leading-tight break-words px-1 max-w-[90px] ${isCurrent ? 'font-bold text-slate-950' : isDone ? 'text-slate-800 font-semibold' : 'text-slate-500 font-medium'}`}>
+                              {step.label}
+                            </span>
                           </div>
                         );
                       })}
                     </div>
+                  </div>
 
-                    {/* Timeline Updates Actions */}
-                    <div className="flex items-center justify-between text-[11px] font-bold text-primary mt-2 select-none">
-                      <button 
-                        onClick={() => setShowTimelineModal(true)}
-                        className="hover:underline flex items-center gap-0.5 cursor-pointer hover:text-primary transition-colors"
-                      >
-                        See All Updates &gt;
-                      </button>
-                      
-                      {activeOrder.status === 'Delivered' && (
-                        <span className="text-mut font-semibold">
-                          Return policy ended on {formattedPolicyEndedDate}
+                  {/* Return Policy Notice if Delivered */}
+                  {activeOrder.status === 'Delivered' && (
+                    <div className="mt-6 pt-5 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2 text-slate-700 font-medium">
+                        <ShieldCheck size={16} className="text-emerald-700 shrink-0" />
+                        <span>
+                          {getReturnPolicyStatus(activeOrder)?.text || '7-day hassle-free return window applicable'}
                         </span>
+                      </div>
+                      {isReturnEligible(activeOrder) && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenReturnModal(activeOrder)}
+                          className="text-xs font-bold text-amber-900 hover:text-amber-950 underline cursor-pointer min-h-[44px] flex items-center"
+                        >
+                          Initiate Return or Replacement
+                        </button>
                       )}
                     </div>
-
-                    {/* Chat with support bar */}
-                    <div className="border-t border-bdrl pt-4 flex justify-center">
-                      <button
-                        onClick={() => showToast('Opening customer support live chat...')}
-                        className="flex items-center justify-center gap-2 py-2 px-6 rounded-lg border border-bdr hover:bg-sur/40 text-xs font-bold text-mid cursor-pointer transition-all w-full"
-                      >
-                        <MessageSquare className="text-mut shrink-0" size={14} />
-                        <span>Chat with us</span>
-                      </button>
-                    </div>
-
-                  </div>
-                );
-              })}
-
-              {/* Rate Experience card */}
-              <div className="card p-5 bg-wht border border-bdrl rounded-xl select-none">
-                <h4 className="text-xs font-bold text-mut uppercase tracking-wider mb-4">Rate your experience</h4>
-                <div className="flex items-center gap-6">
-                  <div className="flex items-center gap-1.5">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        onClick={() => showToast(`Thanks for giving ${star} stars!`)}
-                        className="w-8 h-8 rounded-lg hover:bg-sur flex items-center justify-center text-mut hover:text-primary transition-all cursor-pointer border border-bdr text-base"
-                      >
-                        ★
-                      </button>
-                    ))}
-                  </div>
-                  <span className="text-xs font-bold text-mid select-none">Rate the products package</span>
+                  )}
                 </div>
-              </div>
+              )}
 
-              {/* Back CTA actions row */}
-              <div className="flex items-center justify-between pt-4 select-none">
-                <button
-                  onClick={() => setActiveOrder(null)}
-                  className="btn-secondary text-xs flex items-center gap-1 hover:text-primary transition-all cursor-pointer"
-                >
-                  <ArrowLeft size={12} /> Back to Dashboard
-                </button>
-              </div>
-
-            </div>
-
-            {/* Right Column (Sidebar metrics, address, invoice) */}
-            <div className="lg:col-span-1 space-y-4">
-              
-              {/* Order Actions Menu Card */}
-              <div className="card p-5 bg-wht border border-bdrl rounded-xl flex flex-col gap-3 select-none">
-                <h4 className="text-xs font-bold text-mut uppercase tracking-wider mb-2 font-mono">Order Actions</h4>
-                
-                {/* Reorder Products */}
-                <button
-                  onClick={() => handleReorder(activeOrder)}
-                  className="btn-secondary text-xs flex items-center justify-center gap-1.5 w-full py-2.5 font-bold cursor-pointer hover:text-primary hover:border-primary transition-all bg-wht"
-                >
-                  <RotateCcw size={13} /> Reorder Products
-                </button>
-
-                {/* Cancel Order */}
-                {!isCancelled && ['Pending', 'Confirmed', 'Packed', 'Ready for Dispatch'].includes(activeOrder.status) && (
-                  <button
-                    onClick={() => handleOpenCancelModal(activeOrder)}
-                    className="btn-secondary text-xs border-red/20 text-red hover:bg-red-bg flex items-center justify-center gap-1.5 w-full py-2.5 font-bold cursor-pointer transition-all bg-wht"
-                  >
-                    <XCircle size={13} /> Cancel Order
-                  </button>
-                )}
-
-                {/* Return Product */}
-                {!isCancelled && activeOrder.status === 'Delivered' && (
-                  <button
-                    onClick={() => handleReturnOrder(activeOrder.id)}
-                    className="btn-secondary text-xs border-red/20 text-red hover:bg-red-bg flex items-center justify-center gap-1.5 w-full py-2.5 font-bold cursor-pointer transition-all bg-wht"
-                  >
-                    <Undo size={13} /> Return Product
-                  </button>
-                )}
-
-                {/* Support Query */}
-                <button
-                  onClick={() => showToast(`Contacting support for Order ${activeOrder.id}...`)}
-                  className="btn-secondary text-xs flex items-center justify-center gap-1.5 w-full py-2.5 font-bold cursor-pointer hover:text-primary hover:border-primary transition-all bg-wht"
-                >
-                  <MessageSquare size={13} /> Support Query
-                </button>
-              </div>
-              
-              {/* Delivery Address Card */}
-              <div className="card p-5 bg-wht border border-bdrl rounded-xl flex flex-col gap-4">
-                <div className="flex items-start gap-3 text-xs text-blk">
-                  <Home className="text-mut shrink-0 mt-0.5" size={16} />
+              {/* 2. Items in Order Breakdown Card */}
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                <div className="p-5 border-b border-slate-100 flex items-center justify-between select-none">
                   <div>
-                    <h5 className="font-bold">Home</h5>
-                    <p className="text-[11px] text-mut leading-relaxed mt-1">
-                      {(() => {
-                        const addr = activeOrder.address;
-                        const parts = [];
-                        if (addr?.addressLine1) parts.push(addr.addressLine1);
-                        if (addr?.addressLine2) parts.push(addr.addressLine2);
-                        if (addr?.city) parts.push(addr.city);
-                        if (addr?.state) parts.push(addr.state);
-                        let formattedStr = parts.join(', ');
-                        if (addr?.pincode) {
-                          formattedStr += formattedStr ? ` - ${addr.pincode}` : addr.pincode;
-                        }
-                        return formattedStr || 'Address details not specified';
-                      })()}
-                    </p>
+                    <h3 className="text-sm font-bold text-slate-950">
+                      Items in this Order ({items.length})
+                    </h3>
+                    <p className="text-[11px] text-slate-500 mt-0.5">Click any item to inspect its photos and gallery on the left</p>
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => handleReorder(activeOrder)}
+                    className="text-xs font-bold text-slate-800 hover:text-slate-950 flex items-center gap-1.5 cursor-pointer min-h-[38px] px-2.5 rounded-lg hover:bg-slate-100 transition-colors"
+                  >
+                    <RotateCcw size={14} /> <span>Buy all again</span>
+                  </button>
                 </div>
 
-                <div className="border-t border-bdrl my-0.5" />
-
-                <div className="flex items-start gap-3 text-xs text-blk">
-                  <UserIcon className="text-mut shrink-0 mt-0.5" size={16} />
-                  <div>
-                    <h5 className="font-bold font-mono">
-                      {activeOrder.address?.name || curUser?.name || 'Customer'}
-                    </h5>
-                    <p className="text-[11px] text-mut font-mono mt-0.5">
-                      {activeOrder.address?.phone || curUser?.phoneNumber || curUser?.phone || ''}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Price Details summary card */}
-              <div className="card p-5 bg-wht border border-bdrl rounded-xl flex flex-col">
-                <h4 className="text-xs font-bold text-mut uppercase tracking-wider mb-4 font-mono">Price Details</h4>
-                
-                {/* Math Calculations variables mapping */}
-                {(() => {
-                  const totalFees = activeOrder.total >= 499 ? 0 : 50;
-                  const specialPrice = activeOrder.total - totalFees;
-                  const listingPrice = Math.round(specialPrice * 1.25);
-                  const discountFees = listingPrice - specialPrice;
-                  
-                  // Fees and specific discounts
-                  const couponDiscount = activeOrder.discount || 0;
-                  const finalOtherDiscount = discountFees + couponDiscount;
-                  const grandTotal = activeOrder.total;
-
-                  return (
-                    <div className="text-xs space-y-3">
-                      <div className="flex justify-between items-center">
-                        <span className="text-mut">Listing price</span>
-                        <span className="font-semibold text-blk font-mono">₹{listingPrice}</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-mut flex items-center gap-1">
-                          Special price <Info size={11} className="text-mut/60 cursor-pointer" />
-                        </span>
-                        <span className="font-semibold text-blk font-mono">₹{specialPrice}</span>
-                      </div>
-
-                      <div className="flex justify-between items-center">
-                        <span className="text-mut flex items-center gap-1">Total fees</span>
-                        <span className="font-semibold text-blk font-mono">₹{totalFees}</span>
-                      </div>
-
-                      {finalOtherDiscount > 0 && (
-                        <div className="flex justify-between items-center">
-                          <span className="text-mut">Other discount</span>
-                          <span className="font-bold text-emerald-600 font-mono">-₹{finalOtherDiscount}</span>
-                        </div>
-                      )}
-
-                      <div className="border-t border-dashed border-bdrl my-4" />
-
-                      <div className="flex justify-between items-center text-sm font-extrabold text-blk">
-                        <span>Total amount</span>
-                        <span className="font-mono">₹{grandTotal}</span>
-                      </div>
-
-                      {/* Payment details */}
-                      <div className="bg-sur/40 rounded-xl p-3 border border-bdrl flex justify-between items-center text-[10px] mt-4 select-none">
-                        <span className="font-semibold text-mut">Paid By</span>
-                        <span className="font-bold text-blk flex items-center gap-1">
-                          <span className="px-1.5 py-0.5 bg-wht border border-bdr rounded font-mono text-[9px] text-mid uppercase font-extrabold tracking-wider shadow-premium-sm">
-                            {activeOrder.paymentMethod || 'UPI'}
-                          </span>
-                          <span>{activeOrder.paymentMethod || 'UPI'}</span>
-                        </span>
-                      </div>
-
-                      {/* Download Invoice Button */}
-                      <button
-                        onClick={() => setInvoiceOrder(activeOrder)}
-                        className="flex items-center justify-center gap-2 py-2.5 px-4 rounded-xl border border-bdr hover:bg-sur/40 text-xs font-bold text-mid cursor-pointer transition-all w-full mt-4 bg-wht"
-                      >
-                        <Printer className="text-mut shrink-0" size={13} />
-                        <span>Download Invoice</span>
-                      </button>
-
-                    </div>
-                  );
-                })()}
-
-              </div>
-
-              {/* Offers Earned block */}
-              <div className="card p-5 bg-wht border border-bdrl rounded-xl">
-                <div className="flex items-center justify-between text-xs text-blk font-bold select-none cursor-pointer">
-                  <span>Offers earned</span>
-                  <span className="text-mut text-[10px] font-normal">1 Offer &gt;</span>
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </div>
-        
-        {/* Shipment Tracker Modal */}
-        {showTimelineModal && activeOrder && ReactDOM.createPortal(
-          <div className="fixed inset-0 bg-blk/60 backdrop-blur-sm flex items-center justify-center p-4 z-[9999] animate-fadeIn">
-            <div className="bg-wht w-full max-w-[460px] rounded-2xl shadow-premium border border-bdr p-6 relative animate-scaleIn">
-              <button
-                onClick={() => setShowTimelineModal(false)}
-                className="absolute right-4 top-4 w-7 h-7 rounded-full bg-sur hover:bg-bdr/50 flex items-center justify-center text-mut hover:text-blk transition-all cursor-pointer border-none"
-              >
-                <X size={14} />
-              </button>
-
-              <div className="flex items-center gap-2.5 mb-6 pb-4 border-b border-bdrl">
-                <Truck className="text-primary" size={20} />
-                <div>
-                  <h3 className="font-display text-sm font-bold text-blk">Shipment Tracking Details</h3>
-                  <p className="text-[10px] text-mut mt-0.5">Order ID: {(activeOrder as any).id} • Registered to {(activeOrder as any).address?.name}</p>
-                </div>
-              </div>
-
-              {/* Modal Timeline Content */}
-              <div className="max-h-[380px] overflow-y-auto pr-2 custom-scrollbar">
-                <div className="flex flex-col">
-                  {getTimelineEvents(activeOrder as any).map((ev: any, evIdx: number, evArr: any[]) => {
-                    const isLatest = evIdx === 0;
-                    const isLastItem = evIdx === evArr.length - 1;
-                    const isCancelEvent = ev.status.toLowerCase().includes('cancel');
-
+                <div className="divide-y divide-slate-100">
+                  {items.map((it: any, idx: number) => {
+                    const prod = it.product || it || {};
+                    const unitPrice = prod.price || it.price || 0;
+                    const isFocus = idx === selectedItemIdx;
                     return (
-                      <div key={evIdx} className="flex gap-4 text-xs">
-                        {/* Left column: indicator circle & connector line */}
-                        <div className="flex flex-col items-center shrink-0 w-5 relative">
-                          <div className={`w-3.5 h-3.5 rounded-full flex items-center justify-center shrink-0 z-10 ${
-                            isLatest 
-                              ? (isCancelEvent ? 'bg-red text-wht ring-4 ring-red/10' : 'bg-emerald-600 text-wht ring-4 ring-emerald-50')
-                              : (isCancelEvent ? 'bg-red text-wht' : 'bg-emerald-500 text-wht')
-                          }`}>
-                            {isCancelEvent ? <X size={8} /> : <Check size={8} />}
+                      <div
+                        key={idx}
+                        onClick={() => {
+                          setSelectedItemIdx(idx);
+                          setSelectedImgIdx(0);
+                          setIsImgZoomed(false);
+                        }}
+                        className={`p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-colors cursor-pointer ${
+                          isFocus ? 'bg-slate-50/80 ring-1 ring-inset ring-slate-950/10' : 'hover:bg-slate-50/50'
+                        }`}
+                      >
+                        <div className="flex items-start sm:items-center gap-4 min-w-0 flex-1">
+                          <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-xl bg-slate-50 border border-slate-200 p-2 flex items-center justify-center shrink-0">
+                            {prod.imgs && prod.imgs.length > 0 ? (
+                              <img src={prod.imgs[0]} alt={prod.name} className="w-full h-full object-contain mix-blend-multiply" />
+                            ) : prod.img ? (
+                              <img src={prod.img} alt={prod.name} className="w-full h-full object-contain mix-blend-multiply" />
+                            ) : (
+                              <Package size={26} className="text-slate-400" />
+                            )}
                           </div>
-                          {!isLastItem && <div className="w-[1.5px] flex-grow bg-bdr my-1" />}
+                          <div className="space-y-1 min-w-0 flex-1">
+                            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider block">
+                              {prod.cat || 'Essential'}
+                            </span>
+                            <h4
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (prod.id) {
+                                  setSelectedProductId(prod.id);
+                                  setCurPage('product-detail');
+                                }
+                              }}
+                              className="text-sm font-bold text-slate-950 hover:underline cursor-pointer leading-snug line-clamp-2"
+                            >
+                              {prod.name || 'Order Item'}
+                            </h4>
+                            <div className="flex items-center gap-2.5 text-xs text-slate-600 flex-wrap">
+                              <span>Qty: <strong className="text-slate-950 font-bold">{it.quantity || 1}</strong></span>
+                              <span>•</span>
+                              <span>Unit Price: <strong className="text-slate-950 font-bold font-price">₹{unitPrice.toLocaleString('en-IN')}</strong></span>
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Right column: text updates */}
-                        <div className="flex-1 pb-5">
-                          <p className={`font-bold leading-normal ${isLatest ? 'text-blk' : 'text-mut'}`}>
-                            {ev.status}
-                          </p>
-                          <p className="text-[10px] text-mut mt-0.5">{ev.date}</p>
-                          {ev.notes && (
-                            <div className="bg-sur/40 border border-bdrl rounded-lg p-2.5 mt-1.5 text-[10px] text-mid">
-                              {ev.notes}
-                            </div>
-                          )}
+                        <div className="flex sm:flex-col sm:items-end justify-between items-center gap-2.5 shrink-0 select-none pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100" onClick={(e) => e.stopPropagation()}>
+                          <span className="text-base font-black text-slate-950 font-price">
+                            ₹{((it.quantity || 1) * unitPrice).toLocaleString('en-IN')}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                addToCart(prod, 1);
+                                showToast(`${prod.name || 'Item'} added to cart!`);
+                              }}
+                              className="btn-secondary text-xs font-bold min-h-[38px] px-3.5 cursor-pointer"
+                            >
+                              Buy again
+                            </button>
+                            {activeOrder.status === 'Delivered' && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (prod.id) {
+                                    setSelectedProductId(prod.id);
+                                    setCurPage('product-detail');
+                                  }
+                                }}
+                                className="btn-secondary text-xs font-bold min-h-[38px] px-3.5 cursor-pointer"
+                              >
+                                Review
+                              </button>
+                            )}
+                          </div>
                         </div>
                       </div>
                     );
@@ -1133,479 +1374,512 @@ const Orders: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-4 border-t border-bdrl mt-4 flex justify-end">
-                <button
-                  onClick={() => setShowTimelineModal(false)}
-                  className="btn-primary text-xs px-5 py-2 shadow-premium-sm"
-                >
-                  Close Tracking
-                </button>
-              </div>
-
-            </div>
-          </div>
-        , document.body)}
-      </>
-    );
-  }
-
-  return (
-    <>
-      {/* Confetti confirmation overlay */}
-      {successOverlay && (
-        <OrderSuccessOverlay
-          method={successOverlay.method}
-          total={successOverlay.total}
-          onDismiss={() => setSuccessOverlay(null)}
-        />
-      )}
-
-      {/* ─── Cancel Order confirmation modal experience ─── */}
-      {cancellingOrder && (
-        <div 
-          className="fixed inset-0 z-[1000] flex items-center justify-center p-4 bg-blk/60 backdrop-blur-xs select-none"
-          onClick={() => {
-            // Prevent close on outside click when processing cancellation
-            if (cancellationStatus !== 'processing') {
-              setCancellingOrder(null);
-            }
-          }}
-        >
-          <div 
-            className="bg-wht rounded-2xl shadow-premium-xl max-w-[500px] w-full border border-bdr p-6 animate-scaleIn relative overflow-hidden"
-            onClick={e => e.stopPropagation()}
-          >
-            <div className="absolute inset-x-0 top-0 h-1 bg-red/30" />
-
-            {/* Cancel IDLE State */}
-            {cancellationStatus === 'idle' && (
-              <div className="flex flex-col">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2 text-red">
-                    <XCircle size={18} />
-                    <h3 className="font-display text-sm font-bold text-blk">Cancel Order Confirmation</h3>
-                  </div>
-                  <button 
-                    onClick={() => setCancellingOrder(null)} 
-                    className="w-7 h-7 rounded-full hover:bg-sur flex items-center justify-center text-mut hover:text-blk"
-                  >
-                    <X size={14} />
-                  </button>
-                </div>
-
-                <p className="text-xs text-mid mb-5 leading-normal">
-                  Are you sure you want to request cancellation for this order? Below is a summary of the formulation package items:
-                </p>
-
-                {/* Compact Product Preview */}
-                {(() => {
-                  const items = Array.isArray(cancellingOrder.items)
-                    ? cancellingOrder.items
-                    : typeof cancellingOrder.items === 'string'
-                    ? (() => { try { return JSON.parse(cancellingOrder.items); } catch { return []; } })()
-                    : [];
-                  const pItem = items[0];
-                  return (
-                    <div className="flex items-center gap-4 bg-sur/50 border border-bdrl rounded-xl p-3.5 mb-5 text-xs text-mid">
-                      <div className="w-12 h-12 rounded-lg border border-bdrl bg-wht overflow-hidden shrink-0 flex items-center justify-center">
-                        {pItem?.product?.imgs?.length > 0 ? (
-                          <img src={pItem.product.imgs[0]} alt="" className="w-full h-full object-cover" />
-                        ) : (
-                          <Package size={16} className="text-primary/20" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-bold text-blk truncate">{pItem?.product?.name || 'Organic formulation'}</h4>
-                        <p className="text-[10px] text-mut mt-0.5">Order Reference: {cancellingOrder.id}</p>
-                        <p className="text-[10px] text-mut">Quantity: {pItem?.quantity || 1} item(s)</p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <span className="font-bold text-blk font-mono">₹{cancellingOrder.total}</span>
-                      </div>
+              {/* 3. Delivery Address & Payment Method in a 2-Column Subgrid with Equal Height */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+                {/* Shipping Address */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between h-full space-y-4 select-none">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600 pb-3 border-b border-slate-100 mb-3">
+                      <MapPin size={15} className="text-slate-900" />
+                      <span>Delivery Address</span>
                     </div>
-                  );
-                })()}
-
-                {/* Cancellation Reason Dropdown */}
-                <div className="flex flex-col gap-1.5 mb-5 text-xs">
-                  <label className="text-[10px] font-bold text-mut uppercase">Reason for Cancellation</label>
-                  <select 
-                    value={cancellationReason}
-                    onChange={e => setCancellationReason(e.target.value)}
-                    className="input-field py-2"
-                  >
-                    <option value="">Select a reason for cancellation...</option>
-                    <option value="Ordered by mistake">Ordered by mistake</option>
-                    <option value="Found a better price">Found a better price</option>
-                    <option value="Delivery taking too long">Delivery taking too long</option>
-                    <option value="Changed my mind">Changed my mind</option>
-                    <option value="Incorrect product selected">Incorrect product selected</option>
-                    <option value="Payment issue">Payment issue</option>
-                    <option value="Other">Other (Please specify)</option>
-                  </select>
-
-                  {cancellationReason === 'Other' && (
-                    <textarea 
-                      placeholder="Please elaborate on your cancellation request..."
-                      value={cancellationOtherText}
-                      onChange={e => setCancellationOtherText(e.target.value)}
-                      rows={2}
-                      className="textarea-field mt-2"
-                      required
-                    />
-                  )}
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-950">
+                        {activeOrder.address?.name || curUser?.name || 'Valued Customer'}
+                      </h4>
+                      <p className="text-xs text-slate-700 leading-relaxed mt-1.5">
+                        {(() => {
+                          const addr = activeOrder.address;
+                          const parts = [];
+                          if (addr?.addressLine1) parts.push(addr.addressLine1);
+                          if (addr?.addressLine2) parts.push(addr.addressLine2);
+                          if (addr?.city) parts.push(addr.city);
+                          if (addr?.state) parts.push(addr.state);
+                          let str = parts.join(', ');
+                          if (addr?.pincode) str += str ? ` - ${addr.pincode}` : addr.pincode;
+                          return str || 'Address on file';
+                        })()}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-slate-100">
+                    <p className="text-xs text-slate-600 font-mono font-semibold">
+                      Phone: {activeOrder.address?.phone || curUser?.phoneNumber || curUser?.phone || 'Not provided'}
+                    </p>
+                  </div>
                 </div>
 
-                {/* Warning notification message banner */}
-                <div className="bg-red-bg border border-red/15 rounded-lg p-3 text-[11px] leading-relaxed text-rose-800 mb-6 flex gap-2">
-                  <AlertTriangle size={14} className="text-red shrink-0 mt-0.5" />
-                  <span>
-                    Once cancelled, this order cannot be restored. If you have already made a payment, any applicable refund will be processed according to the refund policy.
-                  </span>
-                </div>
-
-                {/* Actions Footer */}
-                <div className="flex gap-3 justify-end">
-                  <button 
-                    onClick={() => setCancellingOrder(null)} 
-                    className="btn-secondary text-xs px-4"
-                  >
-                    Keep Order
-                  </button>
-                  <button 
-                    onClick={handleConfirmCancellation}
-                    disabled={!cancellationReason}
-                    className={`text-xs px-4 py-2 bg-red text-wht font-bold rounded-lg focus:outline-none transition-all shadow-premium-sm ${
-                      !cancellationReason ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:bg-red/90'
-                    }`}
-                  >
-                    Cancel Order
-                  </button>
+                {/* Payment Details */}
+                <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs flex flex-col justify-between h-full space-y-4 select-none">
+                  <div>
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-600 pb-3 border-b border-slate-100 mb-3">
+                      <CreditCard size={15} className="text-slate-900" />
+                      <span>Payment Method</span>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-sm font-bold text-slate-950">{activeOrder.paymentMethod || 'Online Payment'}</span>
+                        <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold uppercase bg-emerald-50 text-emerald-800 border border-emerald-300">
+                          Paid
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 leading-relaxed">
+                        Transaction processed via 256-bit secure gateway.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="pt-3 border-t border-slate-100">
+                    <p className="text-xs text-slate-600 font-medium">
+                      Billing Status: <span className="font-bold text-slate-950">Verified &amp; Cleared</span>
+                    </p>
+                  </div>
                 </div>
               </div>
-            )}
 
-            {/* Cancel PROCESSING State */}
-            {cancellationStatus === 'processing' && (
-              <div className="flex flex-col items-center justify-center py-10 text-center">
-                <Loader2 size={36} className="text-red animate-spin mb-4" />
-                <h4 className="font-display font-bold text-blk mb-2">Cancelling Order...</h4>
-                <p className="text-xs text-mut max-w-[280px]">Communicating cancellation coordinates to server ledger. Please wait.</p>
-              </div>
-            )}
-
-            {/* Cancel SUCCESS State */}
-            {cancellationStatus === 'success' && (
-              <div className="flex flex-col items-center justify-center py-6 text-center animate-scaleIn">
-                <div className="w-14 h-14 rounded-full bg-emerald-50 border border-emerald-100 flex items-center justify-center mb-4 text-emerald-600">
-                  <CheckCircle size={28} className="animate-scaleIn" />
-                </div>
-                <h4 className="font-display text-base font-bold text-blk mb-1">✓ Order Cancelled Successfully</h4>
-                <p className="text-xs text-mut mb-6">Your order has been cancelled.</p>
-                
-                {cancellingOrder.paymentStatus === 'Paid' && (
-                  <p className="text-[11px] text-primary bg-primary-soft/30 border border-primary/10 rounded-lg p-2.5 max-w-[340px] leading-relaxed mb-6">
-                    Your refund will be processed according to the original payment method. Refund times range between 3-5 banking business days.
-                  </p>
-                )}
-
-                <button 
-                  onClick={() => setCancellingOrder(null)}
-                  className="btn-primary text-xs px-6 py-2.5 shadow-premium-sm"
-                >
-                  Okay, Done
-                </button>
-              </div>
-            )}
-
-            {/* Cancel ERROR State */}
-            {cancellationStatus === 'error' && (
-              <div className="flex flex-col items-center justify-center py-6 text-center">
-                <AlertTriangle size={32} className="text-red mb-3" />
-                <h4 className="font-display font-bold text-blk mb-1">Cancellation Failed</h4>
-                <p className="text-xs text-mut mb-6">{cancellationErrorMessage}</p>
-                
-                <div className="flex gap-3">
-                  <button 
-                    onClick={() => setCancellingOrder(null)} 
-                    className="btn-secondary text-xs px-4"
-                  >
-                    Close
-                  </button>
-                  <button 
-                    onClick={handleConfirmCancellation}
-                    className="btn-primary text-xs px-4 bg-red hover:bg-red/90"
-                  >
-                    Try Again
-                  </button>
+              {/* 4. Price & Order Summary */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-3 select-none">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 pb-2 border-b border-slate-100">
+                  Order Summary
+                </h4>
+                <div className="space-y-2.5 text-xs divide-y divide-slate-100">
+                  <div className="flex justify-between pt-1">
+                    <span className="text-slate-600 font-medium">Items Subtotal</span>
+                    <span className="font-bold text-slate-900 font-price">₹{activeOrder.total.toLocaleString('en-IN')}</span>
+                  </div>
+                  <div className="flex justify-between pt-2">
+                    <span className="text-slate-600 font-medium">Shipping &amp; Packaging</span>
+                    <span className="font-bold text-emerald-800">FREE</span>
+                  </div>
+                  {activeOrder.discount ? (
+                    <div className="flex justify-between pt-2">
+                      <span className="text-slate-600 font-medium">Promo Discount</span>
+                      <span className="font-bold text-emerald-800 font-price">-₹{activeOrder.discount}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between items-baseline pt-3 text-sm font-bold text-slate-950">
+                    <span>Grand Total</span>
+                    <span className="text-xl font-black font-price text-slate-950 tracking-tight">₹{activeOrder.total.toLocaleString('en-IN')}</span>
+                  </div>
                 </div>
               </div>
-            )}
 
-          </div>
-        </div>
-      )}
+              {/* 5. Milestone Activity Log */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 sm:p-7 shadow-xs select-none">
+                <h3 className="text-sm font-bold text-slate-950 mb-5 pb-3 border-b border-slate-100">
+                  Milestone Activity Log
+                </h3>
+                <div className="space-y-4">
+                  {getTimelineEvents(activeOrder).map((ev: any, evIdx: number, evArr: any[]) => {
+                    const isLatest = evIdx === 0;
+                    const isLast = evIdx === evArr.length - 1;
+                    return (
+                      <div key={evIdx} className="flex gap-3.5 text-xs">
+                        <div className="flex flex-col items-center shrink-0 w-4 pt-1">
+                          <div className={`w-3 h-3 rounded-full shrink-0 ${isLatest ? 'bg-slate-950 ring-4 ring-slate-200' : 'bg-slate-400'}`} />
+                          {!isLast && <div className="w-[2px] flex-1 bg-slate-200 my-1 min-h-[24px]" />}
+                        </div>
+                        <div className="pb-3 flex-1 min-w-0">
+                          <div className="flex flex-wrap items-baseline justify-between gap-2">
+                            <span className={`font-bold ${isLatest ? 'text-slate-950 text-sm' : 'text-slate-800'}`}>{ev.status}</span>
+                            <span className="text-[11px] font-semibold text-slate-500 font-mono">{ev.date}</span>
+                          </div>
+                          {ev.notes && <p className="text-slate-600 text-xs mt-1 leading-relaxed">{ev.notes}</p>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
 
-
-
-
-      {/* Main dashboard space */}
-      <div className="max-w-[1200px] mx-auto px-4 md:px-8 py-10 pb-24 animate-fadeIn">
-        
-        {/* Header Block */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8 border-b border-bdrl pb-6">
-          <div>
-            <h1 className="page-title text-3xl font-extrabold tracking-tight">Order Dashboard</h1>
-            <p className="text-sm text-mut mt-1">Monitor shipment logs, check delivery tracking, print invoices, and request returns.</p>
-          </div>
-          <button
-            onClick={() => setCurPage('products')}
-            className="btn-secondary text-xs shrink-0 self-start sm:self-center"
-          >
-            <ArrowLeft size={13} /> Continue Shopping
-          </button>
-        </div>
-
-        {/* Empty state conditional view */}
-        {!orders || orders.length === 0 ? (
-          <div className="empty-state max-w-[500px] mx-auto py-16">
-            <div className="empty-state-icon animate-float">
-              <ShoppingBag size={32} className="text-primary" />
-            </div>
-            <h2 className="font-display text-xl font-bold text-blk mb-2">No purchases yet</h2>
-            <p className="text-sm text-mut mb-6">
-              You haven't logged any eco formulations orders. Start exploring our homecare catalog to purchase botanical solutions.
-            </p>
-            <button onClick={() => setCurPage('products')} className="btn-primary-lg mx-auto">
-              Browse Formulations
-            </button>
-          </div>
-        ) : (
-          <div className="flex flex-col gap-6">
-            
-            {/* Filter and Command Toolbar */}
-            <div className="card p-4 flex flex-col md:flex-row gap-4 items-stretch md:items-center justify-between select-none">
-              
-              {/* Category tabs */}
-              <div className="flex gap-1 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
-                {(['All', 'Progress', 'Delivered', 'Cancelled'] as const).map(tab => (
+              {/* 6. Order Actions Card */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-xs space-y-3 select-none">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-600 pb-2 border-b border-slate-100">
+                  Order Actions
+                </h4>
+                <div className="space-y-2.5">
                   <button
-                    key={tab}
-                    onClick={() => setStatusTab(tab)}
-                    className={`px-4 py-2 rounded-lg text-xs font-semibold cursor-pointer transition-all ${
-                      statusTab === tab
-                        ? 'bg-primary text-wht font-bold shadow-premium-sm'
-                        : 'text-mut hover:text-blk hover:bg-sur'
-                    }`}
+                    type="button"
+                    onClick={() => setInvoiceOrder(activeOrder)}
+                    className="btn-secondary w-full text-xs font-bold min-h-[44px] flex items-center justify-center gap-2 shadow-2xs hover:bg-slate-100 cursor-pointer"
                   >
-                    {tab === 'Progress' ? 'In Transit' : tab === 'Cancelled' ? 'Cancelled / Returned' : tab}
+                    <Printer size={15} />
+                    <span>Print Invoice</span>
                   </button>
-                ))}
-              </div>
-
-              {/* Action filters */}
-              <div className="flex flex-wrap items-center gap-3.5">
-                
-                {/* Search */}
-                <div className="relative flex-1 min-w-[200px] max-w-[280px]">
-                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-mut" />
-                  <input
-                    type="text"
-                    placeholder="Search by ID or name..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-2 text-xs border border-bdr rounded-lg bg-sur/30 focus:bg-wht outline-none focus:border-primary transition-all placeholder:text-mut"
-                  />
-                  {searchQuery && (
-                    <button onClick={() => setSearchQuery('')} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-mut hover:text-blk">
-                      <X size={12} />
+                  {!isCancelled && ['Pending', 'Confirmed', 'Packed', 'Ready for Dispatch'].includes(activeOrder.status) && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenCancelModal(activeOrder)}
+                      className="w-full min-h-[44px] rounded-xl border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-800 text-xs font-bold flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                    >
+                      Cancel Order
+                    </button>
+                  )}
+                  {!isCancelled && activeOrder.status === 'Delivered' && isReturnEligible(activeOrder) && (
+                    <button
+                      type="button"
+                      onClick={() => handleOpenReturnModal(activeOrder)}
+                      className="w-full min-h-[44px] rounded-xl border border-amber-300 bg-amber-50 hover:bg-amber-100 text-amber-900 text-xs font-bold flex items-center justify-center cursor-pointer transition-colors shadow-2xs"
+                    >
+                      Return or Replace Items
                     </button>
                   )}
                 </div>
-
-                {/* Date Dropdown */}
-                <div className="flex items-center gap-1.5 border border-bdr rounded-lg bg-wht px-3 py-2 cursor-pointer relative hover:border-mut transition-all">
-                  <SlidersHorizontal size={12} className="text-mut" />
-                  <select
-                    value={dateFilter}
-                    onChange={(e) => setDateFilter(e.target.value as any)}
-                    className="bg-transparent text-xs font-semibold text-mid outline-none border-none cursor-pointer pr-1"
-                  >
-                    <option value="all">All Dates</option>
-                    <option value="30days">Last 30 Days</option>
-                    <option value="6months">Last 6 Months</option>
-                    <option value="2026">Year 2026</option>
-                  </select>
-                </div>
-
-                {/* Sort dropdown */}
-                <div className="flex items-center gap-1.5 border border-bdr rounded-lg bg-wht px-3 py-2 cursor-pointer relative hover:border-mut transition-all">
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value as any)}
-                    className="bg-transparent text-xs font-semibold text-mid outline-none border-none cursor-pointer pr-1"
-                  >
-                    <option value="newest">Newest First</option>
-                    <option value="oldest">Oldest First</option>
-                  </select>
-                </div>
-
               </div>
+
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  /* ───────────────────────────────────────────────────────────────────
+     VIEW: MAIN RETURNS & ORDERS LISTING VIEW
+     ─────────────────────────────────────────────────────────────────── */
+  return (
+    <div className="w-full min-h-screen bg-[#FAFBFD] pb-24">
+      {/* Header Block */}
+      <div className="bg-white border-b border-slate-200 py-6">
+        <div className="max-w-[1300px] mx-auto px-4 sm:px-6 lg:px-8">
+          <nav className="flex items-center gap-2 text-xs text-slate-600 mb-3" aria-label="Breadcrumb">
+            <button
+              type="button"
+              onClick={() => setCurPage('home')}
+              className="text-slate-600 hover:text-slate-950 font-medium transition-colors cursor-pointer"
+            >
+              Home
+            </button>
+            <ChevronRight size={12} className="text-slate-400" />
+            <span className="text-slate-950 font-bold">Returns &amp; Orders</span>
+          </nav>
+
+          <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+            <div>
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                Returns &amp; Orders
+              </h1>
+              <p className="text-xs sm:text-sm text-slate-600 mt-1">
+                Manage your orders, track active shipments, review return policies, and download invoices.
+              </p>
             </div>
 
-            {/* Main Orders Display Listing */}
-            {isLoading ? (
-              <SkeletonLoader />
-            ) : processedOrders.length === 0 ? (
-              <div className="text-center py-16 bg-wht border border-bdr rounded-xl shadow-premium-sm max-w-[480px] mx-auto p-6">
-                <AlertTriangle size={24} className="text-accent mx-auto mb-3" />
-                <h3 className="font-display font-semibold text-blk mb-1">No orders found</h3>
-                <p className="text-xs text-mut mb-4">No logged deliveries match your search query or selected category filter options.</p>
-                <button onClick={() => { setSearchQuery(''); setStatusTab('All'); setDateFilter('all'); }} className="btn-secondary text-xs">
-                  Reset Active Filters
+            <button
+              type="button"
+              onClick={() => setCurPage('products')}
+              className="btn-secondary text-xs font-bold min-h-[44px] px-4 self-start sm:self-auto shadow-xs hover:bg-slate-100 cursor-pointer flex items-center"
+            >
+              Browse Catalog
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Content Area */}
+      <div className="max-w-[1300px] mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+        {/* Controls Toolbar: Tabs + Search + Date Filter */}
+        <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-xs flex flex-col lg:flex-row gap-4 justify-between items-stretch lg:items-center select-none">
+          {/* Status Tabs */}
+          <div className="flex gap-1.5 overflow-x-auto pb-1 lg:pb-0 scrollbar-none">
+            {[
+              { id: 'All', label: 'All Orders', count: totalOrdersCount },
+              { id: 'Progress', label: 'In Transit', count: inTransitCount },
+              { id: 'Delivered', label: 'Delivered', count: deliveredCount },
+              { id: 'Returns', label: 'Returns & Refunds', count: returnsCount },
+              { id: 'Cancelled', label: 'Cancelled', count: cancelledCount }
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => setStatusTab(tab.id as any)}
+                className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-2 shrink-0 ${
+                  statusTab === tab.id
+                    ? 'bg-slate-950 text-white shadow-sm'
+                    : 'text-slate-700 hover:text-slate-950 hover:bg-slate-100'
+                }`}
+              >
+                <span>{tab.label}</span>
+                {tab.count > 0 && (
+                  <span
+                    className={`px-2 py-0.5 rounded-full text-[11px] font-mono font-bold ${
+                      statusTab === tab.id ? 'bg-slate-800 text-slate-100' : 'bg-slate-100 text-slate-700'
+                    }`}
+                  >
+                    {tab.count}
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+
+          {/* Search and Date Selectors */}
+          <div className="flex items-center gap-3 flex-wrap">
+            <div className="relative flex-1 min-w-[220px] max-w-[320px]">
+              <Search size={15} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-500" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search by order ID or item..."
+                className="input-field pl-10 pr-8 text-xs min-h-[44px] py-2 bg-slate-50 border-slate-200 focus:bg-white"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery('')}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-900 cursor-pointer w-6 h-6 flex items-center justify-center"
+                >
+                  <X size={14} />
                 </button>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-5">
-                {processedOrders.map((order: any) => {
-                  const cfg = getStatusConfig(order.status);
-                  const StatusIcon = cfg.icon;
+              )}
+            </div>
 
-                  const items = Array.isArray(order.items)
-                    ? order.items
-                    : typeof order.items === 'string'
-                    ? (() => { try { return JSON.parse(order.items); } catch { return []; } })()
-                    : [];
+            <select
+              value={dateFilter}
+              onChange={(e) => setDateFilter(e.target.value as any)}
+              className="border border-slate-200 rounded-xl bg-white px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none cursor-pointer min-h-[44px] shadow-2xs hover:border-slate-300 focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              aria-label="Filter orders by date"
+            >
+              <option value="all">All Orders</option>
+              <option value="30days">Past 30 Days</option>
+              <option value="6months">Past 6 Months</option>
+              <option value="2026">Year 2026</option>
+            </select>
 
-                  const primaryItem = items[0];
-                  const totalQuantity = items.reduce((sum: number, it: any) => sum + (it.quantity || 0), 0);
-                  const isCancelled = ['Cancelled', 'Return Requested', 'Returned', 'Refunded'].includes(order.status);
-                  const isDelivered = order.status === 'Delivered';
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as any)}
+              className="border border-slate-200 rounded-xl bg-white px-3.5 py-2.5 text-xs font-bold text-slate-900 outline-none cursor-pointer min-h-[44px] shadow-2xs hover:border-slate-300 focus:border-slate-950 focus:ring-2 focus:ring-slate-950/10"
+              aria-label="Sort orders"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+            </select>
+          </div>
+        </div>
 
-                  return (
-                    <div
-                      key={order.id}
-                      className="card p-5 sm:p-6 transition-all duration-200 flex flex-col gap-4 relative overflow-hidden group"
-                    >
-                      {/* Left highlights color strip */}
-                      <div className={`absolute top-0 bottom-0 left-0 w-1.5 ${isCancelled ? 'bg-red' : isDelivered ? 'bg-emerald-600' : 'bg-primary'}`} />
+        {/* Orders Listing Area */}
+        {isLoading ? (
+          <SkeletonLoader />
+        ) : !orders || orders.length === 0 ? (
+          /* Empty State: No Orders */
+          <div className="bg-white border border-slate-200 rounded-2xl p-16 text-center max-w-[480px] mx-auto shadow-xs">
+            <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4 text-slate-500">
+              <ShoppingBag size={28} />
+            </div>
+            <h3 className="text-lg font-bold text-slate-950 mb-1.5">No orders found</h3>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed mb-6 max-w-xs mx-auto">
+              You have not placed any orders yet. Discover our premium collection in the store catalog.
+            </p>
+            <button
+              type="button"
+              onClick={() => setCurPage('products')}
+              className="btn-primary text-xs font-bold min-h-[44px] px-6 cursor-pointer"
+            >
+              Start Shopping
+            </button>
+          </div>
+        ) : processedOrders.length === 0 ? (
+          /* Empty State: No matching filter results */
+          <div className="bg-white border border-slate-200 rounded-2xl p-12 text-center max-w-[480px] mx-auto shadow-xs">
+            <AlertTriangle size={28} className="text-slate-500 mx-auto mb-3" />
+            <h3 className="text-base font-bold text-slate-950 mb-1">No matching results</h3>
+            <p className="text-xs text-slate-600 mb-5">
+              No orders matched your active search query or filter selection.
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery('');
+                setStatusTab('All');
+                setDateFilter('all');
+              }}
+              className="btn-secondary text-xs font-bold min-h-[44px] px-5 cursor-pointer"
+            >
+              Reset Filters
+            </button>
+          </div>
+        ) : (
+          /* Orders Cards List */
+          <div className="space-y-6">
+            {processedOrders.map((order: any) => {
+              const cfg = getStatusConfig(order.status);
+              const StatusIcon = cfg.icon;
 
-                      {/* Clean Desktop horizontal order card layout */}
-                      <div className="flex flex-col md:flex-row md:items-center justify-between gap-5 w-full">
-                        
-                        {/* 1. Product Image & Product Info */}
-                        <div className="flex items-center gap-4 min-w-0 md:w-[45%]">
-                          <div className="w-16 h-16 rounded-xl border border-bdrl overflow-hidden bg-primary-soft/30 flex items-center justify-center shrink-0 shadow-premium-sm relative">
+              const items = Array.isArray(order.items)
+                ? order.items
+                : typeof order.items === 'string'
+                ? (() => {
+                    try {
+                      return JSON.parse(order.items);
+                    } catch {
+                      return [];
+                    }
+                  })()
+                : [];
+
+              const primaryItem = items[0];
+              const totalQuantity = items.reduce((sum: number, it: any) => sum + (it.quantity || 0), 0);
+              const isCancelled = order.status === 'Cancelled';
+              const isDelivered = order.status === 'Delivered';
+              const isReturnState = ['Return Requested', 'Returned', 'Refunded'].includes(order.status);
+
+              return (
+                <div
+                  key={order.id}
+                  className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs hover:border-slate-300 hover:shadow-sm transition-all duration-200"
+                >
+                  {/* Tier 1: Executive Card Header Bar */}
+                  <div className="bg-slate-50/90 border-b border-slate-200 px-6 py-4 flex flex-wrap items-center justify-between gap-4 text-xs">
+                    <div className="flex flex-wrap items-center gap-6 sm:gap-8">
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-0.5">
+                          Order Placed
+                        </span>
+                        <span className="font-bold text-slate-900">{order.date}</span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-0.5">
+                          Total Paid
+                        </span>
+                        <span className="font-black text-slate-950 font-price text-sm">₹{order.total.toLocaleString('en-IN')}</span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-bold uppercase tracking-wider text-slate-600 block mb-0.5">
+                          Ship To
+                        </span>
+                        <span className="font-bold text-slate-900 truncate max-w-[150px] block">
+                          {order.address?.name || curUser?.name || 'Customer'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-3">
+                      <span className="font-mono text-slate-700 font-bold text-xs">{order.id}</span>
+                      <span className="text-slate-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => handleSelectOrder(order)}
+                        className="font-bold text-slate-950 hover:underline cursor-pointer min-h-[44px] inline-flex items-center"
+                      >
+                        Order Details
+                      </button>
+                      <span className="text-slate-300">•</span>
+                      <button
+                        type="button"
+                        onClick={() => setInvoiceOrder(order)}
+                        className="font-bold text-slate-950 hover:underline cursor-pointer min-h-[44px] inline-flex items-center"
+                      >
+                        Invoice
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Tier 2: Card Body */}
+                  <div className="p-6">
+                    <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                      {/* Left: Status Announcement & Product Items */}
+                      <div className="space-y-4 flex-1">
+                        <div className="flex items-center gap-2.5">
+                          <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${cfg.color} ${cfg.bg} ${cfg.border}`}>
+                            <StatusIcon size={13} />
+                            {cfg.label}
+                          </span>
+                          {isDelivered && (
+                            <span className="text-xs font-semibold text-slate-700">
+                              Package handed directly to customer
+                            </span>
+                          )}
+                          {!isDelivered && !isCancelled && !isReturnState && (
+                            <span className="text-xs font-semibold text-slate-700">
+                              Carrier: {order.courierCompany || 'Delhivery Express'} • Expected soon
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Items Presentation */}
+                        <div className="flex items-center gap-4">
+                          <div className="w-20 h-20 rounded-xl bg-slate-50 border border-slate-200 p-2 flex items-center justify-center shrink-0 relative">
                             {primaryItem?.product?.imgs?.length > 0 ? (
-                              <img src={primaryItem.product.imgs[0]} alt="" className="w-full h-full object-cover" />
+                              <img
+                                src={primaryItem.product.imgs[0]}
+                                alt={primaryItem.product.name}
+                                className="w-full h-full object-contain mix-blend-multiply"
+                              />
                             ) : (
-                              <Package size={20} className="text-primary/30" />
+                              <Package size={26} className="text-slate-400" />
                             )}
                             {items.length > 1 && (
-                              <span className="absolute bottom-1 right-1 bg-ink/80 backdrop-blur-xs text-wht text-[9px] font-bold px-1.5 py-0.5 rounded">
+                              <span className="absolute bottom-1 right-1 bg-slate-950 text-white text-[10px] font-bold px-1.5 py-0.5 rounded shadow-xs">
                                 +{items.length - 1}
                               </span>
                             )}
                           </div>
 
-                          <div className="min-w-0 flex-1">
-                            <div className="flex flex-wrap items-center gap-1.5 mb-0.5">
-                              <span className="text-[10px] font-bold text-mut font-mono">{order.id}</span>
-                              <span className="text-[10px] text-fnt font-bold">•</span>
-                              <span className="text-[10px] font-medium text-mut">{order.date}</span>
-                            </div>
-                            <h3 className="text-sm font-bold text-blk truncate leading-snug group-hover:text-primary transition-colors">
-                              {primaryItem?.product?.name || 'Botanical formulation order'}
-                            </h3>
-                            <div className="flex flex-wrap gap-x-3 text-[10px] text-mut font-semibold mt-1">
-                              <span>Variant: <span className="text-mid">500ml Bottled</span></span>
-                              <span>Qty: <span className="text-mid">{totalQuantity}</span></span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* 2. Order Status (subtle badges + compact timeline) */}
-                        <div className="flex flex-col gap-1.5 justify-center md:w-[25%] select-none">
-                          <div className="flex items-center gap-1.5">
-                            <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[10px] font-bold ${cfg.color} ${cfg.bg} ${cfg.border}`}>
-                              <StatusIcon size={10} />
-                              {order.status}
+                          <div className="space-y-1">
+                            <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                              {primaryItem?.product?.cat || 'General Essential'}
                             </span>
-                            {isDelivered && (
-                              <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-100 rounded px-1.5 py-0.5 uppercase tracking-wider font-extrabold">
-                                Delivered
-                              </span>
-                            )}
+                            <h3
+                              onClick={() => handleSelectOrder(order)}
+                              className="text-sm font-bold text-slate-950 hover:underline cursor-pointer line-clamp-1 leading-snug"
+                            >
+                              {primaryItem?.product?.name || 'Order Item'}
+                            </h3>
+                            <p className="text-xs text-slate-600">
+                              Total items: <strong className="text-slate-950 font-bold">{totalQuantity}</strong>
+                            </p>
                           </div>
-                          {!isCancelled && renderCompactTimeline(order.status)}
-                          {isCancelled && (
-                            <span className="text-[10px] text-red/80 font-medium">Inactive Order</span>
-                          )}
                         </div>
-
-                        {/* 3. Price Summary */}
-                        <div className="flex flex-col justify-center items-start md:items-end shrink-0 md:w-[12%] select-none">
-                          <span className="text-[10px] text-mut font-semibold block leading-none mb-1">Paid Total</span>
-                          <span className="text-sm font-bold text-blk font-mono">₹{order.total}</span>
-                        </div>
-
-                        {/* 4. Primary & Secondary Actions */}
-                        <div className="flex flex-row md:flex-col justify-end items-center md:items-end gap-2.5 shrink-0 md:w-[15%]">
-                          <button
-                            onClick={() => setActiveOrder(order)}
-                            className="btn-primary text-xs w-full py-1.5 text-center flex items-center justify-center gap-1 shadow-premium-sm cursor-pointer"
-                          >
-                            View Details
-                          </button>
-                        </div>
-
                       </div>
 
-                      {/* Optional secondary actions row */}
-                      <div className="flex flex-wrap items-center gap-4 border-t border-bdrl pt-3 text-[11px] font-bold text-mid select-none w-full">
+                      {/* Right: Action Buttons */}
+                      <div className="flex flex-row lg:flex-col gap-2.5 shrink-0 justify-end">
                         <button
-                          onClick={() => setInvoiceOrder(order)}
-                          className="hover:text-primary cursor-pointer"
+                          type="button"
+                          onClick={() => handleSelectOrder(order)}
+                          className="btn-primary text-xs font-bold min-h-[44px] px-5 shadow-xs flex items-center justify-center cursor-pointer"
                         >
-                          Download Invoice
+                          View Order Details
                         </button>
-                        <span className="text-bdrl">|</span>
                         <button
+                          type="button"
                           onClick={() => handleReorder(order)}
-                          className="hover:text-primary cursor-pointer"
+                          className="btn-secondary text-xs font-bold min-h-[44px] px-5 flex items-center justify-center shadow-xs hover:bg-slate-100 cursor-pointer"
                         >
-                          Reorder Items
+                          Buy it again
                         </button>
-                        <span className="text-bdrl">|</span>
-                        <button
-                          onClick={() => showToast(`Contacting support for Order ${order.id}...`)}
-                          className="hover:text-primary cursor-pointer"
-                        >
-                          Support Query
-                        </button>
-                        {isDelivered && (
-                          <span className="text-emerald-700 ml-auto font-bold">
-                            Completed on {order.estimatedDelivery || order.date}
-                          </span>
+                        {!isCancelled && isDelivered && isReturnEligible(order) && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenReturnModal(order)}
+                            className="text-xs font-bold text-amber-900 hover:text-amber-950 py-1.5 px-2 text-center underline cursor-pointer min-h-[40px] flex items-center justify-center"
+                          >
+                            Return or replace items
+                          </button>
                         )}
-                        {!isDelivered && order.estimatedDelivery && (
-                          <span className="text-primary ml-auto font-bold">
-                            Delivery Est: {order.estimatedDelivery}
-                          </span>
+                        {!isCancelled && ['Pending', 'Confirmed', 'Packed', 'Ready for Dispatch'].includes(order.status) && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenCancelModal(order)}
+                            className="text-xs font-bold text-rose-800 hover:text-rose-900 py-1.5 px-2 text-center underline cursor-pointer min-h-[40px] flex items-center justify-center"
+                          >
+                            Cancel order
+                          </button>
                         )}
                       </div>
-
                     </div>
-                  );
-                })}
-              </div>
-            )}
-            
+                  </div>
+                </div>
+              );
+            })}
           </div>
         )}
-      </div>
 
-    </>
+        {/* Cancel & Return Modals */}
+        {renderCancelModal()}
+        {renderReturnModal()}
+      </div>
+    </div>
   );
 };
 

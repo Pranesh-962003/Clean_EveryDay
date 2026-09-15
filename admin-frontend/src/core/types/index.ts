@@ -38,18 +38,24 @@ export interface Product {
 }
 
 export interface Review {
-  id: number;
+  id: number | string;
+  _id?: string;
   author: string;
   ini: string;
   role: string;
   img: string | null;
+  image?: string | null;
+  images?: string[];
   rating: number;
   body: string;
   product: string; // Product name or "General"
+  productId?: string | number;
   approved: boolean;
   date: string;
   reply?: string; // Admin reply text
   status?: 'Approved' | 'Pending' | 'Rejected' | 'Hidden';
+  verifiedPurchase?: boolean;
+  isVerifiedPurchase?: boolean;
 }
 
 export interface User {
@@ -162,6 +168,8 @@ export interface Order {
   orderNumber?: string;
   date: string;
   items: CartItem[];
+  subtotal?: number;
+  shippingCharge?: number;
   total: number;
   customerEmail: string;
   shippingMethod: string;

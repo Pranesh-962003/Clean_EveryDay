@@ -29,6 +29,8 @@ export interface Product {
   };
   rating: number;
   reviewCount: number;
+  averageRating?: number;
+  totalReviews?: number;
   originalPrice?: number;
   seo?: {
     metaTitle?: string;
@@ -44,6 +46,8 @@ export interface Review {
   ini: string;
   role: string;
   img: string | null;
+  image?: string | null;
+  images?: string[];
   rating: number;
   body: string;
   product: string; // Product name or "General"
@@ -52,6 +56,8 @@ export interface Review {
   date: string;
   reply?: string; // Admin reply text
   status?: 'Approved' | 'Pending' | 'Rejected' | 'Hidden';
+  verifiedPurchase?: boolean;
+  isVerifiedPurchase?: boolean;
 }
 
 export interface Story {

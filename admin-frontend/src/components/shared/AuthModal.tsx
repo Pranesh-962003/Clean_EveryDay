@@ -9,7 +9,7 @@ import axios from 'axios';
 const AuthModal: React.FC = () => {
   const { authModalOpen, closeAuthModal, fetchCurrentUser } = useApp();
 
-  const [email, setEmail] = useState('admin@cleaneveryday.in');
+  const [email, setEmail] = useState('admin@ecommerce.com');
   const [password, setPassword] = useState('admin123');
   const [rememberMe, setRememberMe] = useState(true);
   const [showPassword, setShowPassword] = useState(false);
@@ -35,7 +35,7 @@ const AuthModal: React.FC = () => {
   useEffect(() => {
     if (authModalOpen) {
       setErrorMsg(null);
-      setEmail('admin@cleaneveryday.in');
+      setEmail('admin@ecommerce.com');
       setPassword('admin123');
     }
   }, [authModalOpen]);
@@ -214,7 +214,7 @@ const AuthModal: React.FC = () => {
               <input
                 className="input-field mt-1 border-blk/10 focus:border-blk focus:ring-blk/5 font-mono text-xs"
                 type="email"
-                placeholder="admin@cleaneveryday.in"
+                placeholder="admin@ecommerce.com"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}

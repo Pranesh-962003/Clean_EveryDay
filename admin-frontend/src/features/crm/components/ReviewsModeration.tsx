@@ -16,7 +16,14 @@ import {
   Square,
   Database,
   Monitor,
-  Loader2
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  EyeOff,
+  Filter,
+  RefreshCw,
+  CornerDownRight,
+  ShieldCheck
 } from 'lucide-react';
 
 interface ReviewItem {
@@ -28,15 +35,17 @@ interface ReviewItem {
   rating: number;
   body: string;
   product: string;
+  image?: string;
+  images?: string[];
   status: 'Pending' | 'Approved' | 'Hidden' | 'Rejected';
   approved: boolean;
   date: string;
   reply?: string;
 }
 
-// Neat Linear System-to-System Data Transfer Loading Animation Component (Light Blue Theme)
+// Sleek enterprise loader with server-to-client stream animation
 const LinearSystemDataTransferLoader: React.FC = () => (
-  <div className="relative flex flex-col items-center justify-center select-none py-4 px-6 w-full max-w-[420px]">
+  <div className="relative flex flex-col items-center justify-center select-none py-6 px-4 w-full max-w-[420px] mx-auto">
     <style>{`
       @keyframes linearStreamPulse {
         0% { stroke-dashoffset: 60; }
@@ -44,87 +53,57 @@ const LinearSystemDataTransferLoader: React.FC = () => (
       }
       @keyframes linearPacketMove {
         0% { transform: translateX(0px); opacity: 0; }
-        15% { opacity: 1; }
-        85% { opacity: 1; }
+        20% { opacity: 1; }
+        80% { opacity: 1; }
         100% { transform: translateX(180px); opacity: 0; }
-      }
-      @keyframes serverGlow {
-        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 3px rgba(2, 132, 199, 0.4)); }
-        50% { transform: scale(1.05); filter: drop-shadow(0 0 10px rgba(56, 189, 248, 0.85)); }
-      }
-      @keyframes adminGlow {
-        0%, 100% { transform: scale(1); filter: drop-shadow(0 0 3px rgba(2, 132, 199, 0.4)); }
-        50% { transform: scale(1.05); filter: drop-shadow(0 0 10px rgba(125, 211, 252, 0.9)); }
       }
     `}</style>
 
-    <div className="relative flex items-center justify-between w-full h-20 px-2">
-      {/* SYSTEM A: Backend Database / Server Node */}
-      <div 
-        className="flex flex-col items-center gap-1 z-10"
-        style={{ animation: 'serverGlow 2s ease-in-out infinite' }}
-      >
-        <div className="w-12 h-12 rounded-xl bg-slate-900 text-sky-400 border border-sky-400/40 flex items-center justify-center shadow-md relative">
-          <Database size={22} />
-          {/* Active Status Ring */}
-          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-wht animate-ping" />
-          <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-wht" />
+    <div className="relative flex items-center justify-between w-full h-16 px-2">
+      {/* Node A: Server Database */}
+      <div className="flex flex-col items-center gap-1.5 z-10">
+        <div className="w-10 h-10 rounded-xl bg-slate-900 text-slate-100 border border-slate-700 flex items-center justify-center shadow-sm relative">
+          <Database size={18} className="text-emerald-400" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white animate-ping" />
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white" />
         </div>
-        <span className="text-[10px] font-bold text-sky-700/80 tracking-wider uppercase">System A (Server)</span>
+        <span className="text-[10px] font-semibold text-slate-500 tracking-wider uppercase">Database Node</span>
       </div>
 
-      {/* LINEAR CONNECTING DATA PIPE */}
-      <div className="relative flex-1 mx-4 h-12 flex items-center justify-center">
-        {/* Background Track Line */}
-        <div className="absolute w-full h-[3px] bg-sky-100/80 rounded-full" />
-
-        {/* Animated Linear Stream Pipeline */}
-        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 48" fill="none">
-          <defs>
-            <linearGradient id="lightBluePipeGrad" x1="0" y1="24" x2="200" y2="24" gradientUnits="userSpaceOnUse">
-              <stop stopColor="#0284C7" />
-              <stop offset="0.5" stopColor="#38BDF8" />
-              <stop offset="1" stopColor="#7DD3FC" />
-            </linearGradient>
-          </defs>
-          <line 
-            x1="10" y1="24" x2="190" y2="24" 
-            stroke="url(#lightBluePipeGrad)" 
-            strokeWidth="3.5" 
-            strokeDasharray="10 8" 
+      {/* Stream track */}
+      <div className="relative flex-1 mx-3 h-10 flex items-center justify-center">
+        <div className="absolute w-full h-[2px] bg-slate-200 rounded-full" />
+        <svg className="absolute inset-0 w-full h-full" viewBox="0 0 200 40" fill="none">
+          <line
+            x1="10" y1="20" x2="190" y2="20"
+            stroke="#10B981"
+            strokeWidth="2.5"
+            strokeDasharray="8 6"
             strokeLinecap="round"
             style={{ animation: 'linearStreamPulse 1.2s linear infinite' }}
           />
         </svg>
 
-        {/* Linear Sliding Data Packets (Light Blue Nodes) */}
-        <div className="absolute left-3 top-1/2 -translate-y-1/2 w-full flex items-center pointer-events-none">
-          <div 
-            className="w-3.5 h-3.5 bg-sky-400 rounded-full border-2 border-wht shadow-md shadow-sky-400/50"
-            style={{ animation: 'linearPacketMove 1.6s ease-in-out infinite' }}
+        {/* Sliding packets */}
+        <div className="absolute left-2 top-1/2 -translate-y-1/2 w-full flex items-center pointer-events-none">
+          <div
+            className="w-2.5 h-2.5 bg-emerald-500 rounded-full border border-white shadow-sm"
+            style={{ animation: 'linearPacketMove 1.5s ease-in-out infinite' }}
           />
-          <div 
-            className="w-3.5 h-3.5 bg-sky-300 rounded-full border-2 border-wht shadow-md shadow-sky-300/50"
-            style={{ animation: 'linearPacketMove 1.6s ease-in-out infinite 0.5s' }}
-          />
-          <div 
-            className="w-3.5 h-3.5 bg-sky-200 rounded-full border-2 border-wht shadow-md shadow-sky-200/50"
-            style={{ animation: 'linearPacketMove 1.6s ease-in-out infinite 1s' }}
+          <div
+            className="w-2.5 h-2.5 bg-emerald-400 rounded-full border border-white shadow-sm"
+            style={{ animation: 'linearPacketMove 1.5s ease-in-out infinite 0.5s' }}
           />
         </div>
       </div>
 
-      {/* SYSTEM B: Admin Console / Dashboard Node */}
-      <div 
-        className="flex flex-col items-center gap-1 z-10"
-        style={{ animation: 'adminGlow 2s ease-in-out infinite 1s' }}
-      >
-        <div className="w-12 h-12 rounded-xl bg-sky-500 text-wht border border-sky-300 flex items-center justify-center shadow-md relative">
-          <Monitor size={22} />
-          {/* Receiving Pulse Indicator */}
-          <span className="absolute -bottom-1 -left-1 w-3.5 h-3.5 bg-sky-200 rounded-full border-2 border-wht animate-pulse" />
+      {/* Node B: Admin Console */}
+      <div className="flex flex-col items-center gap-1.5 z-10">
+        <div className="w-10 h-10 rounded-xl bg-slate-900 text-white border border-slate-700 flex items-center justify-center shadow-sm relative">
+          <Monitor size={18} className="text-emerald-400" />
+          <span className="absolute -bottom-1 -left-1 w-2 h-2 bg-emerald-400 rounded-full animate-pulse" />
         </div>
-        <span className="text-[10px] font-bold text-sky-700/80 tracking-wider uppercase">System B (Admin)</span>
+        <span className="text-[10px] font-semibold text-slate-500 tracking-wider uppercase">Admin Stream</span>
       </div>
     </div>
   </div>
@@ -175,10 +154,12 @@ const ReviewsModeration: React.FC = () => {
             rating: r.rating || 5,
             body: r.review || r.comment || '',
             product: r.product?.name || r.product?.title || 'HomeCare Product',
+            image: r.image || (Array.isArray(r.images) && r.images.length > 0 ? r.images[0] : ''),
+            images: r.images || (r.image ? [r.image] : []),
             status: r.status || 'Pending',
             approved: r.status === 'Approved',
             date: r.date ? new Date(r.date).toLocaleDateString('en-IN') : new Date().toLocaleDateString('en-IN'),
-            reply: r.adminReply || ''
+            reply: r.adminReply || r.reply || r.responseStatement || ''
           };
         });
         setApiReviews(fetched);
@@ -201,12 +182,18 @@ const ReviewsModeration: React.FC = () => {
     socket.on(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewEvent);
     socket.on(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewEvent);
     socket.on(SOCKET_EVENTS.REVIEW_DELETED, handleReviewEvent);
+    socket.on(SOCKET_EVENTS.STORY_CREATED, handleReviewEvent);
+    socket.on(SOCKET_EVENTS.STORY_UPDATED, handleReviewEvent);
+    socket.on(SOCKET_EVENTS.STORY_DELETED, handleReviewEvent);
 
     return () => {
       socket.off(SOCKET_EVENTS.REVIEW_CREATED, handleReviewEvent);
       socket.off(SOCKET_EVENTS.REVIEW_UPDATED, handleReviewEvent);
       socket.off(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewEvent);
       socket.off(SOCKET_EVENTS.REVIEW_DELETED, handleReviewEvent);
+      socket.off(SOCKET_EVENTS.STORY_CREATED, handleReviewEvent);
+      socket.off(SOCKET_EVENTS.STORY_UPDATED, handleReviewEvent);
+      socket.off(SOCKET_EVENTS.STORY_DELETED, handleReviewEvent);
     };
   }, [loadReviews]);
 
@@ -241,6 +228,16 @@ const ReviewsModeration: React.FC = () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [replyReviewId, deleteConfirmId, isBulkDeleteModalOpen]);
+
+  // Pre-fill previous admin reply when opening reply modal
+  useEffect(() => {
+    if (replyReviewId !== null) {
+      const selected = reviews.find((r) => r.id === replyReviewId || r._id === replyReviewId);
+      if (selected && selected.reply) {
+        setReplyText(selected.reply);
+      }
+    }
+  }, [replyReviewId, reviews]);
 
   // Products list from reviews
   const productsList = Array.from(new Set(reviews.map((r) => r.product)));
@@ -357,128 +354,222 @@ const ReviewsModeration: React.FC = () => {
     }
   };
 
-  const handleReplySubmit = (e: React.FormEvent) => {
+  const [isSubmittingReply, setIsSubmittingReply] = useState(false);
+
+  const handleReplySubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (replyReviewId === null || !replyText.trim()) return;
 
-    showToast('Reply statement saved.');
-    setReplyReviewId(null);
-    setReplyText('');
+    setIsSubmittingReply(true);
+    try {
+      const firebaseUser = auth.currentUser;
+      let token = '';
+      if (firebaseUser) {
+        token = await firebaseUser.getIdToken();
+      }
+      const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+      await axios.put(
+        `${backendUrl}/auth/admin/reply/${replyReviewId}`,
+        { responseStatement: replyText },
+        {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+          withCredentials: true
+        }
+      );
+
+      showToast('Reply statement saved.');
+      setReplyReviewId(null);
+      setReplyText('');
+      await loadReviews();
+    } catch (err: any) {
+      console.error('Error submitting reply:', err);
+      showToast(err.response?.data?.message || 'Failed to save reply statement.');
+    } finally {
+      setIsSubmittingReply(false);
+    }
   };
 
   // Star render
   const renderStars = (rating: number) => {
-    return Array.from({ length: 5 }, (_, i) => (
-      <Star
-        key={i}
-        size={12}
-        className={i < rating ? 'text-gold fill-gold' : 'text-fnt'}
-      />
-    ));
+    return (
+      <div className="flex items-center gap-0.5" title={`${rating} out of 5 stars`}>
+        {Array.from({ length: 5 }, (_, i) => (
+          <Star
+            key={i}
+            size={13}
+            className={i < rating ? 'text-amber-400 fill-amber-400' : 'text-slate-200'}
+          />
+        ))}
+      </div>
+    );
   };
 
+  // Metrics summary
+  const approvedCount = reviews.filter((r) => r.status === 'Approved' || r.approved).length;
+  const pendingCount = reviews.filter((r) => r.status === 'Pending' || (!r.status && !r.approved)).length;
+  const avgRating = reviews.length > 0
+    ? (reviews.reduce((acc, r) => acc + (r.rating || 5), 0) / reviews.length).toFixed(1)
+    : '5.0';
+
   return (
-    <div className="animate-fadeIn">
-      {/* Title */}
-      <div className="mb-7">
-        <h2 className="font-display text-xl font-semibold text-blk">Reviews moderation</h2>
-        <p className="text-sm text-mut">Moderate customer-submitted store ratings, reject spam, or post reply statements.</p>
+    <div className="space-y-6">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Reviews Moderation</h1>
+            <span className="px-2.5 py-0.5 text-xs font-semibold bg-slate-100 text-slate-700 rounded-full border border-slate-200">
+              {reviews.length} Total
+            </span>
+          </div>
+          <p className="text-sm text-slate-500">
+            Moderate customer-submitted store ratings, reject spam, or post public reply statements.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => loadReviews(true)}
+            className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 hover:border-slate-300 transition-colors shadow-xs cursor-pointer min-h-[44px]"
+          >
+            <RefreshCw size={14} className={isLoading ? 'animate-spin' : ''} />
+            Refresh Feed
+          </button>
+        </div>
+      </div>
+
+      {/* High-level KPI summary cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Average Store Rating</p>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-bold text-slate-900">{avgRating}</span>
+              <span className="text-xs font-medium text-slate-500">/ 5.0</span>
+            </div>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-500">
+            <Star size={20} className="fill-amber-400 text-amber-400" />
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Approved Testimonials</p>
+            <span className="text-2xl font-bold text-emerald-600">{approvedCount}</span>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+            <CheckCircle2 size={20} />
+          </div>
+        </div>
+
+        <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex items-center justify-between">
+          <div>
+            <p className="text-xs font-medium text-slate-500 mb-1">Pending Moderation</p>
+            <span className="text-2xl font-bold text-amber-600">{pendingCount}</span>
+          </div>
+          <div className="w-10 h-10 rounded-lg bg-amber-50 border border-amber-100 flex items-center justify-center text-amber-600">
+            <AlertCircle size={20} />
+          </div>
+        </div>
       </div>
 
       {/* Filter and Search Bar */}
-      <div className="bg-wht border border-bdrl rounded-xl p-4 shadow-premium-sm mb-6 flex flex-col gap-4">
-        <div className="flex flex-col md:flex-row md:items-center gap-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col gap-4">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
           {/* Search */}
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fnt" size={14} />
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
             <input
               type="text"
-              placeholder="Search reviews by client or comment text..."
-              className="w-full border border-bdr rounded bg-wht pl-9 pr-4 py-2 text-sm outline-none focus:border-primary placeholder:text-mut/50"
+              placeholder="Search reviews by customer name, comments, or keywords..."
+              className="w-full border border-slate-200 rounded-lg bg-slate-50/50 pl-10 pr-4 py-2 text-xs text-slate-900 placeholder:text-slate-400 outline-none focus:bg-white focus:border-slate-400 focus:ring-2 focus:ring-slate-100 transition-all min-h-[44px]"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
 
-          {/* Status Filter */}
-          <div className="flex flex-col gap-1 min-w-[120px]">
-            <label className="text-xs font-medium text-mut">Status</label>
-            <select
-              className="border border-bdr rounded bg-wht px-3 py-2 text-sm outline-none cursor-pointer focus:border-primary text-mid font-medium"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-            >
-              <option value="All">All statuses</option>
-              <option value="Approved">Approved</option>
-              <option value="Pending">Pending</option>
-              <option value="Rejected">Rejected</option>
-              <option value="Hidden">Hidden</option>
-            </select>
-          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Status Filter */}
+            <div className="flex items-center gap-1.5 min-w-[130px]">
+              <select
+                className="w-full border border-slate-200 rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none cursor-pointer focus:border-slate-400 focus:ring-1 focus:ring-slate-200 min-h-[44px]"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+              >
+                <option value="All">All statuses</option>
+                <option value="Approved">Approved</option>
+                <option value="Pending">Pending</option>
+                <option value="Rejected">Rejected</option>
+                <option value="Hidden">Hidden</option>
+              </select>
+            </div>
 
-          {/* Rating Filter */}
-          <div className="flex flex-col gap-1 min-w-[120px]">
-            <label className="text-xs font-medium text-mut">Rating</label>
-            <select
-              className="border border-bdr rounded bg-wht px-3 py-2 text-sm outline-none cursor-pointer focus:border-primary text-mid font-medium"
-              value={ratingFilter}
-              onChange={(e) => setRatingFilter(e.target.value)}
-            >
-              <option value="All">All ratings</option>
-              <option value="5">5 stars</option>
-              <option value="4">4 stars</option>
-              <option value="3">3 stars</option>
-              <option value="2">2 stars</option>
-              <option value="1">1 star</option>
-            </select>
-          </div>
+            {/* Rating Filter */}
+            <div className="flex items-center gap-1.5 min-w-[120px]">
+              <select
+                className="w-full border border-slate-200 rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none cursor-pointer focus:border-slate-400 focus:ring-1 focus:ring-slate-200 min-h-[44px]"
+                value={ratingFilter}
+                onChange={(e) => setRatingFilter(e.target.value)}
+              >
+                <option value="All">All ratings</option>
+                <option value="5">5 stars</option>
+                <option value="4">4 stars</option>
+                <option value="3">3 stars</option>
+                <option value="2">2 stars</option>
+                <option value="1">1 star</option>
+              </select>
+            </div>
 
-          {/* Product Filter */}
-          <div className="flex flex-col gap-1 min-w-[120px]">
-            <label className="text-xs font-medium text-mut">Product</label>
-            <select
-              className="border border-bdr rounded bg-wht px-3 py-2 text-sm outline-none cursor-pointer focus:border-primary text-mid font-medium"
-              value={productFilter}
-              onChange={(e) => setProductFilter(e.target.value)}
-            >
-              <option value="All">All products</option>
-              {productsList.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
+            {/* Product Filter */}
+            <div className="flex items-center gap-1.5 min-w-[160px]">
+              <select
+                className="w-full border border-slate-200 rounded-lg bg-white px-3 py-2 text-xs font-medium text-slate-700 outline-none cursor-pointer focus:border-slate-400 focus:ring-1 focus:ring-slate-200 min-h-[44px] truncate"
+                value={productFilter}
+                onChange={(e) => setProductFilter(e.target.value)}
+              >
+                <option value="All">All products</option>
+                {productsList.map((p) => (
+                  <option key={p} value={p}>{p}</option>
+                ))}
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Bulk Action Controls */}
+        {/* Bulk Action Banner */}
         {selectedIds.length > 0 && (
-          <div className="flex items-center justify-between bg-primary-soft/50 border border-primary-light/50 px-4 py-3 rounded-md animate-slideUp">
-            <span className="text-sm font-medium text-primary">
-              <strong>{selectedIds.length}</strong> review(s) selected
+          <div className="flex items-center justify-between bg-slate-900 text-white px-4 py-3 rounded-lg animate-fadeIn shadow-sm">
+            <span className="text-xs font-medium">
+              <strong className="text-emerald-400">{selectedIds.length}</strong> review{selectedIds.length > 1 ? 's' : ''} selected
             </span>
-            <div className="flex gap-2">
+            <div className="flex items-center gap-2">
               <button
                 onClick={handleBulkApprove}
                 disabled={isBulkUpdating}
-                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 border border-primary-light/40 text-primary-hover hover:bg-primary-soft rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-md cursor-pointer disabled:opacity-50 transition-colors"
               >
-                {isBulkUpdating ? <Loader2 size={12} className="animate-spin text-primary" /> : <Check size={12} />} Bulk Approve
+                {isBulkUpdating ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                Approve
               </button>
               <button
                 onClick={handleBulkReject}
                 disabled={isBulkUpdating}
-                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 border border-transparent bg-sur text-mid hover:bg-sur/80 rounded cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-md cursor-pointer disabled:opacity-50 transition-colors"
               >
-                {isBulkUpdating ? <Loader2 size={12} className="animate-spin text-mid" /> : <X size={12} />} Bulk Reject
+                {isBulkUpdating ? <Loader2 size={12} className="animate-spin" /> : <X size={12} />}
+                Reject
               </button>
               <button
                 onClick={() => setIsBulkDeleteModalOpen(true)}
-                className="flex items-center gap-1 text-sm font-medium px-3 py-1.5 border border-transparent bg-red-bg text-red hover:bg-red-bg/85 rounded cursor-pointer"
+                className="inline-flex items-center gap-1 text-xs font-semibold px-3 py-1.5 bg-rose-600 hover:bg-rose-500 text-white rounded-md cursor-pointer transition-colors"
               >
-                <Trash2 size={12} /> Bulk Delete
+                <Trash2 size={12} />
+                Delete
               </button>
               <button
                 onClick={() => setSelectedIds([])}
-                className="text-sm font-medium px-2 py-1.5 text-mut hover:text-blk cursor-pointer"
+                className="text-xs font-medium px-2 py-1.5 text-slate-400 hover:text-white cursor-pointer ml-1"
               >
                 Cancel
               </button>
@@ -487,38 +578,42 @@ const ReviewsModeration: React.FC = () => {
         )}
       </div>
 
-      {/* Reviews Moderator Data Table */}
-      <div className="bg-wht border border-bdrl rounded-xl shadow-premium-sm overflow-hidden mb-6">
+      {/* Reviews Data Table Card */}
+      <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
         <div className="overflow-x-auto w-full scrollbar-thin">
-          <table className="w-full text-left border-collapse min-w-[900px]">
+          <table className="w-full text-left border-collapse min-w-[950px]">
             <thead>
-              <tr className="bg-sur border-b border-bdrl text-xs font-medium text-mut select-none">
-                <th className="py-3 px-5 w-[50px] text-center">
-                  <button onClick={handleSelectAll} className="text-mid hover:text-primary transition-colors cursor-pointer">
+              <tr className="bg-slate-50/80 border-b border-slate-200 text-xs font-semibold text-slate-500 select-none uppercase tracking-wider">
+                <th className="py-3 px-4 w-[48px] text-center">
+                  <button
+                    onClick={handleSelectAll}
+                    className="text-slate-400 hover:text-slate-900 transition-colors cursor-pointer inline-flex items-center justify-center p-1"
+                  >
                     {selectedIds.length === filteredReviews.length && filteredReviews.length > 0 ? (
-                      <CheckSquare size={15} className="text-primary" />
+                      <CheckSquare size={16} className="text-slate-900" />
                     ) : (
-                      <Square size={15} />
+                      <Square size={16} />
                     )}
                   </button>
                 </th>
-                <th className="py-3 px-4 w-[160px] whitespace-nowrap">Customer</th>
-                <th className="py-3 px-4 w-[160px] whitespace-nowrap">Product</th>
-                <th className="py-3 px-4 w-[100px] text-center whitespace-nowrap">Rating</th>
-                <th className="py-3 px-4 whitespace-nowrap">Review</th>
-                <th className="py-3 px-4 w-[100px] text-center whitespace-nowrap">Status</th>
-                <th className="py-3 px-4 w-[100px] whitespace-nowrap">Date</th>
-                <th className="py-3 px-5 text-right w-[150px] whitespace-nowrap">Actions</th>
+                <th className="py-3 px-4 w-[170px]">Customer</th>
+                <th className="py-3 px-4 w-[170px]">Product</th>
+                <th className="py-3 px-4 w-[110px] text-center">Rating</th>
+                <th className="py-3 px-4 min-w-[260px]">Review Content</th>
+                <th className="py-3 px-4 w-[100px] text-center">Photo</th>
+                <th className="py-3 px-4 w-[110px] text-center">Status</th>
+                <th className="py-3 px-4 w-[110px]">Date</th>
+                <th className="py-3 px-5 text-right w-[150px]">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-bdrl text-sm leading-relaxed">
+            <tbody className="divide-y divide-slate-100 text-xs leading-relaxed">
               {isLoading || apiReviews === null ? (
                 <tr>
-                  <td colSpan={8} className="py-14 text-center">
-                    <div className="flex flex-col items-center justify-center gap-2">
+                  <td colSpan={9} className="py-16 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3">
                       <LinearSystemDataTransferLoader />
-                      <p className="text-xs font-semibold text-mut tracking-wide animate-pulse">
-                        Syncing Review Data Stream from Backend Server to Admin Console...
+                      <p className="text-xs font-semibold text-slate-500 animate-pulse">
+                        Syncing review stream with database...
                       </p>
                     </div>
                   </td>
@@ -533,75 +628,134 @@ const ReviewsModeration: React.FC = () => {
                   return (
                     <tr
                       key={r.id}
-                      className={`hover:bg-sur/10 transition-colors ${
-                        isSelected ? 'bg-primary-soft/20' : ''
+                      className={`hover:bg-slate-50/60 transition-colors ${
+                        isSelected ? 'bg-slate-50' : ''
                       }`}
                     >
                       {/* Checkbox */}
-                      <td className="py-4 px-5 text-center">
-                        <button onClick={() => handleSelectOne(r.id)} className="text-mid hover:text-primary transition-colors cursor-pointer">
+                      <td className="py-3.5 px-4 text-center">
+                        <button
+                          onClick={() => handleSelectOne(r.id)}
+                          className="text-slate-400 hover:text-slate-900 transition-colors cursor-pointer inline-flex items-center justify-center p-1"
+                        >
                           {isSelected ? (
-                            <CheckSquare size={15} className="text-primary" />
+                            <CheckSquare size={16} className="text-slate-900" />
                           ) : (
-                            <Square size={15} />
+                            <Square size={16} />
                           )}
                         </button>
                       </td>
 
                       {/* Author */}
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-blk">{r.author}</div>
-                        <div className="text-xs text-mut">{r.role}</div>
+                      <td className="py-3.5 px-4">
+                        <div className="flex items-center gap-2.5">
+                          <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center justify-center font-bold text-xs shrink-0">
+                            {r.ini}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-semibold text-slate-900 truncate">{r.author}</div>
+                            <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                              {r.role.includes('Verified') && (
+                                <ShieldCheck size={11} className="text-emerald-600 shrink-0" />
+                              )}
+                              <span className="truncate">{r.role}</span>
+                            </div>
+                          </div>
+                        </div>
                       </td>
 
                       {/* Product */}
-                      <td className="py-4 px-4 font-semibold text-mid">{r.product}</td>
+                      <td className="py-3.5 px-4">
+                        <span className="font-medium text-slate-800 line-clamp-1" title={r.product}>
+                          {r.product}
+                        </span>
+                      </td>
 
                       {/* Rating */}
-                      <td className="py-4 px-4">
-                        <div className="flex gap-0.5 justify-center">{renderStars(r.rating)}</div>
+                      <td className="py-3.5 px-4 text-center">
+                        <div className="flex flex-col items-center gap-0.5">
+                          {renderStars(r.rating)}
+                          <span className="text-[10px] font-bold text-slate-500 mt-0.5">{r.rating}.0</span>
+                        </div>
                       </td>
 
                       {/* Review body */}
-                      <td className="py-4 px-4">
-                        <p className="text-blk font-medium">"{r.body}"</p>
+                      <td className="py-3.5 px-4 min-w-[260px]">
+                        <p className="text-slate-700 leading-normal line-clamp-2">
+                          "{r.body}"
+                        </p>
                         {r.reply && (
-                          <div className="bg-sur border-l-2 border-primary p-2.5 rounded-sm mt-2 text-sm text-mid italic">
-                            <strong>Reply:</strong> "{r.reply}"
+                          <div className="mt-1.5 flex items-start gap-1 text-[11px] text-slate-500 bg-slate-50 border border-slate-200/80 rounded p-1.5">
+                            <CornerDownRight size={12} className="text-emerald-600 shrink-0 mt-0.5" />
+                            <span className="line-clamp-1 italic text-slate-600">
+                              Reply: {r.reply}
+                            </span>
                           </div>
                         )}
                       </td>
 
+                      {/* Attached Photo */}
+                      <td className="py-3.5 px-4 text-center">
+                        {r.image || (Array.isArray((r as any).images) && (r as any).images.length > 0) ? (
+                          <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                            {(Array.isArray((r as any).images) && (r as any).images.length > 0 ? (r as any).images : [r.image])
+                              .filter(Boolean)
+                              .map((imgUrl: string, imgIdx: number) => (
+                                <a
+                                  key={imgIdx}
+                                  href={imgUrl}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-block relative group/thumb overflow-hidden rounded-lg border border-slate-200 hover:border-slate-800 bg-slate-50 transition-all shadow-2xs"
+                                  title="Click to view full photo in new tab"
+                                >
+                                  <img
+                                    src={imgUrl}
+                                    alt="Customer attachment"
+                                    className="w-12 h-12 object-cover transition-transform group-hover/thumb:scale-110"
+                                  />
+                                </a>
+                              ))}
+                          </div>
+                        ) : (
+                          <span className="text-slate-300 text-xs font-mono font-medium">—</span>
+                        )}
+                      </td>
+
                       {/* Status */}
-                      <td className="py-3 px-4 text-center">
-                        <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-full ${
+                      <td className="py-3.5 px-4 text-center">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold tracking-wide border ${
                           status === 'Approved'
-                            ? 'bg-primary-soft text-primary'
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
                             : status === 'Pending'
-                            ? 'bg-yellow-50 text-amber-700'
-                            : 'bg-red-bg text-red'
+                            ? 'bg-amber-50 text-amber-700 border-amber-200'
+                            : status === 'Hidden'
+                            ? 'bg-slate-100 text-slate-600 border-slate-200'
+                            : 'bg-rose-50 text-rose-700 border-rose-200'
                         }`}>
                           {status}
                         </span>
                       </td>
 
                       {/* Date */}
-                      <td className="py-3 px-4 text-sm text-mid whitespace-nowrap">{r.date}</td>
+                      <td className="py-3.5 px-4 text-slate-500 font-mono text-[11px] whitespace-nowrap">
+                        {r.date}
+                      </td>
 
                       {/* Actions */}
-                      <td className="py-4 px-5 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
+                      <td className="py-3.5 px-5 text-right">
+                        <div className="flex items-center justify-end gap-1">
                           {status !== 'Approved' && (
                             <button
                               onClick={() => handleUpdateStatus(r.id, 'Approved')}
                               disabled={isDeleting || isUpdatingStatus}
-                              className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                              className="p-1.5 border border-slate-200 hover:border-emerald-500 text-slate-600 hover:text-emerald-700 rounded-md bg-white cursor-pointer disabled:opacity-50 transition-colors min-h-[32px] min-w-[32px] inline-flex items-center justify-center"
                               title="Approve Review"
                             >
                               {isUpdatingStatus ? (
-                                <Loader2 size={12} className="animate-spin text-primary" />
+                                <Loader2 size={13} className="animate-spin text-emerald-600" />
                               ) : (
-                                <Check size={12} />
+                                <Check size={13} />
                               )}
                             </button>
                           )}
@@ -609,13 +763,13 @@ const ReviewsModeration: React.FC = () => {
                             <button
                               onClick={() => handleUpdateStatus(r.id, 'Hidden')}
                               disabled={isDeleting || isUpdatingStatus}
-                              className="p-1 border border-bdr hover:border-accent text-mid hover:text-accent-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                              className="p-1.5 border border-slate-200 hover:border-slate-400 text-slate-600 hover:text-slate-900 rounded-md bg-white cursor-pointer disabled:opacity-50 transition-colors min-h-[32px] min-w-[32px] inline-flex items-center justify-center"
                               title="Hide Review"
                             >
                               {isUpdatingStatus ? (
-                                <Loader2 size={12} className="animate-spin text-accent" />
+                                <Loader2 size={13} className="animate-spin text-slate-600" />
                               ) : (
-                                <X size={12} />
+                                <EyeOff size={13} />
                               )}
                             </button>
                           )}
@@ -625,21 +779,21 @@ const ReviewsModeration: React.FC = () => {
                               setReplyText(r.reply || '');
                             }}
                             disabled={isDeleting}
-                            className="p-1 border border-bdr hover:border-primary text-mid hover:text-primary-hover rounded bg-wht cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                            title="Reply to Review"
+                            className="p-1.5 border border-slate-200 hover:border-slate-400 text-slate-600 hover:text-slate-900 rounded-md bg-white cursor-pointer disabled:opacity-50 transition-colors min-h-[32px] min-w-[32px] inline-flex items-center justify-center"
+                            title="Reply to Customer"
                           >
-                            <MessageSquare size={12} />
+                            <MessageSquare size={13} />
                           </button>
                           <button
                             onClick={() => setDeleteConfirmId(r.id)}
                             disabled={isDeleting}
-                            className="p-1 border border-bdr hover:border-red text-mid hover:text-red rounded bg-wht cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+                            className="p-1.5 border border-slate-200 hover:border-rose-500 text-slate-600 hover:text-rose-600 rounded-md bg-white cursor-pointer disabled:opacity-50 transition-colors min-h-[32px] min-w-[32px] inline-flex items-center justify-center"
                             title="Delete Review"
                           >
                             {isDeleting ? (
-                              <Loader2 size={12} className="animate-spin text-red" />
+                              <Loader2 size={13} className="animate-spin text-rose-600" />
                             ) : (
-                              <Trash2 size={12} />
+                              <Trash2 size={13} />
                             )}
                           </button>
                         </div>
@@ -649,8 +803,12 @@ const ReviewsModeration: React.FC = () => {
                 })
               ) : (
                 <tr>
-                  <td colSpan={8} className="py-14 text-center text-mut">
-                    No customer testimonials match filters.
+                  <td colSpan={9} className="py-16 text-center">
+                    <div className="flex flex-col items-center justify-center text-slate-400">
+                      <Filter size={32} className="mb-2 text-slate-300" />
+                      <p className="text-sm font-semibold text-slate-600">No customer testimonials match filters</p>
+                      <p className="text-xs text-slate-400 mt-1">Try resetting the status, rating, or search queries.</p>
+                    </div>
                   </td>
                 </tr>
               )}
@@ -661,38 +819,36 @@ const ReviewsModeration: React.FC = () => {
 
       {/* Single Review Delete Confirmation Modal */}
       {deleteConfirmId !== null && (
-        <div 
-          className="fixed inset-0 z-[999] flex items-center justify-center bg-blk/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+        <div
+          className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
           onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setDeleteConfirmId(null);
-            }
+            if (e.target === e.currentTarget) setDeleteConfirmId(null);
           }}
         >
-          <div className="bg-wht rounded-2xl border border-bdr shadow-premium-lg max-w-[420px] w-full p-6 text-center animate-slideUp relative my-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-[420px] w-full p-6 text-center animate-slideUp relative my-auto">
             <button
               onClick={() => setDeleteConfirmId(null)}
-              className="absolute top-4 right-4 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer border-none bg-transparent"
             >
               <X size={18} />
             </button>
 
-            <div className="w-12 h-12 bg-red-bg border border-red/10 text-red rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <Trash2 size={22} />
             </div>
 
-            <h3 className="font-display text-lg font-bold text-blk mb-2">
-              Delete Review?
+            <h3 className="text-base font-bold text-slate-900 mb-2">
+              Delete Customer Review?
             </h3>
 
-            <p className="text-xs text-mut leading-relaxed mb-6">
-              Are you sure you want to delete this review? This action will permanently remove it and update store ratings across admin and customer clients in real-time via Socket.IO.
+            <p className="text-xs text-slate-500 leading-relaxed mb-6">
+              Are you sure you want to delete this review? This action will permanently remove it from store rating metrics across all clients in real-time.
             </p>
 
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteConfirmId(null)}
-                className="flex-1 py-2.5 px-4 rounded-lg border border-bdr text-xs font-semibold text-mid hover:bg-sur transition-colors cursor-pointer"
+                className="flex-1 py-2.5 px-4 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer min-h-[44px]"
               >
                 Cancel
               </button>
@@ -704,7 +860,7 @@ const ReviewsModeration: React.FC = () => {
                     await handleDeleteReview(targetId);
                   }
                 }}
-                className="flex-1 py-2.5 px-4 rounded-lg bg-red text-wht hover:bg-red/90 text-xs font-semibold shadow-premium-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 px-4 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
               >
                 <Trash2 size={14} /> Yes, Delete
               </button>
@@ -715,38 +871,36 @@ const ReviewsModeration: React.FC = () => {
 
       {/* Bulk Delete Confirmation Modal */}
       {isBulkDeleteModalOpen && (
-        <div 
-          className="fixed inset-0 z-[999] flex items-center justify-center bg-blk/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+        <div
+          className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
           onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setIsBulkDeleteModalOpen(false);
-            }
+            if (e.target === e.currentTarget) setIsBulkDeleteModalOpen(false);
           }}
         >
-          <div className="bg-wht rounded-2xl border border-bdr shadow-premium-lg max-w-[420px] w-full p-6 text-center animate-slideUp relative my-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-xl max-w-[420px] w-full p-6 text-center animate-slideUp relative my-auto">
             <button
               onClick={() => setIsBulkDeleteModalOpen(false)}
-              className="absolute top-4 right-4 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer border-none bg-transparent"
             >
               <X size={18} />
             </button>
 
-            <div className="w-12 h-12 bg-red-bg border border-red/10 text-red rounded-full flex items-center justify-center mx-auto mb-4">
+            <div className="w-12 h-12 bg-rose-50 border border-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
               <Trash2 size={22} />
             </div>
 
-            <h3 className="font-display text-lg font-bold text-blk mb-2">
+            <h3 className="text-base font-bold text-slate-900 mb-2">
               Delete Selected Reviews?
             </h3>
 
-            <p className="text-xs text-mut leading-relaxed mb-6">
-              Are you sure you want to delete <strong className="text-blk">{selectedIds.length}</strong> selected review(s)? This action will update all clients in real-time.
+            <p className="text-xs text-slate-500 leading-relaxed mb-6">
+              Are you sure you want to delete <strong className="text-slate-900">{selectedIds.length}</strong> selected review(s)? This action will update store metrics across all client views in real-time.
             </p>
 
             <div className="flex gap-3">
               <button
                 onClick={() => setIsBulkDeleteModalOpen(false)}
-                className="flex-1 py-2.5 px-4 rounded-lg border border-bdr text-xs font-semibold text-mid hover:bg-sur transition-colors cursor-pointer"
+                className="flex-1 py-2.5 px-4 rounded-lg border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer min-h-[44px]"
               >
                 Cancel
               </button>
@@ -758,7 +912,7 @@ const ReviewsModeration: React.FC = () => {
                   }
                   setSelectedIds([]);
                 }}
-                className="flex-1 py-2.5 px-4 rounded-lg bg-red text-wht hover:bg-red/90 text-xs font-semibold shadow-premium-sm transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                className="flex-1 py-2.5 px-4 rounded-lg bg-rose-600 text-white hover:bg-rose-700 text-xs font-semibold shadow-xs transition-colors cursor-pointer flex items-center justify-center gap-1.5 min-h-[44px]"
               >
                 <Trash2 size={14} /> Yes, Delete All
               </button>
@@ -769,45 +923,51 @@ const ReviewsModeration: React.FC = () => {
 
       {/* Reply Dialog Modal */}
       {replyReviewId !== null && (
-        <div 
-          className="fixed inset-0 z-[999] flex items-center justify-center bg-blk/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+        <div
+          className="fixed inset-0 z-[999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
           onClick={(e) => {
-            if (e.target === e.currentTarget) {
-              setReplyReviewId(null);
-            }
+            if (e.target === e.currentTarget) setReplyReviewId(null);
           }}
         >
-          <div className="bg-wht rounded-xl border border-bdr shadow-premium-lg w-full max-w-[500px] p-6 relative my-auto">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xl w-full max-w-[500px] p-6 relative my-auto animate-slideUp">
             <button
               onClick={() => setReplyReviewId(null)}
-              className="absolute top-5 right-5 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer border-none bg-transparent"
             >
               <X size={18} />
             </button>
 
-            <h3 className="font-display text-[1.1rem] font-bold text-blk mb-4 border-b border-bdrl pb-2.5">
+            <h3 className="text-base font-bold text-slate-900 mb-4 border-b border-slate-100 pb-3">
               Reply to Customer Testimonial
             </h3>
 
-            <form onSubmit={handleReplySubmit} className="flex flex-col gap-4 text-[0.82rem]">
+            <form onSubmit={handleReplySubmit} className="flex flex-col gap-4 text-xs">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-mut">Response statement</label>
+                <label className="text-xs font-semibold text-slate-700">Official Response Statement</label>
                 <textarea
                   rows={4}
                   required
-                  placeholder="Thank you for your feedback! We have updated our dilution guidelines..."
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none w-full resize-none placeholder:text-mut/50 bg-wht"
+                  placeholder="Thank you for your feedback! We have updated our dilution guidelines to assist..."
+                  className="border border-slate-200 focus:border-slate-400 focus:ring-2 focus:ring-slate-100 rounded-lg p-3 outline-none w-full resize-none placeholder:text-slate-400 bg-white text-slate-800 text-xs leading-relaxed transition-all"
                   value={replyText}
                   onChange={(e) => setReplyText(e.target.value)}
                 />
               </div>
 
-              <div className="flex gap-2 justify-end">
+              <div className="flex gap-2 justify-end pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setReplyReviewId(null)}
+                  className="px-4 py-2 text-xs font-medium text-slate-600 hover:bg-slate-50 border border-slate-200 rounded-lg cursor-pointer min-h-[40px]"
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
-                  className="bg-primary text-wht rounded px-5 py-2 text-sm font-semibold cursor-pointer"
+                  disabled={isSubmittingReply}
+                  className="bg-slate-900 hover:bg-slate-800 text-white rounded-lg px-5 py-2 text-xs font-semibold cursor-pointer disabled:opacity-50 transition-colors shadow-xs min-h-[40px]"
                 >
-                  Save Reply
+                  {isSubmittingReply ? 'Saving Statement...' : 'Save Public Reply'}
                 </button>
               </div>
             </form>

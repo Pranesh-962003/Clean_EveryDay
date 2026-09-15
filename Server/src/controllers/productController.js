@@ -622,3 +622,50 @@ export const deleteProduct = async (req, res) => {
 
     }
 };
+
+// bulk delete products
+export const bulkDeleteProducts = async (req, res) => {
+    try {
+        const { ids } = req.body;
+
+        if (!Array.isArray(ids) || ids.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "No product IDs provided for deletion."
+            });
+        }
+
+        const products = await Product.find({
+            _id: { $in: ids },
+            isDeleted: false
+        });
+
+        if (!products || products.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: "No active products found to delete."
+            });
+        }
+
+        await Product.updateMany(
+            { _id: { $in: ids }, isDeleted: false },
+            { $set: { isDeleted: true } }
+        );
+
+        products.forEach((product) => {
+            emitToAll("product:deleted", { id: product._id, _id: product._id, sku: product.sku });
+        });
+
+        return res.status(200).json({
+            success: true,
+            message: `${products.length} product(s) deleted successfully.`
+        });
+    } catch (error) {
+        console.error("Bulk delete error:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to delete products.",
+            error: error.message
+        });
+    }
+};

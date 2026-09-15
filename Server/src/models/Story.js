@@ -69,6 +69,16 @@ const storySchema = new mongoose.Schema(
             default: false,
             index: true,
         },
+
+        adminReply: {
+            type: String,
+            default: "",
+        },
+
+        repliedAt: {
+            type: Date,
+            default: null,
+        },
     },
     {
         timestamps: true,

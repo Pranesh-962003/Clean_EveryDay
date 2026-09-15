@@ -59,6 +59,17 @@ const reviewSchema = new mongoose.Schema(
             maxlength: 2000,
         },
 
+        // Attached customer photo of the product
+        image: {
+            type: String,
+            default: "",
+        },
+
+        images: {
+            type: [String],
+            default: [],
+        },
+
         // =====================================
         // Moderation
         // =====================================

@@ -68,6 +68,8 @@ const addressSchema = new mongoose.Schema(
 
         phoneNumber: String,
 
+        phone: String,
+
         alternatePhone: String,
 
         addressLine1: String,
@@ -81,6 +83,8 @@ const addressSchema = new mongoose.Schema(
         state: String,
 
         postalCode: String,
+
+        pincode: String,
 
         country: String
     },

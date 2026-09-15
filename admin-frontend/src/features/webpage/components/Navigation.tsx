@@ -1,30 +1,29 @@
 import React, { useState } from 'react';
 import { useApp } from '../../../core/context/AppContext';
-import { Leaf, Search, LogOut, ShoppingCart, LayoutDashboard, Menu, X, Loader2 } from 'lucide-react';
+import { 
+  ShieldCheck, 
+  LogOut, 
+  Search, 
+  Loader2, 
+  Menu,
+  ChevronDown, 
+  SlidersHorizontal 
+} from 'lucide-react';
 
-const Navigation: React.FC = () => {
+interface NavigationProps {
+  onMenuClick?: () => void;
+}
+
+const Navigation: React.FC<NavigationProps> = ({ onMenuClick }) => {
   const {
     curUser,
     isAuthLoading,
-    curPage,
-    setCurPage,
     openAuthModal,
     logoutUser,
-    cart
+    orders
   } = useApp();
 
-  const [inputVal, setInputVal] = useState('');
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!inputVal.trim()) return;
-    window.location.href = `http://localhost:5173/products`;
-  };
-
-  const handleLogoClick = () => {
-    window.location.href = 'http://localhost:5173/';
-  };
+  const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
 
   const getUserInitials = (name: string) => {
     return name
@@ -35,261 +34,156 @@ const Navigation: React.FC = () => {
       .substring(0, 2);
   };
 
-  const cartItemsCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+  const pendingOrdersCount = (orders || []).filter(o => o.status === 'Pending').length;
 
-  const navLinkClass = (page: string) =>
-    `text-sm font-medium transition-colors cursor-pointer hover:text-primary ${
-      curPage === page ? 'text-primary font-semibold' : 'text-mid'
-    }`;
-
-  const handleNavClick = (page: string, anchorId?: string) => {
-    if (page === 'admin') {
-      setCurPage('admin');
-      setIsMobileMenuOpen(false);
-      return;
-    }
-    const PAGE_TO_PATH: Record<string, string> = {
-      'home': '/',
-      'products': '/products',
-      'product-detail': '/product',
-      'checkout': '/checkout',
-      'orders': '/orders',
-      'profile': '/profile',
-    };
-    const path = PAGE_TO_PATH[page] || '/';
-    const hash = anchorId ? `#${anchorId}` : '';
-    window.location.href = `http://localhost:5173${path}${hash}`;
+  const triggerCommandPalette = () => {
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true }));
   };
 
   return (
-    <header className="sticky top-0 z-[200] w-full">
-      {/* Slim Announcement Ticker */}
-      <div className="bg-blk flex items-center overflow-hidden h-[30px] border-b border-white/5">
-        <div className="flex whitespace-nowrap animate-tickerLoop">
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Free shipping on orders above ₹499 <span className="text-primary text-[0.7rem]">✦</span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Safe, natural, plant-based ingredients <span className="text-primary text-[0.7rem]">✦</span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Gentle on hands, tough on stains <span className="text-primary text-[0.7rem]">✦</span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            No harsh chemicals or toxic residues <span className="text-primary text-[0.7rem]">✦</span>
-          </span>
-          {/* Loop copy */}
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Free shipping on orders above ₹499 <span className="text-primary text-[0.7rem]">✦</span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Safe, natural, plant-based ingredients <span className="text-primary text-[0.7rem]">✦</span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            Gentle on hands, tough on stains <span className="text-primary text-[0.7rem]">✦</span>
-          </span>
-          <span className="inline-flex items-center gap-2 px-12 font-mono text-[0.62rem] font-medium tracking-[0.15em] uppercase text-mut">
-            No harsh chemicals or toxic residues <span className="text-primary text-[0.7rem]">✦</span>
-          </span>
+    <header className="sticky top-0 z-[100] w-full bg-slate-950 text-white border-b border-slate-800/90 select-none no-print shrink-0">
+      <div className="w-full flex items-center justify-between px-4 sm:px-6 h-[58px] gap-4">
+        
+        {/* Left: Mobile Menu Toggle & Title Badge */}
+        <div className="flex items-center gap-3 shrink-0">
+          {onMenuClick && (
+            <button
+              type="button"
+              onClick={onMenuClick}
+              className="lg:hidden p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-900 transition-colors cursor-pointer"
+              aria-label="Open navigation menu"
+            >
+              <Menu size={20} />
+            </button>
+          )}
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-slate-900 text-slate-300 border border-slate-800">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live Console
+            </span>
+          </div>
         </div>
-      </div>
 
-      {/* Main Navbar */}
-      <nav className="bg-wht/80 backdrop-blur-lg border-b border-bdrl/80 shadow-premium-sm transition-all duration-200">
-        <div className="max-w-[1400px] mx-auto flex items-center justify-between px-4 md:px-7 h-[62px] gap-4">
-          
-          {/* Mobile Menu Button + Logo */}
-          <div className="flex items-center gap-3">
-            <button
-              className="lg:hidden p-1 -ml-1 text-ink hover:text-primary transition-colors cursor-pointer"
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              aria-label="Toggle mobile menu"
-            >
-              {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
-            </button>
-            <div className="flex items-center gap-2.5 cursor-pointer select-none group" onClick={handleLogoClick}>
-              <div className="w-8 h-8 border border-primary rounded-tr-[50%] rounded-tl-[50%] rounded-bl-[50%] rounded-br-[6px] flex items-center justify-center bg-primary-soft transition-transform duration-300 group-hover:-rotate-6">
-                <Leaf className="text-primary" size={15} />
-              </div>
-              <div>
-                <div className="font-display text-[1.2rem] font-bold text-blk tracking-wide leading-none hidden sm:block">
-                  Clean <span className="text-primary font-normal italic font-display">Everyday</span>
-                </div>
-              </div>
+        {/* Center: Quick Search Command Palette Trigger */}
+        <div className="flex-1 max-w-[440px] mx-2 hidden md:block">
+          <button
+            type="button"
+            onClick={triggerCommandPalette}
+            className="w-full flex items-center justify-between px-3.5 py-2 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200 transition-all text-xs cursor-pointer shadow-xs min-h-[36px]"
+          >
+            <div className="flex items-center gap-2.5">
+              <Search size={14} className="text-slate-500" />
+              <span>Quick search orders, products, customers...</span>
             </div>
-          </div>
+            <kbd className="hidden lg:inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-400 border border-slate-700">
+              Ctrl K
+            </kbd>
+          </button>
+        </div>
 
-          {/* Nav Links — uniform style, no icons */}
-          <div className="hidden lg:flex items-center gap-7">
-            <button className={navLinkClass('products')} onClick={() => handleNavClick('products')}>
-              Collection
-            </button>
-            <button
-              className={navLinkClass('home')}
-              onClick={() => handleNavClick('home', 'about')}
+        {/* Right: Actions + User Profile */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          
+          {/* Pending Orders Counter */}
+          {pendingOrdersCount > 0 && (
+            <div 
+              className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-bold"
+              title={`${pendingOrdersCount} orders waiting for processing`}
             >
-              About
-            </button>
-            <button
-              className={navLinkClass('home')}
-              onClick={() => handleNavClick('home', 'contact')}
-            >
-              Contact
-            </button>
-            <button className={navLinkClass('orders')} onClick={() => handleNavClick('orders')}>
-              My Orders
-            </button>
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+              <span>{pendingOrdersCount} Pending</span>
+            </div>
+          )}
 
-            {/* Admin link — visually separated */}
-            {curUser?.isAdmin && (
-              <>
-                <span className="w-px h-4 bg-bdr" />
-                <button
-                  className={`flex items-center gap-1.5 text-sm font-medium transition-colors cursor-pointer hover:text-primary ${curPage === 'admin' ? 'text-primary font-semibold' : 'text-mid'}`}
-                  onClick={() => handleNavClick('admin')}
-                  title="Admin Dashboard"
-                >
-                  <LayoutDashboard size={13} />
-                  Dashboard
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Right — Search + Auth + Cart */}
-          <div className="flex items-center gap-3.5 flex-1 justify-end max-w-[560px]">
-            {/* Search */}
-            <form
-              className="hidden md:flex items-center border border-bdr rounded-md overflow-hidden bg-sur/50 focus-within:bg-wht focus-within:border-primary transition-all duration-200 h-[34px] w-full max-w-[260px]"
-              onSubmit={handleSearchSubmit}
-            >
-              <input
-                className="border-none outline-none px-3 text-sm text-ink flex-1 bg-transparent placeholder:text-mut"
-                type="text"
-                placeholder="Search products..."
-                value={inputVal}
-                onChange={(e) => setInputVal(e.target.value)}
-              />
-              <button className="px-3 h-full flex items-center justify-center text-mut hover:text-primary bg-transparent cursor-pointer" type="submit" aria-label="Search">
-                <Search size={13} />
-              </button>
-            </form>
-
-            <div className="flex items-center gap-2">
-              {/* Cart */}
+          {/* User Profile Dropdown */}
+          {isAuthLoading ? (
+            <div className="w-9 h-9 rounded-xl border border-slate-800 bg-slate-900 flex items-center justify-center text-slate-400">
+              <Loader2 size={16} className="animate-spin" />
+            </div>
+          ) : curUser ? (
+            <div className="relative">
               <button
-                className="relative w-9 h-9 border border-bdr rounded-full flex items-center justify-center text-ink hover:text-primary hover:bg-sur transition-colors cursor-pointer"
-                onClick={() => { window.location.href = 'http://localhost:5173/checkout'; }}
-                title="View Shopping Cart"
+                type="button"
+                onClick={() => setIsUserDropdownOpen(!isUserDropdownOpen)}
+                className="flex items-center gap-2.5 p-1 rounded-xl hover:bg-slate-900 transition-colors cursor-pointer select-none border border-transparent hover:border-slate-800 min-h-[38px]"
               >
-                <ShoppingCart size={15} />
-                {cartItemsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-primary text-wht text-[10px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-scaleUp">
-                    {cartItemsCount}
+                <div className="w-8 h-8 rounded-lg bg-white text-slate-950 flex items-center justify-center text-xs font-black shrink-0 overflow-hidden shadow-sm">
+                  {curUser.avatar ? (
+                    <img src={curUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    getUserInitials(curUser.name || 'Admin')
+                  )}
+                </div>
+                <div className="hidden sm:flex flex-col text-left leading-none pr-1">
+                  <span className="text-xs font-bold text-white truncate max-w-[100px]">
+                    {curUser.name?.split(' ')[0] || 'Admin'}
                   </span>
-                )}
+                  <span className="text-[10px] text-slate-400 uppercase font-semibold mt-0.5">
+                    {curUser.isAdmin ? 'Super Admin' : 'Staff'}
+                  </span>
+                </div>
+                <ChevronDown size={14} className="text-slate-400" />
               </button>
 
-              {isAuthLoading ? (
-                <div className="w-8 h-8 rounded-full border border-bdr bg-sur/50 flex items-center justify-center text-primary" title="Verifying session...">
-                  <Loader2 size={15} className="animate-spin" />
-                </div>
-              ) : curUser ? (
+              {/* Profile Dropdown Menu */}
+              {isUserDropdownOpen && (
                 <>
                   <div
-                    className="flex items-center gap-2 bg-bdrl border border-bdr rounded-full py-1 pr-3 pl-1 cursor-pointer transition-all duration-150 hover:bg-bdr/50"
-                    onClick={() => {
-                      if (curUser.isAdmin) {
-                        setCurPage('admin');
-                      } else {
-                        window.location.href = 'http://localhost:5173/profile';
-                      }
-                    }}
-                  >
-                    <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center text-xs font-semibold text-wht overflow-hidden shrink-0">
-                      {curUser.avatar ? (
-                        <img src={curUser.avatar} alt="Avatar" className="w-full h-full object-cover" />
-                      ) : (
-                        getUserInitials(curUser.name)
-                      )}
+                    className="fixed inset-0 z-40"
+                    onClick={() => setIsUserDropdownOpen(false)}
+                  />
+                  <div className="absolute right-0 mt-2 w-56 bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl py-2 z-50 text-slate-200 animate-scaleIn">
+                    <div className="px-4 py-2.5 border-b border-slate-800">
+                      <p className="text-xs font-bold text-white truncate">{curUser.name}</p>
+                      <p className="text-[11px] text-slate-400 font-mono truncate mt-0.5">{curUser.email}</p>
+                      <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-slate-800 text-slate-300 border border-slate-700">
+                        <ShieldCheck size={11} className="text-emerald-400" />
+                        Authorized Admin
+                      </div>
                     </div>
-                    <span className="text-xs font-semibold text-ink hidden sm:inline">
-                      {curUser.name.split(' ')[0]}
-                    </span>
+
+                    <div className="py-1">
+                      <button
+                        type="button"
+                        className="w-full text-left px-4 py-2.5 text-xs font-semibold text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2.5 cursor-pointer transition-colors"
+                        onClick={() => {
+                          setIsUserDropdownOpen(false);
+                          triggerCommandPalette();
+                        }}
+                      >
+                        <SlidersHorizontal size={14} className="text-slate-400" />
+                        <span>Command Palette</span>
+                      </button>
+                    </div>
+
+                    <div className="border-t border-slate-800 my-1" />
+
+                    <button
+                      type="button"
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 flex items-center gap-2.5 cursor-pointer transition-colors"
+                      onClick={() => {
+                        setIsUserDropdownOpen(false);
+                        logoutUser();
+                      }}
+                    >
+                      <LogOut size={14} />
+                      <span>Sign Out</span>
+                    </button>
                   </div>
-                  <button
-                    className="w-8 h-8 rounded-full border border-bdr flex items-center justify-center text-mut hover:bg-red-bg hover:text-red hover:border-red/20 transition-all duration-150 cursor-pointer"
-                    onClick={logoutUser}
-                    title="Sign Out"
-                  >
-                    <LogOut size={13} />
-                  </button>
                 </>
-              ) : (
-                <button
-                  className="text-xs font-semibold text-wht px-4 py-1.5 bg-primary hover:bg-primary-hover transition-colors rounded-md cursor-pointer"
-                  onClick={() => openAuthModal('login')}
-                >
-                  Login
-                </button>
               )}
             </div>
-          </div>
+          ) : (
+            <button
+              type="button"
+              className="btn-primary text-xs font-semibold px-4 min-h-[38px]"
+              onClick={() => openAuthModal('login')}
+            >
+              Sign In
+            </button>
+          )}
         </div>
-        
-        {/* Mobile Menu Dropdown */}
-        {isMobileMenuOpen && (
-          <div className="lg:hidden border-t border-bdrl bg-wht animate-slideDown shadow-premium-md absolute w-full">
-            <div className="px-4 py-4 flex flex-col gap-4">
-              {/* Mobile Search */}
-              <form
-                className="flex items-center border border-bdr rounded-md overflow-hidden bg-sur/50 focus-within:bg-wht focus-within:border-primary transition-all duration-200 h-[40px] w-full"
-                onSubmit={handleSearchSubmit}
-              >
-                <input
-                  className="border-none outline-none px-3 text-sm text-ink flex-1 bg-transparent placeholder:text-mut"
-                  type="text"
-                  placeholder="Search products..."
-                  value={inputVal}
-                  onChange={(e) => setInputVal(e.target.value)}
-                />
-                <button className="px-3 h-full flex items-center justify-center text-mut hover:text-primary bg-transparent cursor-pointer" type="submit" aria-label="Search">
-                  <Search size={16} />
-                </button>
-              </form>
-
-              <div className="flex flex-col gap-2">
-                <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('products')}`} onClick={() => handleNavClick('products')}>
-                  Collection
-                </button>
-                <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('home')}`} onClick={() => handleNavClick('home', 'about')}>
-                  About
-                </button>
-                <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('home')}`} onClick={() => handleNavClick('home', 'contact')}>
-                  Contact
-                </button>
-                <button className={`text-left py-2 px-2 rounded-md hover:bg-sur ${navLinkClass('orders')}`} onClick={() => handleNavClick('orders')}>
-                  My Orders
-                </button>
-                {curUser?.isAdmin && (
-                  <button className={`text-left py-2 px-2 rounded-md hover:bg-sur flex items-center gap-2 ${curPage === 'admin' ? 'text-primary font-semibold' : 'text-mid'}`} onClick={() => handleNavClick('admin')}>
-                    <LayoutDashboard size={14} /> Admin Dashboard
-                  </button>
-                )}
-                {curUser ? (
-                  <button className="text-left py-2 px-2 rounded-md hover:bg-red-bg text-red flex items-center gap-2 font-medium" onClick={() => { logoutUser(); setIsMobileMenuOpen(false); }}>
-                    <LogOut size={14} /> Sign Out
-                  </button>
-                ) : (
-                  <button className="text-left py-2 px-2 rounded-md bg-primary text-wht font-semibold text-center" onClick={() => { openAuthModal('login'); setIsMobileMenuOpen(false); }}>
-                    Login / Sign Up
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        )}
-      </nav>
+      </div>
     </header>
   );
 };

@@ -34,7 +34,8 @@ interface AppContextType {
   logoutUser: () => void;
   addProduct: (product: Omit<Product, 'id' | 'rating' | 'reviewCount'>) => Promise<boolean>;
   updateProductImages: (id: number, updatedImgs: string[]) => void;
-  deleteProduct: (id: number) => Promise<boolean>;
+  deleteProduct: (id: number | string) => Promise<boolean>;
+  bulkDeleteProducts: (ids: (number | string)[]) => Promise<boolean>;
   duplicateProduct: (id: number) => void;
   submitReview: (authorName: string, rating: number, body: string, productName: string) => void;
   approveReview: (id: number) => void;
@@ -245,13 +246,13 @@ const DEF_REVS: Review[] = [
 const DEF_USERS: User[] = [
   {
     name: 'Admin User',
-    email: 'admin@cleaneveryday.in',
+    email: 'admin@ecommerce.com',
     password: 'admin123',
     isAdmin: true
   },
   {
     name: 'Global Customer',
-    email: 'customer@cleaneveryday.in',
+    email: 'customer@ecommerce.com',
     password: 'customer123',
     isAdmin: false
   }
@@ -270,10 +271,10 @@ const DEF_BANNERS: Banner[] = Array.from({ length: 4 }, (_, i) => ({
 }));
 
 const DEF_STAFF: Staff[] = [
-  { id: 'ST-001', name: 'Alok Sharma', email: 'alok@cleaneveryday.in', role: 'Super Admin', status: 'Active', lastLogin: '2026-07-06 18:30' },
-  { id: 'ST-002', name: 'Nisha Patil', email: 'nisha@cleaneveryday.in', role: 'Manager', status: 'Active', lastLogin: '2026-07-07 08:15' },
-  { id: 'ST-003', name: 'Rahul Sen', email: 'rahul@cleaneveryday.in', role: 'Sales', status: 'Active', lastLogin: '2026-07-05 14:22' },
-  { id: 'ST-004', name: 'Pooja Iyer', email: 'pooja@cleaneveryday.in', role: 'Support', status: 'Inactive', lastLogin: '2026-06-30 11:05' }
+  { id: 'ST-001', name: 'Alok Sharma', email: 'alok@ecommerce.com', role: 'Super Admin', status: 'Active', lastLogin: '2026-07-06 18:30' },
+  { id: 'ST-002', name: 'Nisha Patil', email: 'nisha@ecommerce.com', role: 'Manager', status: 'Active', lastLogin: '2026-07-07 08:15' },
+  { id: 'ST-003', name: 'Rahul Sen', email: 'rahul@ecommerce.com', role: 'Sales', status: 'Active', lastLogin: '2026-07-05 14:22' },
+  { id: 'ST-004', name: 'Pooja Iyer', email: 'pooja@ecommerce.com', role: 'Support', status: 'Inactive', lastLogin: '2026-06-30 11:05' }
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -926,9 +927,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     showToast('Product images updated.');
   };
 
-  const deleteProduct = async (id: number): Promise<boolean> => {
+  const deleteProduct = async (id: number | string): Promise<boolean> => {
     if (!checkAdminPermission()) return false;
-    const prod = products.find((p) => p.id === id);
+    const prod = products.find((p) => p.id === id || p._id === id);
     if (!prod) return false;
 
     if (prod._id) {
@@ -960,10 +961,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return false;
       }
     } else {
-      setProducts((prev) => prev.filter((p) => p.id !== id));
+      setProducts((prev) => prev.filter((p) => p.id !== id && p._id !== id));
       showToast('Product removed locally.');
       return true;
     }
+  };
+
+  const bulkDeleteProducts = async (ids: (number | string)[]): Promise<boolean> => {
+    if (!checkAdminPermission()) return false;
+    if (!ids || ids.length === 0) return false;
+
+    const targetProducts = products.filter(
+      (p) => ids.includes(p.id) || (p._id && ids.includes(p._id))
+    );
+
+    if (targetProducts.length === 0) return false;
+
+    const mongoIds = targetProducts.map((p) => p._id).filter(Boolean) as string[];
+    const localIds = targetProducts.filter((p) => !p._id).map((p) => p.id);
+
+    let success = true;
+
+    if (mongoIds.length > 0) {
+      const firebaseUser = auth.currentUser;
+      if (!firebaseUser) {
+        showToast('Error: System Admin Firebase session not active.');
+        return false;
+      }
+      try {
+        const token = await firebaseUser.getIdToken();
+        const response = await axios.post(
+          `${import.meta.env.VITE_BACKEND_URI}/admin/bulk-delete-products`,
+          { ids: mongoIds },
+          {
+            headers: {
+              Authorization: `Bearer ${token}`
+            },
+            withCredentials: true
+          }
+        );
+        if (response.data && response.data.success) {
+          showToast(`${targetProducts.length} product(s) deleted successfully.`);
+          await fetchProducts();
+        } else {
+          showToast(response.data.message || 'Failed to bulk delete products.');
+          success = false;
+        }
+      } catch (error: any) {
+        console.error('Error bulk deleting products:', error);
+        const errMsg = error.response?.data?.message || 'Error occurred while deleting products.';
+        showToast(errMsg);
+        success = false;
+      }
+    }
+
+    if (localIds.length > 0) {
+      setProducts((prev) => prev.filter((p) => !localIds.includes(p.id) && (!p._id || !ids.includes(p._id))));
+      if (mongoIds.length === 0) {
+        showToast(`${localIds.length} product(s) removed locally.`);
+      }
+    }
+
+    return success;
   };
 
   const duplicateProduct = (id: number) => {
@@ -1961,29 +2020,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         };
       }),
       total: b.grandTotal,
-      customerEmail: curUser?.email || 'customer@cleaneveryday.in',
+      customerEmail: curUser?.email || 'customer@ecommerce.com',
       shippingMethod: 'Standard Delivery',
       taxes: b.tax || 0,
       discount: b.discount || 0,
       address: {
         name: b.shippingAddress?.fullName || '',
-        phone: b.shippingAddress?.phone || '',
+        phone: b.shippingAddress?.phoneNumber || b.shippingAddress?.phone || '',
         alternatePhone: b.shippingAddress?.alternatePhone || '',
         addressLine1: b.shippingAddress?.addressLine1 || '',
         addressLine2: b.shippingAddress?.addressLine2 || '',
-        pincode: b.shippingAddress?.pincode || '',
+        pincode: b.shippingAddress?.postalCode || b.shippingAddress?.pincode || '',
         city: b.shippingAddress?.city || '',
         state: b.shippingAddress?.state || ''
       },
       billingAddress: {
-        name: b.billingAddress?.fullName || '',
-        phone: b.billingAddress?.phone || '',
+        name: b.billingAddress?.fullName || b.shippingAddress?.fullName || '',
+        phone: b.billingAddress?.phoneNumber || b.billingAddress?.phone || b.shippingAddress?.phoneNumber || b.shippingAddress?.phone || '',
         alternatePhone: b.billingAddress?.alternatePhone || '',
-        addressLine1: b.billingAddress?.addressLine1 || '',
-        addressLine2: b.billingAddress?.addressLine2 || '',
-        pincode: b.billingAddress?.pincode || '',
-        city: b.billingAddress?.city || '',
-        state: b.billingAddress?.state || ''
+        addressLine1: b.billingAddress?.addressLine1 || b.shippingAddress?.addressLine1 || '',
+        addressLine2: b.billingAddress?.addressLine2 || b.shippingAddress?.addressLine2 || '',
+        pincode: b.billingAddress?.postalCode || b.billingAddress?.pincode || b.shippingAddress?.postalCode || b.shippingAddress?.pincode || '',
+        city: b.billingAddress?.city || b.shippingAddress?.city || '',
+        state: b.billingAddress?.state || b.shippingAddress?.state || ''
       },
       paymentMethod: b.payment?.method || 'UPI',
       paymentStatus: b.payment?.status || 'Pending',
@@ -2000,7 +2059,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
           items: cart.map((item) => ({ ...item })),
           total: cart.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
-          customerEmail: curUser?.email || 'customer@cleaneveryday.in',
+          customerEmail: curUser?.email || 'customer@ecommerce.com',
           shippingMethod: 'Standard Delivery',
           taxes: 0,
           discount: 0,
@@ -2290,6 +2349,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addProduct,
         updateProductImages,
         deleteProduct,
+        bulkDeleteProducts,
         duplicateProduct,
         submitReview,
         approveReview,

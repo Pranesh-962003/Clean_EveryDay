@@ -9,6 +9,8 @@ export const SOCKET_EVENTS = {
   STORY_CREATED: "story:created",
   STORY_UPDATED: "story:updated",
   STORY_DELETED: "story:deleted",
+  STORY_REPLIED: "story:replied",
+  REVIEW_REPLIED: "review:replied",
 
   // Private Customer Events
   ORDER_CREATED: "order:created",

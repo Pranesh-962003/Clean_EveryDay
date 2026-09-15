@@ -53,6 +53,7 @@ export const getShippingAddress = (
     }
 
     const resolvedPhone = address.phoneNumber || address.phone || reqPhone || user.phoneNumber || user.phone || "";
+    const resolvedPincode = address.postalCode || address.pincode || address.zip || address.zipCode || "";
 
     return {
 
@@ -74,7 +75,9 @@ export const getShippingAddress = (
 
         country: address.country,
 
-        pincode: address.postalCode || address.pincode
+        postalCode: resolvedPincode,
+
+        pincode: resolvedPincode
 
     };
 
@@ -739,3 +742,72 @@ export const cancelOrderService = async (req) => {
     return order;
 
 };
+
+export const validateOrderReturn = (order) => {
+    if (order.isReturned || order.status === "Returned") {
+        throw new Error("Order is already returned.");
+    }
+
+    if (order.isCancelled || order.status === "Cancelled") {
+        throw new Error("Cancelled orders cannot be returned.");
+    }
+
+    if (order.status !== "Delivered") {
+        throw new Error("Only delivered orders can be returned.");
+    }
+
+    // 7-day return window validation (from delivery timestamp)
+    const deliveryTime = order.shipping?.deliveredAt
+        ? new Date(order.shipping.deliveredAt).getTime()
+        : order.updatedAt
+        ? new Date(order.updatedAt).getTime()
+        : new Date(order.createdAt).getTime();
+
+    const SEVEN_DAYS_MS = 7 * 24 * 60 * 60 * 1000;
+    if (Date.now() - deliveryTime > SEVEN_DAYS_MS) {
+        throw new Error("Return window has expired. Orders can only be returned within 7 days of delivery.");
+    }
+};
+
+export const updateReturnedOrder = async (
+    order,
+    returnReason
+) => {
+    order.status = "Returned";
+    order.isReturned = true;
+    order.returnedAt = new Date();
+    order.returnReason = returnReason || "";
+    order.inventoryRestored = true;
+
+    await order.save();
+    return order;
+};
+
+export const returnOrderService = async (req) => {
+    const { uid } = req.user;
+    const { orderId } = req.params;
+    const returnReason = req.body?.returnReason || req.body?.reason || "";
+
+    const user = await getUser(uid);
+
+    const order = await getOrder(
+        orderId,
+        user._id
+    );
+
+    validateOrderReturn(order);
+
+    if (!order.inventoryRestored) {
+        await restoreInventory(order);
+    }
+
+    await updateReturnedOrder(
+        order,
+        returnReason
+    );
+
+    await order.populate("customer");
+    await order.populate("items.product");
+
+    return order;
+};

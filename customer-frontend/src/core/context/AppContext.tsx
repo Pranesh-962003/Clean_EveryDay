@@ -39,7 +39,7 @@ interface AppContextType {
   updateProductImages: (id: number, updatedImgs: string[]) => void;
   deleteProduct: (id: number) => Promise<boolean>;
   duplicateProduct: (id: number) => void;
-  submitReview: (authorName: string, rating: number, body: string, productName: string, productId?: string) => Promise<{ success: boolean; message?: string }> | void;
+  submitReview: (authorName: string, rating: number, body: string, productName: string, productId?: string, image?: string | null) => Promise<{ success: boolean; message?: string }> | void;
   fetchProductReviews: (productId: string | number, productName?: string) => Promise<void>;
   approveReview: (id: number | string) => void;
   deleteReview: (id: number | string) => void;
@@ -69,6 +69,7 @@ interface AppContextType {
   updateProduct: (product: Product, localDeletedImagePublicIds?: string[]) => Promise<boolean>;
   updateOrderStatus: (id: string, status: Order['status'], targetId?: string) => Promise<boolean>;
   cancelOrder: (orderId: string, reason?: string) => Promise<{ success: boolean; message?: string }>;
+  returnOrder: (orderId: string, reason?: string) => Promise<{ success: boolean; message?: string }>;
   updateOrderDetails: (id: string, details: Partial<Order>) => void;
   addOrderTimelineEvent: (id: string, status: string, notes?: string) => void;
   
@@ -106,6 +107,10 @@ interface AppContextType {
   fetchCurrentUser: (preFetchedUser?: User) => Promise<void>;
   updateProfile: (updatedUser: Partial<User>) => void;
   setCurUser: React.Dispatch<React.SetStateAction<User | null>>;
+
+  // Navigation Visibility Controls
+  hideNavbar: boolean;
+  setHideNavbar: (hide: boolean) => void;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -120,8 +125,8 @@ const DEF_PRODS: Product[] = [
     badge: 'Bestseller',
     imgs: [],
     price: 299,
-    sku: 'CE-FL-01',
-    brand: 'Clean Everyday',
+    sku: 'EC-FL-01',
+    brand: 'Ecommerce',
     discount: 10,
     stock: 45,
     status: 'Active',
@@ -146,8 +151,8 @@ const DEF_PRODS: Product[] = [
     badge: null,
     imgs: [],
     price: 199,
-    sku: 'CE-DH-02',
-    brand: 'Clean Everyday',
+    sku: 'EC-DH-02',
+    brand: 'Ecommerce',
     discount: 0,
     stock: 5,
     status: 'Active',
@@ -172,8 +177,8 @@ const DEF_PRODS: Product[] = [
     badge: 'New',
     imgs: [],
     price: 349,
-    sku: 'CE-LD-03',
-    brand: 'Clean Everyday',
+    sku: 'EC-LD-03',
+    brand: 'Ecommerce',
     discount: 5,
     stock: 120,
     status: 'Active',
@@ -198,8 +203,8 @@ const DEF_PRODS: Product[] = [
     badge: null,
     imgs: [],
     price: 249,
-    sku: 'CE-DH-04',
-    brand: 'Clean Everyday',
+    sku: 'EC-DH-04',
+    brand: 'Ecommerce',
     discount: 15,
     stock: 2,
     status: 'Active',
@@ -207,25 +212,25 @@ const DEF_PRODS: Product[] = [
     specs: {
       Size: '500 ml Spray',
       Usage: 'Spray and wipe with a clean cloth',
-      Fragrance: 'Green Lime',
-      Suitable: 'All kitchen countertops and tables',
-      pH: '6.8',
+      Fragrance: 'Unscented',
+      Suitable: 'Countertops, cutting boards, dining tables',
+      pH: '7.0',
       Dilution: 'Ready to use'
     },
-    rating: 4.5,
-    reviewCount: 43
+    rating: 4.9,
+    reviewCount: 45
   }
 ];
 
 const DEF_REVS: Review[] = [
   {
     id: 1,
-    author: 'Priya Mehta',
-    ini: 'PM',
-    role: 'Mumbai, Home User',
+    author: 'Ananya Sharma',
+    ini: 'AS',
+    role: 'Mumbai, Verified Buyer',
     img: null,
     rating: 5,
-    body: 'I have tried many floor cleaners over the years. This floor concentrate is the first one that really works — my marble floors look clean and shiny, and there is no strong chemical smell.',
+    body: 'The floor cleaner has completely transformed the cleanliness of our home. It lifts dirt easily, leaves a subtle natural freshness, and I feel confident knowing our children and pets are safe.',
     product: 'Fresh Floor Cleaner',
     approved: true,
     status: 'Approved',
@@ -233,12 +238,12 @@ const DEF_REVS: Review[] = [
   },
   {
     id: 2,
-    author: 'Rajan Tiwari',
-    ini: 'RT',
-    role: 'Pune, Restaurant Owner',
+    author: 'Rajesh Nair',
+    ini: 'RN',
+    role: 'Kochi, Verified Buyer',
     img: null,
     rating: 5,
-    body: 'We transitioned our entire café to Clean Everyday for all dish washing and surface cleaning. The grease-cutting on our cookware is extraordinary, and our kitchen staff have commented that their hands are in markedly better condition since switching.',
+    body: 'We transitioned our entire café to these products for all dish washing and surface cleaning. The grease-cutting on our cookware is extraordinary, and our kitchen staff have commented that their hands are in markedly better condition since switching.',
     product: 'Gentle Dishwashing Liquid',
     approved: true,
     status: 'Approved',
@@ -251,7 +256,7 @@ const DEF_REVS: Review[] = [
     role: 'Bangalore, Parent',
     img: null,
     rating: 5,
-    body: 'With two young children and a dog, the safety of every cleaning product in our home is non-negotiable. Clean Everyday is the first brand I have trusted without reservation. The ingredients are simple, the performance is real, and there are no unpleasant chemical odours.',
+    body: 'With two young children and a dog, the safety of every cleaning product in our home is non-negotiable. This is the first store I have trusted without reservation. The ingredients are simple, the performance is real, and there are no unpleasant chemical odours.',
     product: 'Fresh Floor Cleaner',
     approved: true,
     status: 'Approved',
@@ -262,13 +267,13 @@ const DEF_REVS: Review[] = [
 const DEF_USERS: User[] = [
   {
     name: 'Admin User',
-    email: 'admin@cleaneveryday.in',
+    email: 'admin@ecommerce.com',
     password: 'admin123',
     isAdmin: true
   },
   {
     name: 'Global Customer',
-    email: 'customer@cleaneveryday.in',
+    email: 'customer@ecommerce.com',
     password: 'customer123',
     isAdmin: false
   }
@@ -287,10 +292,10 @@ const DEF_BANNERS: Banner[] = Array.from({ length: 4 }, (_, i) => ({
 }));
 
 const DEF_STAFF: Staff[] = [
-  { id: 'ST-001', name: 'Alok Sharma', email: 'alok@cleaneveryday.in', role: 'Super Admin', status: 'Active', lastLogin: '2026-07-06 18:30' },
-  { id: 'ST-002', name: 'Nisha Patil', email: 'nisha@cleaneveryday.in', role: 'Manager', status: 'Active', lastLogin: '2026-07-07 08:15' },
-  { id: 'ST-003', name: 'Rahul Sen', email: 'rahul@cleaneveryday.in', role: 'Sales', status: 'Active', lastLogin: '2026-07-05 14:22' },
-  { id: 'ST-004', name: 'Pooja Iyer', email: 'pooja@cleaneveryday.in', role: 'Support', status: 'Inactive', lastLogin: '2026-06-30 11:05' }
+  { id: 'ST-001', name: 'Alok Sharma', email: 'alok@ecommerce.com', role: 'Super Admin', status: 'Active', lastLogin: '2026-07-06 18:30' },
+  { id: 'ST-002', name: 'Nisha Patil', email: 'nisha@ecommerce.com', role: 'Manager', status: 'Active', lastLogin: '2026-07-07 08:15' },
+  { id: 'ST-003', name: 'Rahul Sen', email: 'rahul@ecommerce.com', role: 'Sales', status: 'Active', lastLogin: '2026-07-05 14:22' },
+  { id: 'ST-004', name: 'Pooja Iyer', email: 'pooja@ecommerce.com', role: 'Support', status: 'Inactive', lastLogin: '2026-06-30 11:05' }
 ];
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -325,6 +330,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   
   // Global Invoice Modal overlay state
   const [invoiceOrder, setInvoiceOrder] = useState<Order | null>(null);
+
+  // Global Navigation visibility state
+  const [hideNavbar, setHideNavbar] = useState<boolean>(false);
 
   // Shopping Cart & Orders state init
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -790,6 +798,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     };
 
+    const handleStoryUpdated = (data: { story?: any; id?: string; status?: string }) => {
+      if (data?.story) {
+        setStories((prev) => {
+          const sId = String(data.story._id || data.story.id);
+          const exists = prev.some((s) => String(s._id || s.id) === sId);
+          if (exists) {
+            return prev.map((s) => (String(s._id || s.id) === sId ? data.story : s));
+          }
+          return [data.story, ...prev];
+        });
+      } else {
+        fetchStories();
+      }
+    };
+
     const handleStoryDeleted = (data: { id?: string }) => {
       if (!data?.id) return;
       setStories((prev) => prev.filter((s) => String(s._id || s.id) !== String(data.id)));
@@ -821,6 +844,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     socket.on(SOCKET_EVENTS.REVIEW_STATUS_UPDATED, handleReviewStatusUpdated);
     socket.on(SOCKET_EVENTS.REVIEW_DELETED, handleReviewDeleted);
     socket.on(SOCKET_EVENTS.STORY_CREATED, handleStoryCreated);
+    socket.on(SOCKET_EVENTS.STORY_UPDATED, handleStoryUpdated);
     socket.on(SOCKET_EVENTS.STORY_DELETED, handleStoryDeleted);
     socket.on(SOCKET_EVENTS.ORDER_CREATED, handleOrderCreated);
     socket.on(SOCKET_EVENTS.ORDER_STATUS_UPDATED, handleOrderStatusUpdated);
@@ -872,7 +896,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const openAuthModal = (tab: 'login' | 'signup' = 'login') => {
     setAuthModalTab(tab);
-    setAuthModalOpen(true);
+    setCurPage(tab === 'signup' ? 'register' : 'login');
   };
 
   const closeAuthModal = () => {
@@ -942,7 +966,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     sessionStorage.setItem('ce_access_token', mockToken);
     
     setCurUser({ name, email, isAdmin: false });
-    showToast(`Welcome to Clean Everyday, ${name}!`);
+    showToast(`Welcome to Ecommerce, ${name}!`);
     return { success: true, message: 'Registered successfully' };
   };
 
@@ -1276,7 +1300,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     rating: number,
     body: string,
     productName: string,
-    productId?: string
+    productId?: string,
+    image?: string | null
   ): Promise<{ success: boolean; message?: string }> => {
     if (!curUser) {
       showToast('Please log in to submit a review.');
@@ -1302,7 +1327,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           {
             productId: resolvedProductId,
             rating: Number(rating),
-            comment: body
+            comment: body,
+            image: image || null
           },
           {
             headers: { Authorization: `Bearer ${token}` },
@@ -1319,21 +1345,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             .substring(0, 2);
 
           const newReview: Review = {
-            id: Date.now(),
+            id: response.data.review?._id || Date.now(),
+            _id: response.data.review?._id,
             author: authorName,
             ini: initials || 'C',
             role: 'Verified Customer',
             img: null,
+            image: response.data.review?.image || image || null,
             rating,
             body,
             product: productName,
-            approved: false,
-            status: 'Pending',
+            approved: true,
+            status: 'Approved',
             date: new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
           };
 
-          setReviews((prev) => [...prev, newReview]);
-          showToast(response.data.message || 'Review submitted successfully. Waiting for admin approval.');
+          setReviews((prev) => [newReview, ...prev]);
+          showToast(response.data.message || 'Review submitted successfully!');
           return { success: true, message: response.data.message };
         } else {
           showToast(response.data?.message || 'Failed to submit review.');
@@ -1353,16 +1381,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ini: initials || 'C',
           role: 'Verified Customer',
           img: null,
+          image: image || null,
           rating,
           body,
           product: productName,
-          approved: false,
-          status: 'Pending',
+          approved: true,
+          status: 'Approved',
           date: new Date().toLocaleDateString('en-IN', { month: 'short', year: 'numeric' })
         };
 
-        setReviews((prev) => [...prev, newReview]);
-        showToast('Your review has been submitted for approval.');
+        setReviews((prev) => [newReview, ...prev]);
+        showToast('Your review has been submitted.');
         return { success: true };
       }
       return { success: false, message: 'Could not authenticate user for review submission.' };
@@ -1396,6 +1425,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             ini: initials || 'C',
             role: r.verifiedPurchase ? 'Verified Purchaser' : 'Customer',
             img: null,
+            image: r.image || (Array.isArray(r.images) && r.images.length > 0 ? r.images[0] : null),
+            images: Array.isArray(r.images) ? r.images : (r.image ? [r.image] : []),
             rating: Number(r.rating) || 5,
             body: r.review || r.comment || '',
             product: productName || 'General',
@@ -1767,15 +1798,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
                 badge: p.badge === 'None' ? null : (p.badge || null),
                 imgs: p.images?.length > 0 ? p.images.map((im: any) => im.url || im) : (p.imgs || []),
                 price: p.sellingPrice || p.retailPrice || p.price || 299,
-                sku: p.sku || 'CE-PROD',
-                brand: p.brand || 'Clean Everyday',
+                sku: p.sku || 'EC-PROD',
+                brand: p.brand || 'Ecommerce',
                 discount: p.discountPercentage || 0,
                 stock: typeof p.stock === 'number' ? p.stock : 50,
                 status: 'Active',
                 createdDate: p.createdAt || '',
                 specs: {},
-                rating: p.averageRating || 4.5,
-                reviewCount: p.totalReviews || 10
+                rating: p.averageRating || 0,
+                reviewCount: p.totalReviews || 0
               };
 
               // Extra safety guard: ensure product price and name are valid
@@ -2045,8 +2076,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
               badge: null,
               imgs: item.image ? [item.image] : (typeof item.product === 'object' && item.product?.images?.length > 0 ? item.product.images.map((im: any) => im.url || im) : (b.firstProductImage ? [b.firstProductImage] : [])),
               price: item.unitPrice || item.sellingPrice || item.price || b.grandTotal,
-              sku: item.sku || 'CE-PROD',
-              brand: 'Clean Everyday',
+              sku: item.sku || 'EC-PROD',
+              brand: 'Ecommerce',
               discount: 0,
               stock: 0,
               status: 'Active',
@@ -2063,15 +2094,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             product: {
               id: Math.floor(Math.random() * 100000),
               _id: b._id || '',
-              name: b.firstProductName || 'Botanical formulation order',
+              name: b.firstProductName || 'Order Item',
               cat: 'General',
               desc: '',
               tags: [],
               badge: null,
               imgs: b.firstProductImage ? [b.firstProductImage] : [],
               price: b.grandTotal || 0,
-              sku: 'CE-PROD',
-              brand: 'Clean Everyday',
+              sku: 'EC-PROD',
+              brand: 'Ecommerce',
               discount: 0,
               stock: 0,
               status: 'Active',
@@ -2094,7 +2125,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: b.createdAt,
       items: formattedItems,
       total: b.grandTotal !== undefined ? b.grandTotal : (b.total || 0),
-      customerEmail: curUser?.email || 'customer@cleaneveryday.in',
+      customerEmail: curUser?.email || 'customer@ecommerce.com',
       shippingMethod: b.shipping?.courier || b.courier || 'Standard Delivery',
       trackingId: b.trackingId || b.shipping?.trackingId || '',
       courierCompany: b.courier || b.shipping?.courier || '',
@@ -2150,7 +2181,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           date: new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
           items: targetItems.map((item) => ({ ...item })),
           total: targetItems.reduce((sum, item) => sum + item.product.price * item.quantity, 0),
-          customerEmail: curUser?.email || 'customer@cleaneveryday.in',
+          customerEmail: curUser?.email || 'customer@ecommerce.com',
           shippingMethod: deliveryOption === 'FREE' ? 'Free Delivery' : deliveryOption === 'EXPRESS' ? 'Express Delivery' : 'Standard Delivery',
           taxes: 0,
           discount: 0,
@@ -2366,6 +2397,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const returnOrder = async (orderId: string, reason?: string): Promise<{ success: boolean; message?: string }> => {
+    try {
+      if (!auth.currentUser) {
+        await auth.authStateReady();
+      }
+      const firebaseUser = auth.currentUser;
+      if (firebaseUser) {
+        const token = await firebaseUser.getIdToken();
+        const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
+        const response = await axios.post(`${backendUrl}/orders/return/${orderId}`, {
+          returnReason: reason,
+          reason
+        }, {
+          headers: { Authorization: `Bearer ${token}` },
+          withCredentials: true
+        });
+
+        if (response.data && response.data.success) {
+          setOrders((prev) =>
+            prev.map((o) => {
+              if (o.id === orderId || o._id === orderId) {
+                const nextTimeline = o.timeline ? [...o.timeline] : [];
+                nextTimeline.push({
+                  status: 'Returned',
+                  date: new Date().toLocaleString('en-IN'),
+                  notes: `Return requested by customer. Reason: ${reason || 'Customer request'}`
+                });
+                return { ...o, status: 'Returned', timeline: nextTimeline };
+              }
+              return o;
+            })
+          );
+          showToast('Order return request submitted successfully.');
+          return { success: true, message: response.data.message || 'Order return request submitted successfully.' };
+        } else {
+          return { success: false, message: response.data?.message || 'Failed to return order.' };
+        }
+      } else {
+        await updateOrderStatus(orderId, 'Returned');
+        return { success: true, message: 'Order returned.' };
+      }
+    } catch (err: any) {
+      console.error('Return order API error:', err);
+      const errMsg = err.response?.data?.message || err.message || 'Failed to return order.';
+      return { success: false, message: errMsg };
+    }
+  };
+
   const updateOrderDetails = (id: string, details: Partial<Order>) => {
     if (!checkAdminPermission()) return;
     setOrders((prev) =>
@@ -2559,6 +2638,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateProduct,
         updateOrderStatus,
         cancelOrder,
+        returnOrder,
         updateOrderDetails,
         addOrderTimelineEvent,
         inviteStaff,
@@ -2569,7 +2649,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setInvoiceOrder,
         fetchCurrentUser,
         updateProfile,
-        setCurUser
+        setCurUser,
+        hideNavbar,
+        setHideNavbar
       }}
     >
       {children}

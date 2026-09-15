@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../../../core/context/AppContext';
-import { Upload, Info, Check, ArrowRight, ArrowLeft, X } from 'lucide-react';
+import { Upload, Info, Check, ArrowRight, ArrowLeft, Package, Star, ShieldCheck } from 'lucide-react';
 
 interface AddProductFormProps {
   onTabChange: (tab: 'dashboard' | 'products' | 'orders' | 'reviews' | 'add' | 'banners' | 'leads' | 'users') => void;
@@ -242,117 +242,136 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
   };
 
   const stepsHeader = [
-    'Basic information',
-    'Pricing settings',
-    'Inventory control',
-    'Media gallery',
-    'SEO metadata',
-    'Review and publish'
+    'General Information',
+    'Pricing & Margin',
+    'Inventory & Specs',
+    'Media Assets',
+    'SEO & Search',
+    'Final Review'
   ];
 
   return (
-    <div className="animate-fadeIn max-w-[760px] mx-auto">
-      {/* Title */}
-      <div className="flex justify-between items-start mb-6 gap-4 select-none">
-        <div>
-          <h2 className="font-display text-xl font-semibold text-blk">Add new product</h2>
-          <p className="text-sm text-mut mt-0.5">Wizard step-by-step form process with autosaved background drafting.</p>
-        </div>
-        <div className="flex items-center gap-4 mt-2 shrink-0">
-          <button
-            onClick={handleClearDraft}
-            className="text-xs font-semibold text-red hover:underline bg-transparent border-none cursor-pointer"
-          >
-            Clear draft
-          </button>
+    <div className="animate-fadeIn w-full space-y-6">
+      {/* Back Button & Step Breadcrumbs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5 border-b border-slate-200">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => onTabChange('products')}
-            className="flex items-center gap-1 text-xs font-semibold text-mut hover:text-primary transition-colors cursor-pointer border-none bg-transparent"
-            title="Cancel and exit form"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors shadow-xs cursor-pointer min-h-[38px]"
           >
-            <X size={12} /> Cancel and exit
+            <ArrowLeft size={14} /> Back to Products
+          </button>
+          <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
+            <span>/</span>
+            <span className="font-semibold text-slate-900">New Product (Step {step} of 6)</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={handleClearDraft}
+            className="text-xs font-semibold text-rose-600 hover:text-rose-700 cursor-pointer bg-transparent border-none py-1.5 px-2"
+          >
+            Clear Draft
           </button>
         </div>
       </div>
 
-      {/* Step Indicators */}
-      <div className="grid grid-cols-6 gap-2 mb-8 select-none text-xs font-semibold text-center">
-        {stepsHeader.map((label, idx) => {
-          const stepNum = idx + 1;
-          const isDone = stepNum < step;
-          const isActive = stepNum === step;
+      {/* 2-Column Layout: Left Wizard + Right Live Preview */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-8 items-start">
+        <div className="xl:col-span-8 space-y-6">
+          {/* Step Progression Indicators */}
+          <div className="bg-white border border-slate-200 rounded-xl p-3 shadow-xs">
+        <div className="grid grid-cols-6 gap-2 select-none text-xs font-medium text-center">
+          {stepsHeader.map((label, idx) => {
+            const stepNum = idx + 1;
+            const isDone = stepNum < step;
+            const isActive = stepNum === step;
 
-          return (
-            <div key={label} className="flex flex-col items-center">
-              <div
-                className={`w-6 h-6 rounded-full flex items-center justify-center border font-bold ${
-                  isDone
-                    ? 'bg-primary text-wht border-primary'
-                    : isActive
-                    ? 'border-primary text-primary bg-primary-soft ring-3 ring-primary/10'
-                    : 'border-bdr text-fnt bg-sur'
+            return (
+              <button
+                key={label}
+                type="button"
+                onClick={() => setStep(stepNum)}
+                className={`flex flex-col items-center py-2 px-1 rounded-lg transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-slate-950 text-white shadow-xs'
+                    : isDone
+                    ? 'text-slate-900 hover:bg-slate-100'
+                    : 'text-slate-400 hover:text-slate-600'
                 }`}
               >
-                {isDone ? <Check size={11} /> : stepNum}
-              </div>
-              <span className={`hidden md:block mt-1.5 truncate max-w-[90px] ${isActive ? 'text-primary-hover' : 'text-mut'}`}>
-                {label.split(' ')[0]}
-              </span>
-            </div>
-          );
-        })}
+                <div className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold mb-1 font-mono ${
+                  isActive
+                    ? 'bg-white text-slate-950'
+                    : isDone
+                    ? 'bg-emerald-100 text-emerald-800'
+                    : 'bg-slate-100 text-slate-500'
+                }`}>
+                  {isDone ? <Check size={11} /> : stepNum}
+                </div>
+                <span className="hidden sm:block text-[11px] truncate w-full px-1">
+                  {label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Step Contents */}
-      <div className="bg-wht border border-bdrl rounded-xl p-6 sm:p-8 shadow-premium-sm mb-6">
-        <form onSubmit={handlePublish}>
+      {/* Step Form Card */}
+      <div className="bg-white border border-slate-200 rounded-xl p-6 sm:p-8 shadow-xs">
+        <form onSubmit={handlePublish} className="space-y-6">
           
           {/* Step 1: Basic Information */}
           {step === 1 && (
-            <div className="flex flex-col gap-4 animate-fadeIn">
-              <h3 className="font-display text-sm font-semibold text-blk border-b border-bdrl pb-2.5 mb-2">Step 1: General product details</h3>
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Step 1: General Product Details</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Core identifiers and consumer descriptions</p>
+              </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label className="text-xs font-medium text-mut">Product Title <span className="text-red-500">*</span></label>
+                  <label className="text-xs font-semibold text-slate-700">Product Title *</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. Lavender Multi-Surface Sanitizer"
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none bg-wht w-full"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 placeholder:text-slate-400 bg-white transition-all min-h-[44px]"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">SKU Identifier <span className="text-red-500">*</span></label>
+                  <label className="text-xs font-semibold text-slate-700">SKU Code *</label>
                   <input
                     type="text"
                     required
                     placeholder="e.g. CE-LV-500"
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-[0.86rem] outline-none bg-wht w-full font-mono uppercase"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm font-mono uppercase text-slate-900 placeholder:text-slate-400 bg-white transition-all min-h-[44px]"
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Brand Supplier</label>
+                  <label className="text-xs font-semibold text-slate-700">Brand Name</label>
                   <input
                     type="text"
                     placeholder="Clean Everyday"
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none bg-wht w-full"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 placeholder:text-slate-400 bg-white transition-all min-h-[44px]"
                     value={brand}
                     onChange={(e) => setBrand(e.target.value)}
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Category <span className="text-red-500">*</span></label>
+                  <label className="text-xs font-semibold text-slate-700">Category *</label>
                   <select
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-[0.86rem] outline-none bg-wht w-full cursor-pointer"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all min-h-[44px] cursor-pointer"
                     value={cat}
                     onChange={(e) => setCat(e.target.value)}
                   >
@@ -363,36 +382,36 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Badge Label</label>
+                  <label className="text-xs font-semibold text-slate-700">Badge Callout</label>
                   <select
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none bg-wht w-full cursor-pointer"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all min-h-[44px] cursor-pointer"
                     value={badge}
                     onChange={(e) => setBadge(e.target.value)}
                   >
-                    <option value="">None</option>
-                    <option value="New">New</option>
+                    <option value="">None (Standard)</option>
+                    <option value="New">New Arrival</option>
                     <option value="Bestseller">Bestseller</option>
                   </select>
                 </div>
 
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label className="text-xs font-medium text-mut">Tags / Highlights (Comma separated)</label>
+                  <label className="text-xs font-semibold text-slate-700">Search Tags (Comma separated)</label>
                   <input
                     type="text"
                     placeholder="e.g. Plant-based, Safe for Pets, Antibacterial"
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none bg-wht w-full"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 placeholder:text-slate-400 bg-white transition-all min-h-[44px]"
                     value={tags}
                     onChange={(e) => setTags(e.target.value)}
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5 sm:col-span-2">
-                  <label className="text-xs font-medium text-mut">Description <span className="text-red-500">*</span></label>
+                  <label className="text-xs font-semibold text-slate-700">Product Description *</label>
                   <textarea
                     rows={4}
                     required
-                    placeholder="Provide a detailed, rich description for the ecommerce catalog..."
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-[0.86rem] outline-none bg-wht w-full resize-none"
+                    placeholder="Provide detailed formulation notes, benefits, and instructions..."
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 placeholder:text-slate-400 bg-white transition-all resize-none"
                     value={desc}
                     onChange={(e) => setDesc(e.target.value)}
                   />
@@ -403,46 +422,52 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
 
           {/* Step 2: Pricing */}
           {step === 2 && (
-            <div className="flex flex-col gap-4 animate-fadeIn">
-              <h3 className="font-display text-sm font-semibold text-blk border-b border-bdrl pb-2.5 mb-2">Step 2: Price configuration</h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 text-sm">
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Step 2: Price Configuration</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Determine retail rates, discounts, and real margins</p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Base retail price (INR) *</label>
+                  <label className="text-xs font-semibold text-slate-700">Base Retail Price (₹ INR) *</label>
                   <input
                     type="number"
                     min={1}
                     required
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm font-mono text-slate-900 bg-white transition-all min-h-[44px]"
                     value={price}
                     onChange={(e) => setPrice(parseInt(e.target.value) || 0)}
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Discount rate (%)</label>
+                  <label className="text-xs font-semibold text-slate-700">Discount Rate (%)</label>
                   <input
                     type="number"
                     min={0}
                     max={100}
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm font-mono text-slate-900 bg-white transition-all min-h-[44px]"
                     value={discount}
                     onChange={(e) => setDiscount(parseInt(e.target.value) || 0)}
                   />
                 </div>
 
-                <div className="sm:col-span-2 bg-sur p-4 rounded-md border border-bdr mt-2 text-sm">
-                  <span className="font-semibold text-mid block mb-1 text-xs">Pricing math:</span>
-                  <div className="flex justify-between py-1 text-mut">
-                    <span>Retail price:</span>
-                    <span>₹{price}</span>
-                  </div>
-                  <div className="flex justify-between py-1 text-red font-semibold">
-                    <span>Discount deduction (-{discount}%):</span>
-                    <span>-₹{Math.round(price * (discount / 100))}</span>
-                  </div>
-                  <div className="flex justify-between py-1.5 text-blk font-semibold border-t border-bdrl mt-2">
-                    <span>Final selling price:</span>
-                    <span>₹{Math.round(price - price * (discount / 100))}</span>
+                <div className="sm:col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-200 text-xs">
+                  <span className="font-semibold text-slate-900 block mb-2">Price Breakdown Summary:</span>
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-slate-600">
+                      <span>Standard Retail Price:</span>
+                      <span className="font-mono">₹{price}</span>
+                    </div>
+                    <div className="flex justify-between text-rose-600">
+                      <span>Discount Concession (-{discount}%):</span>
+                      <span className="font-mono">-₹{Math.round(price * (discount / 100))}</span>
+                    </div>
+                    <div className="flex justify-between font-bold text-slate-950 border-t border-slate-200 pt-2 mt-2">
+                      <span>Customer Checkout Price:</span>
+                      <span className="font-mono text-sm">₹{Math.round(price - price * (discount / 100))}</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -451,53 +476,56 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
 
           {/* Step 3: Inventory */}
           {step === 3 && (
-            <div className="flex flex-col gap-4 animate-fadeIn">
-              <h3 className="font-display text-sm font-semibold text-blk border-b border-bdrl pb-2.5 mb-2">Step 3: Inventory & specs settings</h3>
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Step 3: Inventory & Specifications</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Stock thresholds and technical characteristics</p>
+              </div>
               
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Initial stock count *</label>
+                  <label className="text-xs font-semibold text-slate-700">Initial Stock Quantity *</label>
                   <input
                     type="number"
                     min={0}
                     required
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm font-mono text-slate-900 bg-white transition-all min-h-[44px]"
                     value={stock}
                     onChange={(e) => setStock(parseInt(e.target.value) || 0)}
                   />
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Min stock alert threshold</label>
+                  <label className="text-xs font-semibold text-slate-700">Low Stock Alert Threshold</label>
                   <input
                     type="number"
                     min={1}
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm font-mono text-slate-900 bg-white transition-all min-h-[44px]"
                     value={minStockAlert}
                     onChange={(e) => setMinStockAlert(parseInt(e.target.value) || 0)}
                   />
                 </div>
 
                 {/* Specs Section */}
-                <div className="sm:col-span-2 border-t border-bdrl pt-4 mt-2">
-                  <span className="text-xs font-semibold text-mid block mb-4">Product technical specifications</span>
+                <div className="sm:col-span-2 border-t border-slate-100 pt-4 mt-2">
+                  <h3 className="text-xs font-bold text-slate-900 mb-3">Product Form Specifications</h3>
                   
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-mut">Container Size *</label>
-                      <input className="border border-bdr rounded px-3 py-2 text-sm outline-none focus:border-primary" type="text" required value={specSize} onChange={(e) => setSpecSize(e.target.value)} />
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700">Unit Volume / Size *</label>
+                      <input className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all min-h-[44px]" type="text" required value={specSize} onChange={(e) => setSpecSize(e.target.value)} />
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-mut">Usage Instructions *</label>
-                      <input className="border border-bdr rounded px-3 py-2 text-sm outline-none focus:border-primary" type="text" required value={specUsage} onChange={(e) => setSpecUsage(e.target.value)} />
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700">Usage Instructions *</label>
+                      <input className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all min-h-[44px]" type="text" required value={specUsage} onChange={(e) => setSpecUsage(e.target.value)} />
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-mut">pH Level *</label>
-                      <input className="border border-bdr rounded px-3 py-2 text-sm outline-none focus:border-primary" type="text" required value={specPH} onChange={(e) => setSpecPH(e.target.value)} />
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700">pH Formula *</label>
+                      <input className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all min-h-[44px]" type="text" required value={specPH} onChange={(e) => setSpecPH(e.target.value)} />
                     </div>
-                    <div className="flex flex-col gap-1">
-                      <label className="text-xs font-medium text-mut">Suitable Surfaces *</label>
-                      <input className="border border-bdr rounded px-3 py-2 text-sm outline-none focus:border-primary" type="text" required value={specSuitable} onChange={(e) => setSpecSuitable(e.target.value)} />
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700">Compatible Surfaces *</label>
+                      <input className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all min-h-[44px]" type="text" required value={specSuitable} onChange={(e) => setSpecSuitable(e.target.value)} />
                     </div>
                   </div>
                 </div>
@@ -507,29 +535,32 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
 
           {/* Step 4: Images Drag & Drop */}
           {step === 4 && (
-            <div className="flex flex-col gap-4 animate-fadeIn">
-              <h3 className="font-display text-sm font-semibold text-blk border-b border-bdrl pb-2.5 mb-2">Step 4: Media gallery upload</h3>
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Step 4: Media Gallery</h2>
+                <p className="text-xs text-slate-500 mt-0.5">High fidelity product photos (Maximum 5 images)</p>
+              </div>
               
               {/* Drag Area */}
               <div
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onDrop={handleDrop}
-                className={`border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${
+                className={`border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center gap-3 transition-all cursor-pointer ${
                   isDragging
-                    ? 'border-primary bg-primary-soft/50'
-                    : 'border-bdr hover:border-primary bg-sur/50'
+                    ? 'border-slate-950 bg-slate-100'
+                    : 'border-slate-300 hover:border-slate-900 bg-slate-50/50'
                 }`}
               >
-                <div className="w-12 h-12 rounded-full bg-primary-soft text-primary flex items-center justify-center">
-                  <Upload size={20} />
+                <div className="w-12 h-12 rounded-xl bg-white border border-slate-200 text-slate-700 flex items-center justify-center shadow-xs">
+                  <Upload size={22} />
                 </div>
                 <div className="text-center">
-                  <span className="text-sm font-semibold text-blk block">Drag & Drop Product Images</span>
-                  <span className="text-xs text-mut block mt-1">Accepts images only. Max file size 2MB.</span>
+                  <span className="text-sm font-semibold text-slate-900 block">Drag & Drop Product Photography</span>
+                  <span className="text-xs text-slate-500 block mt-1">Accepts PNG, JPG, WebP up to 5MB</span>
                 </div>
-                <label className="bg-primary text-wht rounded px-4 py-2 text-xs font-semibold hover:bg-primary-hover transition-colors cursor-pointer mt-2">
-                  Browse Files
+                <label className="bg-slate-950 text-white rounded-lg px-4 py-2 text-xs font-medium hover:bg-slate-800 transition-colors cursor-pointer mt-2 shadow-xs">
+                  Browse Local Files
                   <input
                     type="file"
                     accept="image/*"
@@ -542,15 +573,15 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
 
               {/* Uploaded Previews */}
               {images.length > 0 && (
-                <div className="mt-4">
-                  <span className="text-xs font-semibold text-mut block mb-3">Uploaded Previews ({images.length}/5)</span>
-                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3.5">
+                <div className="space-y-3">
+                  <span className="text-xs font-semibold text-slate-700 block">Loaded Assets ({images.length}/5)</span>
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {images.map((imgSrc, imgIdx) => (
-                      <div className="relative aspect-square border border-bdr rounded bg-sur overflow-hidden flex items-center justify-center group" key={imgIdx}>
+                      <div className="relative aspect-square border border-slate-200 rounded-lg bg-slate-100 overflow-hidden flex items-center justify-center group shadow-xs" key={imgIdx}>
                         <img src={imgSrc} alt="" className="w-full h-full object-cover" />
                         <button
                           type="button"
-                          className="absolute inset-0 bg-blk/60 text-wht flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs cursor-pointer"
+                          className="absolute inset-0 bg-slate-950/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs font-medium cursor-pointer"
                           onClick={() => handleRemoveImage(imgIdx)}
                         >
                           Remove
@@ -565,40 +596,43 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
 
           {/* Step 5: SEO */}
           {step === 5 && (
-            <div className="flex flex-col gap-4 animate-fadeIn">
-              <h3 className="font-display text-sm font-semibold text-blk border-b border-bdrl pb-2.5 mb-2">Step 5: Search engine optimization</h3>
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Step 5: Search Engine Optimization</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Optimize search rankings and social share cards</p>
+              </div>
               
-              <div className="flex flex-col gap-4">
+              <div className="space-y-4">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Meta Title Tag</label>
+                  <label className="text-xs font-semibold text-slate-700">Meta Title Tag</label>
                   <input
                     type="text"
                     placeholder="e.g. Natural Floor Cleaner Concentrate | Clean Everyday"
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none w-full"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all min-h-[44px]"
                     value={metaTitle}
                     onChange={(e) => setMetaTitle(e.target.value)}
                   />
-                  <span className="text-xs text-mut text-right">Characters: {metaTitle.length}/60</span>
+                  <span className="text-[11px] text-slate-400 text-right font-mono">{metaTitle.length} / 60 optimal</span>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Meta Description Tag</label>
+                  <label className="text-xs font-semibold text-slate-700">Meta Description Tag</label>
                   <textarea
                     rows={3}
-                    placeholder="Write a catchy 150-160 character description of the product for google search listing..."
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none w-full resize-none"
+                    placeholder="Write a concise 150-160 character description of the product for Google search listings..."
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all resize-none"
                     value={metaDesc}
                     onChange={(e) => setMetaDesc(e.target.value)}
                   />
-                  <span className="text-xs text-mut text-right">Characters: {metaDesc.length}/160</span>
+                  <span className="text-[11px] text-slate-400 text-right font-mono">{metaDesc.length} / 160 optimal</span>
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-medium text-mut">Meta Keywords (Comma separated)</label>
+                  <label className="text-xs font-semibold text-slate-700">Search Keywords (Comma separated)</label>
                   <input
                     type="text"
                     placeholder="e.g. eco friendly, bio floor cleaner, natural disinfectant"
-                    className="border border-bdr focus:border-primary rounded px-3.5 py-2.5 text-sm outline-none w-full"
+                    className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 outline-none text-sm text-slate-900 bg-white transition-all min-h-[44px]"
                     value={metaKeywords}
                     onChange={(e) => setMetaKeywords(e.target.value)}
                   />
@@ -609,65 +643,68 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
 
           {/* Step 6: Review & Publish */}
           {step === 6 && (
-            <div className="flex flex-col gap-4 animate-fadeIn">
-              <h3 className="font-display text-sm font-semibold text-blk border-b border-bdrl pb-2.5 mb-2">Step 6: Review specifications</h3>
+            <div className="space-y-5 animate-fadeIn">
+              <div className="border-b border-slate-100 pb-3">
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Step 6: Review & Verification</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Final verification before deploying product into live catalog</p>
+              </div>
               
-              <div className="border border-bdr rounded-md p-5 bg-sur/50 flex flex-col gap-4 text-sm leading-relaxed">
+              <div className="border border-slate-200 rounded-xl p-5 bg-slate-50/50 space-y-4 text-xs">
                 <div>
-                  <strong className="text-mid text-xs block">Product profile:</strong>
-                  <span className="text-base font-semibold text-blk block mt-0.5">{name || 'Untitled Product'}</span>
-                  <span className="text-xs text-mut block mt-0.5">SKU: {sku || 'TBD'} • Category: {cat} • Brand: {brand}</span>
+                  <span className="text-slate-500 font-medium block">Product Profile</span>
+                  <h3 className="text-base font-bold text-slate-950 mt-0.5">{name || 'Untitled Product'}</h3>
+                  <p className="text-slate-600 font-mono mt-0.5">SKU: {sku || 'TBD'} • Category: {cat} • Brand: {brand}</p>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 border-t border-bdrl pt-3 mt-1">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 border-t border-slate-200 pt-3">
                   <div>
-                    <strong className="text-mut text-xs block">Retail price:</strong>
-                    <span className="font-semibold text-blk">₹{price} (INR)</span>
+                    <span className="text-slate-500 font-medium block">Retail Price:</span>
+                    <span className="font-bold text-slate-950 font-mono">₹{price}</span>
                   </div>
                   <div>
-                    <strong className="text-mut text-xs block">Discount rate:</strong>
-                    <span className="font-semibold text-blk">{discount}% off</span>
+                    <span className="text-slate-500 font-medium block">Discount Rate:</span>
+                    <span className="font-bold text-slate-950 font-mono">{discount}% off</span>
                   </div>
                   <div>
-                    <strong className="text-mut text-xs block">Stock level:</strong>
-                    <span className="font-semibold text-blk">{stock} items</span>
+                    <span className="text-slate-500 font-medium block">Initial Stock:</span>
+                    <span className="font-bold text-slate-950 font-mono">{stock} units</span>
                   </div>
                   <div>
-                    <strong className="text-mut text-xs block">Container size:</strong>
-                    <span className="font-semibold text-blk">{specSize}</span>
+                    <span className="text-slate-500 font-medium block">Packaging:</span>
+                    <span className="font-bold text-slate-950">{specSize}</span>
                   </div>
                 </div>
 
-                <div className="border-t border-bdrl pt-3 mt-1">
-                  <strong className="text-mut text-xs block">Media uploads:</strong>
-                  <span className="text-blk font-medium">{images.length} images added</span>
+                <div className="border-t border-slate-200 pt-3">
+                  <span className="text-slate-500 font-medium block">Media Status:</span>
+                  <span className="text-slate-900 font-semibold">{images.length} assets ready for upload</span>
                 </div>
 
-                <div className="border-t border-bdrl pt-3 mt-1 bg-yellow-50/50 border border-amber-200/50 p-3 rounded-md flex items-center gap-3 text-xs text-amber-800">
-                  <Info size={16} className="text-amber-600 shrink-0" />
-                  <span>Please review that all product description and specifications tags match Clean Everyday safety rules before publishing catalog item.</span>
+                <div className="border border-amber-200 bg-amber-50 p-3.5 rounded-lg flex items-start gap-3 text-xs text-amber-900">
+                  <Info size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <span>Please confirm that all ingredients, formulation tags, and product dilution ratios conform to Clean Everyday quality assurance standards.</span>
                 </div>
               </div>
 
-              <div className="mt-4 flex justify-center">
+              <div className="pt-2 flex justify-center">
                 <button
                   type="submit"
                   disabled={isPublishing}
-                  className="bg-primary text-wht rounded py-3 px-8 text-sm font-semibold hover:bg-primary-hover cursor-pointer active:scale-95 transition-all shadow-premium-md disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="px-8 py-3 rounded-lg bg-slate-950 text-white hover:bg-slate-800 text-xs font-semibold tracking-wide shadow-xs transition-colors min-h-[44px] cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {isPublishing ? 'Publishing...' : 'Publish catalogue item'}
+                  {isPublishing ? 'Deploying to Catalog...' : 'Publish Product to Live Store'}
                 </button>
               </div>
             </div>
           )}
 
           {/* Navigation Controls */}
-          <div className="flex justify-between items-center mt-8 pt-5 border-t border-bdrl select-none">
+          <div className="flex justify-between items-center pt-6 border-t border-slate-200 select-none">
             <button
               type="button"
               disabled={step === 1}
               onClick={() => setStep((s) => Math.max(s - 1, 1))}
-              className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 border border-bdr text-mid hover:border-primary hover:text-primary rounded disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer transition-colors bg-wht"
+              className="inline-flex items-center gap-1.5 text-xs font-medium px-4 py-2 border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-colors bg-white min-h-[40px]"
             >
               <ArrowLeft size={13} /> Back
             </button>
@@ -676,16 +713,128 @@ const AddProductForm: React.FC<AddProductFormProps> = ({ onTabChange }) => {
               <button
                 type="button"
                 onClick={() => setStep((s) => Math.min(s + 1, 6))}
-                className="flex items-center gap-1.5 text-sm font-semibold px-4 py-2 bg-primary text-wht hover:bg-primary-hover rounded cursor-pointer transition-colors"
+                className="inline-flex items-center gap-1.5 text-xs font-medium px-5 py-2 bg-slate-950 text-white hover:bg-slate-800 rounded-lg cursor-pointer transition-colors shadow-xs min-h-[40px]"
               >
-                Next <ArrowRight size={13} />
+                Next Step <ArrowRight size={13} />
               </button>
             ) : null}
           </div>
-
         </form>
       </div>
+      </div>
+
+      {/* Right Column: Live Customer Storefront Preview */}
+      <div className="xl:col-span-4 xl:sticky xl:top-4 space-y-3">
+        <div className="flex items-center justify-between px-1">
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-500">Live Customer Preview</span>
+          <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+            Live Sync
+          </span>
+        </div>
+
+        {/* Product Card Preview Box */}
+        <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm hover:shadow-md transition-all">
+          {/* Image Area */}
+          <div className="relative aspect-[4/3] bg-slate-100 flex items-center justify-center overflow-hidden">
+            {images.length > 0 ? (
+              <img src={images[0]} alt={name} className="w-full h-full object-cover" />
+            ) : (
+              <div className="flex flex-col items-center justify-center text-slate-400 p-4">
+                <Package size={40} className="stroke-1 text-slate-300 mb-1" />
+                <span className="text-xs font-medium">Product Photo Preview</span>
+              </div>
+            )}
+            {badge && (
+              <span className="absolute top-3 left-3 bg-slate-950 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md shadow-xs">
+                {badge}
+              </span>
+            )}
+            {discount > 0 && (
+              <span className="absolute top-3 right-3 bg-rose-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-xs">
+                {discount}% OFF
+              </span>
+            )}
+            {images.length > 1 && (
+              <span className="absolute bottom-3 right-3 bg-slate-950/60 backdrop-blur-xs text-white text-[10px] font-mono px-2 py-0.5 rounded">
+                1 of {images.length} photos
+              </span>
+            )}
+          </div>
+
+          {/* Card Body */}
+          <div className="p-5 space-y-3">
+            <div className="flex items-center justify-between text-xs text-slate-500">
+              <span className="font-semibold text-slate-700">{cat}</span>
+              <span className="font-mono text-[11px] text-slate-400">{sku || 'SKU-PENDING'}</span>
+            </div>
+
+            <h3 className="font-bold text-slate-900 text-base leading-snug line-clamp-2">
+              {name || 'New Product Formulation'}
+            </h3>
+
+            <p className="text-xs text-slate-500 line-clamp-2 leading-relaxed">
+              {desc || 'Botanical, non-toxic household cleaning formula.'}
+            </p>
+
+            {/* Rating mockup */}
+            <div className="flex items-center gap-1 text-xs">
+              <div className="flex text-amber-400">
+                {Array.from({ length: 5 }, (_, i) => (
+                  <Star key={i} size={13} className="fill-amber-400 text-amber-400" />
+                ))}
+              </div>
+              <span className="font-bold text-slate-800 ml-1">5.0</span>
+              <span className="text-slate-400 text-[11px]">(New Release)</span>
+            </div>
+
+            {/* Specs Highlights */}
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100 text-[11px]">
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Volume</span>
+                <span className="font-semibold text-slate-700 truncate block">{specSize || '500 ml'}</span>
+              </div>
+              <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                <span className="text-slate-400 block text-[10px] uppercase font-bold">Surfaces</span>
+                <span className="font-semibold text-slate-700 truncate block">{specSuitable || 'All Floors'}</span>
+              </div>
+            </div>
+
+            {/* Pricing & Stock Status */}
+            <div className="pt-2 border-t border-slate-100 flex items-baseline justify-between">
+              <div className="flex items-baseline gap-2">
+                <span className="text-xl font-bold font-mono text-slate-950">
+                  ₹{discount > 0 ? Math.round(price * (1 - discount / 100)) : price}
+                </span>
+                {discount > 0 && (
+                  <span className="text-xs line-through text-slate-400 font-mono">₹{price}</span>
+                )}
+              </div>
+              <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                stock <= 0
+                  ? 'bg-rose-50 text-rose-700 border-rose-200'
+                  : stock < 10
+                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                  : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+              }`}>
+                {stock <= 0 ? 'Out of Stock' : `${stock} in stock`}
+              </span>
+            </div>
+
+            {/* Mock Customer CTA */}
+            <button
+              type="button"
+              disabled
+              className="w-full py-2.5 bg-slate-900 text-white rounded-lg text-xs font-semibold text-center cursor-default opacity-90 shadow-xs flex items-center justify-center gap-1.5"
+            >
+              <ShieldCheck size={14} className="text-emerald-400" />
+              <span>Customer View • Add to Cart (₹{discount > 0 ? Math.round(price * (1 - discount / 100)) : price})</span>
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
+  </div>
   );
 };
 

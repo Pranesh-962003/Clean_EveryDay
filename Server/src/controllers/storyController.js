@@ -101,8 +101,8 @@ export const createStory = async (req, res) => {
             rating: Number(rating),
             body: storyBody.trim(),
             date: dateStr,
-            approved: true,
-            status: "Approved",
+            approved: false,
+            status: "Pending",
             isVerified: true,
         });
 
@@ -113,7 +113,7 @@ export const createStory = async (req, res) => {
 
         return res.status(201).json({
             success: true,
-            message: "Story published successfully!",
+            message: "Story submitted successfully! Pending admin approval.",
             story: newStory,
         });
     } catch (error) {
@@ -123,6 +123,58 @@ export const createStory = async (req, res) => {
             message: "Failed to publish story.",
             error: error.message,
         });
+    }
+};
+
+/**
+ * Fetch all stories (including Pending) for Admin
+ */
+export const getAllStoriesAdmin = async (req, res) => {
+    try {
+        const stories = await Story.find({ isDeleted: false }).sort({ createdAt: -1 });
+        return res.status(200).json({
+            success: true,
+            stories,
+        });
+    } catch (error) {
+        console.error("[STORIES Error] getAllStoriesAdmin:", error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to fetch stories.",
+            error: error.message,
+        });
+    }
+};
+
+/**
+ * Update story approval status
+ */
+export const updateStoryStatus = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { status } = req.body;
+        if (!["Approved", "Pending", "Hidden", "Rejected"].includes(status)) {
+            return res.status(400).json({ success: false, message: "Invalid status." });
+        }
+        const isApproved = status === "Approved";
+        const story = await Story.findByIdAndUpdate(
+            id,
+            { status, approved: isApproved },
+            { new: true }
+        );
+        if (!story) {
+            return res.status(404).json({ success: false, message: "Story not found." });
+        }
+        emitToAll("story:updated", { story, status });
+        emitToAll("story:statusUpdated", { story, status });
+        return res.status(200).json({
+            success: true,
+            message: `Story status updated to ${status}.`,
+            story
+        });
+    } catch (error) {
+        console.error("[STORIES Error] updateStoryStatus:", error);
+        return res.status(500).json({ success: false, message: "Failed to update story status." });
     }
 };
 

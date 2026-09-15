@@ -39,6 +39,13 @@ const LeadsCRM: React.FC = () => {
     fetchLeads();
   }, []);
 
+  // Local optimistic state for live drag and drop
+  const [localLeads, setLocalLeads] = useState<Lead[]>(leads);
+
+  useEffect(() => {
+    setLocalLeads(leads);
+  }, [leads]);
+
   // Search & Status filters
   const [searchQuery, setSearchQuery] = useState('');
   const [priorityFilter, setPriorityFilter] = useState('All');
@@ -182,7 +189,7 @@ const LeadsCRM: React.FC = () => {
   }, [searchQuery, priorityFilter, serviceFilter]);
 
   // Filter Leads
-  const filteredLeads = leads.filter((l) => {
+  const filteredLeads = localLeads.filter((l) => {
     const name = l.name || '';
     const email = l.email || '';
     const subj = l.subject || '';
@@ -234,7 +241,7 @@ const LeadsCRM: React.FC = () => {
   };
 
   // Unique Services for Filter dropdown
-  const services = Array.from(new Set(leads.map((l) => l.service || 'General')));
+  const services = Array.from(new Set(localLeads.map((l) => l.service || 'General')));
 
   // Kanban Columns statuses
   const KANBAN_STATUSES: Lead['status'][] = [
@@ -247,7 +254,7 @@ const LeadsCRM: React.FC = () => {
     'Archived'
   ];
 
-  // Drag and Drop implementation
+  // Drag and Drop implementation - Live & Optimistic
   const handleDragStart = (e: React.DragEvent, leadId: number | string) => {
     setDraggedLeadId(leadId);
     e.dataTransfer.setData('text/plain', String(leadId));
@@ -265,18 +272,44 @@ const LeadsCRM: React.FC = () => {
     if (!leadId) return;
 
     // Check if targetStatus is already the current status
-    const targetLead = leads.find((l) => String(l.id) === String(leadId) || l._id === String(leadId));
+    const targetLead = localLeads.find((l) => String(l.id) === String(leadId) || l._id === String(leadId));
     if (targetLead && targetLead.status === targetStatus) {
       setDraggedLeadId(null);
       return;
     }
 
+    const previousStatus = targetLead?.status;
     setDraggedLeadId(null);
-    const success = await updateLeadStatus(leadId, targetStatus);
 
-    // If the expanded lead in details drawer is the dragged one, refresh drawer state
-    if (success && selectedLead && (String(selectedLead.id) === String(leadId) || selectedLead._id === String(leadId))) {
+    // 1. Instant optimistic local update - moves card immediately on drop with zero delay!
+    setLocalLeads((prev) =>
+      prev.map((l) =>
+        String(l.id) === String(leadId) || l._id === String(leadId)
+          ? { ...l, status: targetStatus }
+          : l
+      )
+    );
+
+    // If the expanded lead in details drawer is the dragged one, update drawer status immediately
+    if (selectedLead && (String(selectedLead.id) === String(leadId) || selectedLead._id === String(leadId))) {
       setSelectedLead((prev) => (prev ? { ...prev, status: targetStatus } : null));
+    }
+
+    // 2. Perform backend API sync silently in the background
+    const success = await updateLeadStatus(leadId, targetStatus);
+    
+    // 3. If update failed, revert the card back to previous status
+    if (!success && previousStatus) {
+      setLocalLeads((prev) =>
+        prev.map((l) =>
+          String(l.id) === String(leadId) || l._id === String(leadId)
+            ? { ...l, status: previousStatus }
+            : l
+        )
+      );
+      if (selectedLead && (String(selectedLead.id) === String(leadId) || selectedLead._id === String(leadId))) {
+        setSelectedLead((prev) => (prev ? { ...prev, status: previousStatus } : null));
+      }
     }
   };
 
@@ -486,90 +519,96 @@ const LeadsCRM: React.FC = () => {
   };
 
   return (
-    <div className="animate-fadeIn">
+    <div className="space-y-6 animate-fadeIn">
       {/* Header Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-7">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
-          <div className="flex items-center gap-2.5">
-            <h2 className="font-display text-[1.6rem] font-bold text-blk tracking-tight">Leads pipeline CRM</h2>
-            {isLeadsLoading && <Loader2 size={16} className="text-primary animate-spin" />}
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Prospects & CRM</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+            <span className="text-xs text-slate-400">{leads.length} Inquiries</span>
+            {isLeadsLoading && <Loader2 size={13} className="text-slate-950 animate-spin ml-1" />}
           </div>
-          <p className="text-[0.78rem] text-mut">Follow up on customer inquiries, wholesale questions, and custom contracts.</p>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950 font-display">
+            Leads Pipeline CRM
+          </h1>
         </div>
-        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5">
           {/* CSV Export */}
           <button
             onClick={handleCSVExport}
-            className="flex items-center gap-1.5 text-sm font-semibold px-3 py-2 border border-bdr text-mid bg-wht hover:border-primary hover:text-primary rounded shadow-premium-sm cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-xs font-medium text-slate-700 shadow-xs transition-colors min-h-[38px] cursor-pointer"
           >
-            <FileDown size={14} /> Export CSV
+            <FileDown size={14} />
+            <span>Export CSV</span>
           </button>
 
           {/* Toggle View Layout */}
-          <div className="flex border border-bdr rounded overflow-hidden shadow-premium-sm">
+          <div className="inline-flex border border-slate-200 rounded-lg p-0.5 bg-slate-100 shadow-xs">
             <button
               onClick={() => setLayoutMode('kanban')}
-              className={`p-2 transition-colors cursor-pointer ${
-                layoutMode === 'kanban' ? 'bg-primary text-wht' : 'bg-wht text-mid hover:text-blk'
+              className={`p-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                layoutMode === 'kanban' 
+                  ? 'bg-white text-slate-950 shadow-xs' 
+                  : 'text-slate-500 hover:text-slate-900'
               }`}
               title="Kanban Board view"
             >
-              <Layers size={14} />
+              <Layers size={15} />
             </button>
             <button
               onClick={() => setLayoutMode('table')}
-              className={`p-2 transition-colors cursor-pointer ${
-                layoutMode === 'table' ? 'bg-primary text-wht' : 'bg-wht text-mid hover:text-blk'
+              className={`p-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+                layoutMode === 'table' 
+                  ? 'bg-white text-slate-950 shadow-xs' 
+                  : 'text-slate-500 hover:text-slate-900'
               }`}
               title="Tabular Data Grid view"
             >
-              <List size={14} />
+              <List size={15} />
             </button>
           </div>
 
           <button
             onClick={() => setNewLeadModalOpen(true)}
-            className="bg-primary text-wht rounded px-5 py-2 text-sm font-semibold hover:bg-primary-hover transition-colors flex items-center gap-1.5 cursor-pointer shadow-premium-sm"
+            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-slate-950 text-white hover:bg-slate-800 text-xs font-medium tracking-wide shadow-xs transition-colors min-h-[38px] cursor-pointer"
           >
-            <PlusCircle size={14} /> Create lead
+            <PlusCircle size={15} />
+            <span>Create Lead</span>
           </button>
         </div>
       </div>
 
       {/* Filter and Search Bar controls */}
-      <div className="bg-wht border border-bdrl rounded-xl p-4 shadow-premium-sm mb-6 flex flex-col md:flex-row md:items-center gap-4">
+      <div className="bg-white border border-slate-200 rounded-xl p-4 shadow-xs flex flex-col md:flex-row md:items-center gap-3">
         {/* Search */}
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-fnt" size={14} />
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={15} />
           <input
             type="text"
-            placeholder="Search leads by client name, email, company or subject..."
-            className="w-full border border-bdr rounded bg-wht pl-9 pr-4 py-2 text-sm outline-none focus:border-primary placeholder:text-mut/50"
+            placeholder="Search leads by client name, email, company or inquiry subject..."
+            className="w-full border border-slate-200 rounded-lg bg-white pl-10 pr-4 py-2 text-xs outline-none focus:border-slate-900 focus:ring-1 focus:ring-slate-900 placeholder:text-slate-400 min-h-[40px] text-slate-900"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
         </div>
 
         {/* Priority Filter */}
-        <div className="flex flex-col gap-1 min-w-[120px]">
-          <label className="text-xs font-medium text-mut">Priority</label>
+        <div className="flex flex-wrap items-center gap-2.5">
           <select
-            className="border border-bdr rounded bg-wht px-3 py-2 text-sm outline-none cursor-pointer focus:border-primary text-mid font-medium"
+            className="border border-slate-200 rounded-lg bg-white px-3 py-2 text-xs outline-none cursor-pointer focus:border-slate-900 text-slate-700 font-medium min-h-[40px]"
             value={priorityFilter}
             onChange={(e) => setPriorityFilter(e.target.value)}
           >
             <option value="All">All priorities</option>
-            <option value="Low">Low</option>
-            <option value="Medium">Medium</option>
-            <option value="High">High</option>
+            <option value="Low">Low Priority</option>
+            <option value="Medium">Medium Priority</option>
+            <option value="High">High Priority</option>
           </select>
-        </div>
 
-        {/* Service filter */}
-        <div className="flex flex-col gap-1 min-w-[120px]">
-          <label className="text-xs font-medium text-mut">Category</label>
+          {/* Service filter */}
           <select
-            className="border border-bdr rounded bg-wht px-3 py-2 text-sm outline-none cursor-pointer focus:border-primary text-mid font-medium"
+            className="border border-slate-200 rounded-lg bg-white px-3 py-2 text-xs outline-none cursor-pointer focus:border-slate-900 text-slate-700 font-medium min-h-[40px]"
             value={serviceFilter}
             onChange={(e) => setServiceFilter(e.target.value)}
           >
@@ -586,272 +625,263 @@ const LeadsCRM: React.FC = () => {
         /* TABLE LAYOUT VIEW */
         <div className="relative">
           {isLeadsLoading && leads.length > 0 && (
-            <div className="absolute inset-0 bg-wht/40 backdrop-blur-[1px] z-20 flex items-center justify-center rounded-xl pointer-events-auto">
-              <div className="bg-wht border border-bdr shadow-premium-md rounded-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-blk animate-fadeIn">
-                <Loader2 size={16} className="text-primary animate-spin" />
-                <span>Updating lead status...</span>
+            <div className="absolute inset-0 bg-white/50 backdrop-blur-[1px] z-20 flex items-center justify-center rounded-xl pointer-events-auto">
+              <div className="bg-white border border-slate-200 shadow-sm rounded-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-slate-900 animate-fadeIn">
+                <Loader2 size={16} className="text-slate-950 animate-spin" />
+                <span>Updating pipeline state...</span>
               </div>
             </div>
           )}
-          <div className="bg-wht border border-bdrl rounded-xl shadow-premium-sm overflow-hidden mb-6">
-          <div className="overflow-x-auto w-full scrollbar-thin">
-            <table className="w-full text-left border-collapse min-w-[1000px]">
-              <thead>
-              <tr className="bg-sur border-b border-bdrl text-xs font-medium text-mut select-none sticky top-0 z-10">
-                <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-blk" onClick={() => handleSort('id')}>
-                  Lead ID {sortField === 'id' ? (sortAsc ? '▲' : '▼') : ''}
-                </th>
-                <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-blk" onClick={() => handleSort('name')}>
-                  Client name {sortField === 'name' ? (sortAsc ? '▲' : '▼') : ''}
-                </th>
-                <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-blk" onClick={() => handleSort('company')}>
-                  Company {sortField === 'company' ? (sortAsc ? '▲' : '▼') : ''}
-                </th>
-                <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-blk" onClick={() => handleSort('subject')}>
-                  Subject enquiry {sortField === 'subject' ? (sortAsc ? '▲' : '▼') : ''}
-                </th>
-                <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-blk" onClick={() => handleSort('service')}>
-                  Category {sortField === 'service' ? (sortAsc ? '▲' : '▼') : ''}
-                </th>
-                <th className="py-3 px-4 whitespace-nowrap">Source</th>
-                <th className="py-3 px-4 text-center whitespace-nowrap cursor-pointer hover:text-blk" onClick={() => handleSort('priority')}>
-                  Priority {sortField === 'priority' ? (sortAsc ? '▲' : '▼') : ''}
-                </th>
-                <th className="py-3 px-4 text-center whitespace-nowrap cursor-pointer hover:text-blk" onClick={() => handleSort('status')}>
-                  Status {sortField === 'status' ? (sortAsc ? '▲' : '▼') : ''}
-                </th>
-                <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-blk" onClick={() => handleSort('followUpDate')}>
-                  Follow-up date {sortField === 'followUpDate' ? (sortAsc ? '▲' : '▼') : ''}
-                </th>
-                <th className="py-3 px-5 text-right whitespace-nowrap">Actions</th>
-              </tr>
-              </thead>
-              <tbody className="divide-y divide-bdrl text-sm">
-                {isLeadsLoading && leads.length === 0 ? (
-                  <tr>
-                    <td colSpan={10} className="py-14 text-center">
-                      <div className="flex flex-col items-center justify-center gap-2">
-                        <Loader2 size={24} className="text-primary animate-spin" />
-                        <span className="text-xs text-mut font-medium">Fetching leads from server...</span>
-                      </div>
-                    </td>
+          <div className="bg-white border border-slate-200 rounded-xl shadow-xs overflow-hidden">
+            <div className="overflow-x-auto w-full scrollbar-thin">
+              <table className="w-full text-left border-collapse min-w-[1000px]">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 select-none sticky top-0 z-10">
+                    <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-slate-950" onClick={() => handleSort('id')}>
+                      Lead ID {sortField === 'id' ? (sortAsc ? '▲' : '▼') : ''}
+                    </th>
+                    <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-slate-950" onClick={() => handleSort('name')}>
+                      Client Info {sortField === 'name' ? (sortAsc ? '▲' : '▼') : ''}
+                    </th>
+                    <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-slate-950" onClick={() => handleSort('company')}>
+                      Company {sortField === 'company' ? (sortAsc ? '▲' : '▼') : ''}
+                    </th>
+                    <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-slate-950" onClick={() => handleSort('subject')}>
+                      Enquiry Subject {sortField === 'subject' ? (sortAsc ? '▲' : '▼') : ''}
+                    </th>
+                    <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-slate-950" onClick={() => handleSort('service')}>
+                      Category {sortField === 'service' ? (sortAsc ? '▲' : '▼') : ''}
+                    </th>
+                    <th className="py-3 px-4 whitespace-nowrap">Acquisition</th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap cursor-pointer hover:text-slate-950" onClick={() => handleSort('priority')}>
+                      Priority {sortField === 'priority' ? (sortAsc ? '▲' : '▼') : ''}
+                    </th>
+                    <th className="py-3 px-4 text-center whitespace-nowrap cursor-pointer hover:text-slate-950" onClick={() => handleSort('status')}>
+                      Pipeline Stage {sortField === 'status' ? (sortAsc ? '▲' : '▼') : ''}
+                    </th>
+                    <th className="py-3 px-4 whitespace-nowrap cursor-pointer hover:text-slate-950" onClick={() => handleSort('followUpDate')}>
+                      Follow-up {sortField === 'followUpDate' ? (sortAsc ? '▲' : '▼') : ''}
+                    </th>
+                    <th className="py-3 px-5 text-right whitespace-nowrap">Manage</th>
                   </tr>
-                ) : currentLeads.length > 0 ? (
-                  currentLeads.map((l) => (
-                    <tr key={l.id} className="hover:bg-sur/10 transition-colors">
-                      <td className="py-3 px-4 font-mono text-xs text-mid whitespace-nowrap">LD-{String(l.id).substring(5, 10) || l.id}</td>
-                      <td className="py-3 px-4">
-                        <div className="font-semibold text-blk">{l.name}</div>
-                        <div className="text-xs text-mut mt-0.5 leading-normal">{l.email}</div>
-                      </td>
-                      <td className="py-3 px-4 text-mid whitespace-nowrap">{l.company || 'Individual'}</td>
-                      <td className="py-3 px-4 text-blk truncate max-w-[200px]" title={l.subject}>{l.subject}</td>
-                      <td className="py-3 px-4">
-                        <span className="bg-primary-soft text-primary-hover border border-primary-light/40 px-2.5 py-1 rounded-full text-xs font-medium">
-                          {l.service}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-mut font-medium whitespace-nowrap">{l.source}</td>
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          <span className={`text-[11px] font-semibold px-2 py-1 rounded-full ${
-                            l.priority === 'High'
-                              ? 'bg-red-bg text-red'
-                              : l.priority === 'Medium'
-                              ? 'bg-yellow-50 text-amber-700'
-                              : 'bg-sur text-mut'
-                          }`}>
-                            {l.priority}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              openPriorityModal(l);
-                            }}
-                            disabled={updatingPriorityLeadId === String(l._id || l.id)}
-                            className="p-1 rounded text-mut hover:text-primary hover:bg-sur transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                            title="Edit Lead Priority"
-                          >
-                            {updatingPriorityLeadId === String(l._id || l.id) ? (
-                              <Loader2 size={13} className="animate-spin text-primary" />
-                            ) : (
-                              <Pencil size={13} />
-                            )}
-                          </button>
+                </thead>
+                <tbody className="divide-y divide-slate-100 text-xs">
+                  {isLeadsLoading && leads.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="py-16 text-center">
+                        <div className="flex flex-col items-center justify-center gap-2">
+                          <Loader2 size={24} className="text-slate-950 animate-spin" />
+                          <span className="text-xs text-slate-500 font-medium">Loading CRM leads...</span>
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-center whitespace-nowrap">
-                        <select
-                          className="border border-bdr rounded bg-wht px-2.5 py-1.5 text-sm font-semibold text-mid focus:border-primary outline-none cursor-pointer disabled:opacity-50"
-                          value={l.status}
-                          disabled={isLeadsLoading}
-                          onChange={(e) => updateLeadStatus(l._id || l.id, e.target.value as any)}
-                        >
-                          {KANBAN_STATUSES.map((st) => (
-                            <option key={st} value={st}>{st}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-mid whitespace-nowrap">{l.followUpDate || 'Not set'}</td>
-                      <td className="py-3 px-5 text-right whitespace-nowrap">
-                        <button
-                          onClick={() => openDetailsDrawer(l)}
-                          className="text-xs font-semibold px-3 py-1.5 border border-bdr text-mid bg-wht hover:border-primary hover:text-primary rounded cursor-pointer"
-                        >
-                          Workspace
-                        </button>
-                      </td>
                     </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan={10} className="py-14 text-center text-fnt text-[0.82rem]">
-                      <span>No client leads found matching the filters.</span>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between p-4 border-t border-bdrl select-none">
-              <span className="text-xs text-mut font-medium">
-                Page <strong>{currentPage}</strong> of <strong>{totalPages}</strong> (<strong>{sortedLeads.length}</strong> leads)
-              </span>
-              <div className="flex gap-1.5 text-xs">
-                <button
-                  onClick={() => setCurrentPage((c) => Math.max(c - 1, 1))}
-                  disabled={currentPage === 1}
-                  className="px-2.5 py-1.5 border border-bdr rounded bg-wht hover:border-primary disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  Prev
-                </button>
-                {Array.from({ length: totalPages }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setCurrentPage(i + 1)}
-                    className={`px-3 py-1.5 border rounded cursor-pointer transition-all ${
-                      currentPage === i + 1
-                        ? 'bg-primary text-wht border-primary font-bold'
-                        : 'bg-wht border-bdr text-mid hover:border-primary'
-                    }`}
-                  >
-                    {i + 1}
-                  </button>
-                ))}
-                <button
-                  onClick={() => setCurrentPage((c) => Math.min(c + 1, totalPages))}
-                  disabled={currentPage === totalPages}
-                  className="px-2.5 py-1.5 border border-bdr rounded bg-wht hover:border-primary disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-      ) : (
-        /* KANBAN BOARD LAYOUT VIEW */
-        <div className="relative">
-          {/* Loading overlay to stop glitching during in-flight drag-and-drop updates */}
-          {isLeadsLoading && leads.length > 0 && (
-            <div className="absolute inset-0 bg-wht/40 backdrop-blur-[1px] z-20 flex items-center justify-center rounded-xl pointer-events-auto">
-              <div className="bg-wht border border-bdr shadow-premium-md rounded-full px-4 py-2 flex items-center gap-2.5 text-xs font-semibold text-blk animate-fadeIn">
-                <Loader2 size={16} className="text-primary animate-spin" />
-                <span>Updating lead status...</span>
-              </div>
-            </div>
-          )}
-
-          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin select-none max-h-[600px]">
-            {isLeadsLoading && leads.length === 0 ? (
-              <div className="w-full py-16 flex flex-col items-center justify-center gap-2 bg-wht border border-bdrl rounded-xl">
-                <Loader2 size={28} className="text-primary animate-spin" />
-                <span className="text-xs text-mut font-medium">Fetching leads from server...</span>
-              </div>
-            ) : (
-              KANBAN_STATUSES.map((status) => {
-              const columnLeads = filteredLeads.filter((l) => l.status === status);
-
-              return (
-                <div
-                  key={status}
-                  onDragOver={handleDragOver}
-                  onDrop={(e) => handleDrop(e, status)}
-                  className="w-[280px] bg-sur/40 border border-bdrl rounded-md p-4 shrink-0 flex flex-col max-h-[550px] overflow-y-auto"
-                >
-                  {/* Column header */}
-                  <div className="flex justify-between items-center pb-2.5 border-b border-bdrl mb-4">
-                    <span className="text-xs font-semibold text-blk capitalize">
-                      {status}
-                    </span>
-                    <span className="text-xs font-medium text-mut bg-wht border border-bdr px-2 py-0.5 rounded-full leading-none">
-                      {columnLeads.length}
-                    </span>
-                  </div>
-
-                  {/* Cards grid */}
-                  <div className="flex flex-col gap-3 flex-1" onDragOver={handleDragOver}>
-                    {columnLeads.length > 0 ? (
-                      columnLeads.map((lead) => (
-                        <div
-                          key={lead.id}
-                          draggable="true"
-                          onDragStart={(e) => handleDragStart(e, lead._id || lead.id)}
-                          onClick={() => openDetailsDrawer(lead)}
-                          className="bg-wht border border-bdr rounded-md p-4 hover:border-primary shadow-premium-sm hover:shadow-premium-md cursor-grab active:cursor-grabbing transition-all select-none animate-fadeIn"
-                        >
-                          <div className="flex items-center justify-between mb-2">
-                            <span className={`inline-block text-[10px] font-semibold px-2 py-0.5 rounded capitalize ${
-                              lead.priority === 'High'
-                                ? 'bg-red-bg text-red'
-                                : lead.priority === 'Medium'
-                                ? 'bg-yellow-50 text-amber-700'
-                                : 'bg-sur text-mut'
+                  ) : currentLeads.length > 0 ? (
+                    currentLeads.map((l) => (
+                      <tr key={l.id} className="hover:bg-slate-50/75 transition-colors">
+                        <td className="py-3.5 px-4 font-mono text-xs text-slate-600 whitespace-nowrap">LD-{String(l.id).substring(5, 10) || l.id}</td>
+                        <td className="py-3.5 px-4">
+                          <div className="font-bold text-slate-900">{l.name}</div>
+                          <div className="text-[11px] text-slate-400 mt-0.5 leading-normal">{l.email}</div>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-600 whitespace-nowrap">{l.company || 'Individual'}</td>
+                        <td className="py-3.5 px-4 text-slate-900 font-medium truncate max-w-[200px]" title={l.subject}>{l.subject}</td>
+                        <td className="py-3.5 px-4">
+                          <span className="bg-slate-100 text-slate-700 border border-slate-200 px-2.5 py-1 rounded-md text-[11px] font-medium whitespace-nowrap">
+                            {l.service}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-4 text-slate-500 font-medium whitespace-nowrap">{l.source}</td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full border ${
+                              l.priority === 'High'
+                                ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                : l.priority === 'Medium'
+                                ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                : 'bg-slate-100 text-slate-600 border-slate-200'
                             }`}>
-                              {lead.priority} priority
+                              {l.priority}
                             </span>
                             <button
                               onClick={(e) => {
                                 e.stopPropagation();
-                                openPriorityModal(lead);
+                                openPriorityModal(l);
                               }}
-                              disabled={updatingPriorityLeadId === String(lead._id || lead.id)}
-                              className="p-1 rounded text-mut hover:text-primary hover:bg-sur transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                              title="Edit Lead Priority"
+                              disabled={updatingPriorityLeadId === String(l._id || l.id)}
+                              className="p-1 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-all cursor-pointer disabled:opacity-60"
+                              title="Edit Priority"
                             >
-                              {updatingPriorityLeadId === String(lead._id || lead.id) ? (
-                                <Loader2 size={13} className="animate-spin text-primary" />
+                              {updatingPriorityLeadId === String(l._id || l.id) ? (
+                                <Loader2 size={13} className="animate-spin text-slate-950" />
                               ) : (
                                 <Pencil size={13} />
                               )}
                             </button>
                           </div>
-                          
-                          <h4 className="text-sm font-semibold text-blk truncate mb-0.5" title={lead.subject}>
-                            {lead.subject}
-                          </h4>
-                          <span className="text-xs text-mid font-medium block truncate">{lead.name}</span>
-                          {lead.company && <span className="text-xs text-mut block mt-0.5">{lead.company}</span>}
-   
-                          <div className="flex items-center justify-between border-t border-bdrl pt-2.5 mt-3 text-xs text-mut">
-                            <span>{lead.date}</span>
-                            <span className="bg-sur px-2 py-0.5 rounded border border-bdrl">{lead.service}</span>
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="flex-1 border-2 border-dashed border-bdrl rounded-md flex items-center justify-center p-6 text-center text-[0.7rem] text-mut font-medium">
-                        Drag here
-                      </div>
-                    )}
-                  </div>
+                        </td>
+                        <td className="py-3.5 px-4 text-center whitespace-nowrap">
+                          <select
+                            className="border border-slate-200 rounded-lg bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 focus:border-slate-900 outline-none cursor-pointer shadow-xs disabled:opacity-50"
+                            value={l.status}
+                            disabled={isLeadsLoading}
+                            onChange={(e) => updateLeadStatus(l._id || l.id, e.target.value as any)}
+                          >
+                            {KANBAN_STATUSES.map((st) => (
+                              <option key={st} value={st}>{st}</option>
+                            ))}
+                          </select>
+                        </td>
+                        <td className="py-3.5 px-4 text-xs text-slate-600 whitespace-nowrap">{l.followUpDate || 'Not set'}</td>
+                        <td className="py-3.5 px-5 text-right whitespace-nowrap">
+                          <button
+                            onClick={() => openDetailsDrawer(l)}
+                            className="text-xs font-semibold px-3 py-1.5 border border-slate-200 text-slate-700 bg-white hover:bg-slate-50 hover:border-slate-300 rounded-lg shadow-xs transition-colors cursor-pointer min-h-[30px]"
+                          >
+                            Workspace
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={10} className="py-16 text-center text-slate-500 text-xs">
+                        <span>No client leads found matching the filters.</span>
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="bg-slate-50/50 border-t border-slate-200 px-5 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs select-none">
+                <span className="text-slate-500">
+                  Showing page <strong>{currentPage}</strong> of <strong>{totalPages}</strong> ({sortedLeads.length} leads)
+                </span>
+                <div className="flex items-center gap-1.5 font-mono">
+                  <button
+                    onClick={() => setCurrentPage((c) => Math.max(c - 1, 1))}
+                    disabled={currentPage === 1}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
+                  >
+                    Prev
+                  </button>
+                  {Array.from({ length: totalPages }).map((_, i) => (
+                    <button
+                      key={i}
+                      onClick={() => setCurrentPage(i + 1)}
+                      className={`px-3 py-1.5 border rounded-lg cursor-pointer shadow-xs transition-colors ${
+                        currentPage === i + 1
+                          ? 'bg-slate-950 text-white border-slate-950 font-bold'
+                          : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {i + 1}
+                    </button>
+                  ))}
+                  <button
+                    onClick={() => setCurrentPage((c) => Math.min(c + 1, totalPages))}
+                    disabled={currentPage === totalPages}
+                    className="px-3 py-1.5 border border-slate-200 rounded-lg bg-white hover:bg-slate-50 text-slate-700 disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed shadow-xs"
+                  >
+                    Next
+                  </button>
                 </div>
-              );
-            }))}
+              </div>
+            )}
+          </div>
+        </div>
+      ) : (
+        /* KANBAN BOARD LAYOUT VIEW */
+        <div className="relative">
+          <div className="flex gap-4 overflow-x-auto pb-4 scrollbar-thin select-none max-h-[620px]">
+            {isLeadsLoading && localLeads.length === 0 ? (
+              <div className="w-full py-16 flex flex-col items-center justify-center gap-2 bg-white border border-slate-200 rounded-xl">
+                <Loader2 size={28} className="text-slate-950 animate-spin" />
+                <span className="text-xs text-slate-500 font-medium">Loading CRM leads...</span>
+              </div>
+            ) : (
+              KANBAN_STATUSES.map((status) => {
+                const columnLeads = filteredLeads.filter((l) => l.status === status);
+
+                return (
+                  <div
+                    key={status}
+                    onDragOver={handleDragOver}
+                    onDrop={(e) => handleDrop(e, status)}
+                    className="w-[280px] bg-slate-50 border border-slate-200 rounded-xl p-3.5 shrink-0 flex flex-col max-h-[600px] overflow-y-auto"
+                  >
+                    {/* Column header */}
+                    <div className="flex justify-between items-center pb-2.5 border-b border-slate-200 mb-3">
+                      <span className="text-xs font-bold text-slate-900 capitalize">
+                        {status}
+                      </span>
+                      <span className="text-[11px] font-semibold text-slate-600 bg-white border border-slate-200 px-2 py-0.5 rounded-full shadow-xs">
+                        {columnLeads.length}
+                      </span>
+                    </div>
+
+                    {/* Cards grid */}
+                    <div className="space-y-2.5 flex-1" onDragOver={handleDragOver}>
+                      {columnLeads.length > 0 ? (
+                        columnLeads.map((lead) => (
+                          <div
+                            key={lead.id}
+                            draggable="true"
+                            onDragStart={(e) => handleDragStart(e, lead._id || lead.id)}
+                            onClick={() => openDetailsDrawer(lead)}
+                            className="bg-white border border-slate-200 rounded-lg p-3.5 hover:border-slate-300 shadow-xs hover:shadow-sm cursor-grab active:cursor-grabbing transition-all select-none animate-fadeIn"
+                          >
+                            <div className="flex items-center justify-between mb-2">
+                              <span className={`inline-block text-[10px] font-bold px-2 py-0.5 rounded-full border uppercase tracking-wider ${
+                                lead.priority === 'High'
+                                  ? 'bg-rose-50 text-rose-800 border-rose-200'
+                                  : lead.priority === 'Medium'
+                                  ? 'bg-amber-50 text-amber-800 border-amber-200'
+                                  : 'bg-slate-100 text-slate-600 border-slate-200'
+                              }`}>
+                                {lead.priority}
+                              </span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  openPriorityModal(lead);
+                                }}
+                                disabled={updatingPriorityLeadId === String(lead._id || lead.id)}
+                                className="p-1 rounded-md text-slate-400 hover:text-slate-900 hover:bg-slate-50 transition-all cursor-pointer disabled:opacity-60"
+                                title="Edit Lead Priority"
+                              >
+                                {updatingPriorityLeadId === String(lead._id || lead.id) ? (
+                                  <Loader2 size={13} className="animate-spin text-slate-950" />
+                                ) : (
+                                  <Pencil size={13} />
+                                )}
+                              </button>
+                            </div>
+                            
+                            <h4 className="text-xs font-bold text-slate-900 truncate mb-1" title={lead.subject}>
+                              {lead.subject}
+                            </h4>
+                            <span className="text-xs text-slate-600 font-medium block truncate">{lead.name}</span>
+                            {lead.company && <span className="text-[11px] text-slate-400 block mt-0.5">{lead.company}</span>}
+     
+                            <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 mt-3 text-[11px] text-slate-500">
+                              <span>{lead.date}</span>
+                              <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-700 font-medium border border-slate-200">{lead.service}</span>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="flex-1 border-2 border-dashed border-slate-200 rounded-lg flex items-center justify-center p-6 text-center text-xs text-slate-400 font-medium">
+                          Drop to {status}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       )}
@@ -859,7 +889,7 @@ const LeadsCRM: React.FC = () => {
       {/* Workspace Leads details drawer */}
       {selectedLead && createPortal(
         <div 
-          className="fixed inset-0 z-[9998] flex justify-end bg-blk/60 backdrop-blur-xs animate-fadeIn"
+          className="fixed inset-0 z-[9998] flex justify-end bg-slate-950/60 backdrop-blur-xs animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setSelectedLead(null);
@@ -867,54 +897,54 @@ const LeadsCRM: React.FC = () => {
           }}
         >
           <div
-            className="bg-wht border-l border-bdr shadow-premium-xl w-full max-w-[660px] h-full overflow-y-auto p-6 sm:p-8 flex flex-col justify-between"
+            className="bg-white border-l border-slate-200 shadow-2xl w-full max-w-[660px] h-full overflow-y-auto p-6 sm:p-8 flex flex-col justify-between"
           >
             {/* Header */}
             <div>
-              <div className="flex justify-between items-center border-b border-bdrl pb-3.5 mb-5 select-none">
+              <div className="flex justify-between items-center border-b border-slate-200 pb-4 mb-6 select-none">
                 <div>
-                  <span className="text-xs font-medium text-mut">CRM leads workspace</span>
-                  <h3 className="font-display text-lg font-semibold text-blk mt-0.5">{selectedLead.subject}</h3>
+                  <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">CRM Prospect Workspace</span>
+                  <h3 className="text-xl font-bold text-slate-950 font-display mt-0.5">{selectedLead.subject}</h3>
                 </div>
                 <button
                   onClick={() => setSelectedLead(null)}
-                  className="p-1 rounded-full hover:bg-sur text-mut hover:text-blk cursor-pointer animate-fadeIn"
+                  className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-500 hover:text-slate-950 cursor-pointer transition-colors"
                 >
                   <X size={18} />
                 </button>
               </div>
 
               {/* Lead Information block */}
-              <div className="grid grid-cols-2 gap-4 bg-sur/50 p-4 rounded border border-bdrl mb-6 text-sm leading-relaxed">
+              <div className="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200 mb-6 text-xs leading-relaxed">
                 <div>
-                  <span className="text-mut text-xs block">Client contact</span>
-                  <span className="font-semibold text-blk block">{selectedLead.name}</span>
-                  <span className="text-xs text-mut block mt-0.5">{selectedLead.email} • {selectedLead.phone || 'No phone'}</span>
+                  <span className="text-slate-500 font-medium block">Client Contact</span>
+                  <span className="font-bold text-slate-950 block mt-0.5">{selectedLead.name}</span>
+                  <span className="text-slate-500 block mt-0.5">{selectedLead.email} • {selectedLead.phone || 'No phone'}</span>
                 </div>
                 <div>
-                  <span className="text-mut text-xs block">Company & source</span>
-                  <span className="font-semibold text-blk block">{selectedLead.company || 'Individual client'}</span>
-                  <span className="text-xs text-mid block mt-0.5">Acquired via: {selectedLead.source}</span>
+                  <span className="text-slate-500 font-medium block">Organization & Channel</span>
+                  <span className="font-bold text-slate-950 block mt-0.5">{selectedLead.company || 'Individual Client'}</span>
+                  <span className="text-slate-500 block mt-0.5">Source: {selectedLead.source}</span>
                 </div>
                 <div>
-                  <span className="text-mut text-xs block">Service category</span>
-                  <span className="font-semibold text-primary block mt-0.5">{selectedLead.service}</span>
+                  <span className="text-slate-500 font-medium block">Service Category</span>
+                  <span className="font-bold text-slate-900 block mt-0.5">{selectedLead.service}</span>
                 </div>
                 <div>
-                  <span className="text-mut text-xs block">Priority status</span>
+                  <span className="text-slate-500 font-medium block">Priority & Stage</span>
                   <div className="flex items-center gap-1.5 mt-0.5">
-                    <span className="font-semibold text-blk block">{selectedLead.priority} priority • {selectedLead.status}</span>
+                    <span className="font-bold text-slate-950">{selectedLead.priority} • {selectedLead.status}</span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         openPriorityModal(selectedLead);
                       }}
                       disabled={updatingPriorityLeadId === String(selectedLead._id || selectedLead.id)}
-                      className="p-1 rounded text-mut hover:text-primary hover:bg-sur transition-all cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                      className="p-1 rounded text-slate-400 hover:text-slate-900 transition-all cursor-pointer"
                       title="Edit Lead Priority"
                     >
                       {updatingPriorityLeadId === String(selectedLead._id || selectedLead.id) ? (
-                        <Loader2 size={13} className="animate-spin text-primary" />
+                        <Loader2 size={13} className="animate-spin text-slate-950" />
                       ) : (
                         <Pencil size={13} />
                       )}
@@ -924,73 +954,75 @@ const LeadsCRM: React.FC = () => {
               </div>
 
               {/* Workspace Navigation Tabs */}
-              <div className="flex gap-4 border-b border-bdrl pb-2 mb-5 select-none text-xs text-mut font-medium">
+              <div className="flex gap-2 border-b border-slate-200 pb-3 mb-6 select-none text-xs font-semibold">
                 <button
                   onClick={() => setActiveWorkspaceTab('notes')}
-                  className={`pb-1 cursor-pointer ${
-                    activeWorkspaceTab === 'notes' ? 'text-primary border-b-2 border-primary font-semibold' : 'hover:text-blk'
+                  className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                    activeWorkspaceTab === 'notes' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  1. Profile details & notes
+                  Notes & Details
                 </button>
                 <button
                   onClick={() => setActiveWorkspaceTab('activities')}
-                  className={`pb-1 cursor-pointer ${
-                    activeWorkspaceTab === 'activities' ? 'text-primary border-b-2 border-primary font-semibold' : 'hover:text-blk'
+                  className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                    activeWorkspaceTab === 'activities' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  2. Activities ({selectedLead.activities?.length || 0})
+                  Touchpoints ({selectedLead.activities?.length || 0})
                 </button>
                 <button
                   onClick={() => setActiveWorkspaceTab('tasks')}
-                  className={`pb-1 cursor-pointer ${
-                    activeWorkspaceTab === 'tasks' ? 'text-primary border-b-2 border-primary font-semibold' : 'hover:text-blk'
+                  className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                    activeWorkspaceTab === 'tasks' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  3. Tasks ({selectedLead.tasks?.filter((t) => !t.done).length || 0})
+                  Tasks ({selectedLead.tasks?.filter((t) => !t.done).length || 0})
                 </button>
                 <button
                   onClick={() => setActiveWorkspaceTab('reminders')}
-                  className={`pb-1 cursor-pointer ${
-                    activeWorkspaceTab === 'reminders' ? 'text-primary border-b-2 border-primary font-semibold' : 'hover:text-blk'
+                  className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                    activeWorkspaceTab === 'reminders' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  4. Reminders
+                  Reminders
                 </button>
                 <button
                   onClick={() => setActiveWorkspaceTab('comments')}
-                  className={`pb-1 cursor-pointer ${
-                    activeWorkspaceTab === 'comments' ? 'text-primary border-b-2 border-primary font-semibold' : 'hover:text-blk'
+                  className={`px-3 py-1.5 rounded-lg cursor-pointer transition-all ${
+                    activeWorkspaceTab === 'comments' ? 'bg-slate-950 text-white shadow-xs' : 'text-slate-600 hover:bg-slate-100'
                   }`}
                 >
-                  5. Comments ({selectedLead.comments?.length || 0})
+                  Comments ({selectedLead.comments?.length || 0})
                 </button>
               </div>
 
               {/* Tabs contents */}
-               <div className="text-sm">
+              <div className="text-xs">
                 {/* Notes TAB */}
                 {activeWorkspaceTab === 'notes' && (
-                  <div className="flex flex-col gap-4 animate-fadeIn">
+                  <div className="space-y-4 animate-fadeIn">
                     <div>
-                      <span className="text-xs font-semibold text-mut block mb-1.5 flex items-center gap-1"><FileText size={10} /> Message enquiry body</span>
-                      <div className="border border-bdr rounded p-4 bg-sur/30 text-ink leading-relaxed whitespace-pre-wrap">
+                      <span className="text-xs font-bold text-slate-900 block mb-1.5 flex items-center gap-1.5">
+                        <FileText size={14} className="text-slate-500" /> Original Inquiry Message
+                      </span>
+                      <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 text-slate-800 leading-relaxed whitespace-pre-wrap">
                         {selectedLead.message}
                       </div>
                     </div>
                     <div>
                       <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-semibold text-mut">Internal sales follow up notes (Auto-saved)</span>
+                        <span className="text-xs font-bold text-slate-900">Internal Sales Notes (Auto-saved)</span>
                         {isNotesSaving && (
-                          <span className="text-[11px] text-primary flex items-center gap-1 font-medium animate-fadeIn">
-                            <Loader2 size={11} className="animate-spin text-primary" /> Saving notes...
+                          <span className="text-[11px] text-slate-500 flex items-center gap-1 font-medium animate-fadeIn">
+                            <Loader2 size={11} className="animate-spin text-slate-950" /> Syncing changes...
                           </span>
                         )}
                       </div>
                       <textarea
                         rows={4}
-                        placeholder="Log phone call remarks, user requirements details, scheduling quotes details..."
-                        className="w-full border border-bdr focus:border-primary rounded px-3 py-2.5 outline-none resize-none placeholder:text-mut/50 bg-wht"
+                        placeholder="Log customer phone calls, quote discounts discussed, timeline requirements..."
+                        className="w-full border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 rounded-xl px-3.5 py-2.5 outline-none resize-none placeholder:text-slate-400 bg-white text-slate-900 text-xs leading-relaxed"
                         value={selectedLead.internalNotes || ''}
                         onChange={(e) => handleNotesChange(e.target.value)}
                       />
@@ -1000,40 +1032,40 @@ const LeadsCRM: React.FC = () => {
 
                 {/* Activities TAB */}
                 {activeWorkspaceTab === 'activities' && (
-                  <div className="flex flex-col gap-4 animate-fadeIn">
+                  <div className="space-y-4 animate-fadeIn">
                     {/* Add Activity log */}
-                    <div className="border border-bdr rounded p-4 bg-sur/10 flex flex-col gap-3">
-                      <span className="text-xs font-semibold text-mid leading-none">Log customer touchpoint</span>
+                    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
+                      <span className="text-xs font-bold text-slate-900 leading-none block">Log Customer Interaction</span>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex flex-col gap-1">
-                          <label className="text-xs text-mut font-semibold">Touchpoint type</label>
+                          <label className="text-xs text-slate-600 font-semibold">Touchpoint Type</label>
                           <select
-                            className="border border-bdr rounded bg-wht px-2.5 py-1.5 text-sm outline-none cursor-pointer"
+                            className="border border-slate-200 rounded-lg bg-white px-2.5 py-1.5 text-xs outline-none cursor-pointer text-slate-900 min-h-[36px]"
                             value={actType}
                             onChange={(e) => setActType(e.target.value as any)}
                           >
-                            <option value="Call">Call log</option>
-                            <option value="Email">Email sent</option>
-                            <option value="Note">General note</option>
-                            <option value="Task">Task action</option>
+                            <option value="Call">Phone Call</option>
+                            <option value="Email">Email Sent</option>
+                            <option value="Note">General Note</option>
+                            <option value="Task">Task Action</option>
                           </select>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <label className="text-xs text-mut font-semibold">Activity title</label>
+                          <label className="text-xs text-slate-600 font-semibold">Activity Subject</label>
                           <input
                             type="text"
                             placeholder="e.g. Sent pricing catalog"
-                            className="border border-bdr rounded px-2.5 py-1.5 text-sm outline-none focus:border-primary bg-wht"
+                            className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-slate-900 bg-white text-slate-900 min-h-[36px]"
                             value={actTitle}
                             onChange={(e) => setActTitle(e.target.value)}
                           />
                         </div>
                         <div className="flex flex-col gap-1 col-span-2">
-                          <label className="text-xs text-mut font-semibold">Interaction details / notes</label>
+                          <label className="text-xs text-slate-600 font-semibold">Touchpoint Details</label>
                           <input
                             type="text"
                             placeholder="Discussed pricing options for 5L Floor Cleaner concentrate..."
-                            className="border border-bdr rounded px-2.5 py-1.5 text-sm outline-none focus:border-primary bg-wht"
+                            className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs outline-none focus:border-slate-900 bg-white text-slate-900 min-h-[36px]"
                             value={actContent}
                             onChange={(e) => setActContent(e.target.value)}
                           />
@@ -1042,21 +1074,21 @@ const LeadsCRM: React.FC = () => {
                       <button
                         onClick={triggerAddActivity}
                         disabled={isAddingActivity}
-                        className="bg-primary text-wht rounded px-4 py-2 text-xs font-semibold hover:bg-primary-hover self-start cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        className="bg-slate-950 text-white rounded-lg px-4 py-2 text-xs font-medium hover:bg-slate-800 self-start cursor-pointer disabled:opacity-60 flex items-center gap-1.5 shadow-xs min-h-[36px]"
                       >
-                        {isAddingActivity && <Loader2 size={12} className="animate-spin text-wht" />}
-                        {isAddingActivity ? 'Adding activity...' : 'Add activity log'}
+                        {isAddingActivity && <Loader2 size={12} className="animate-spin text-white" />}
+                        {isAddingActivity ? 'Adding...' : 'Record Interaction'}
                       </button>
                     </div>
 
                     {/* Activities List */}
-                    <div className="flex flex-col gap-3 relative pl-4 border-l border-bdr ml-2 mt-2">
+                    <div className="space-y-3 relative pl-4 border-l-2 border-slate-200 ml-2 mt-2">
                       {(selectedLead.activities || []).map((act, idx) => (
                         <div key={idx} className="relative">
-                          <div className="absolute -left-[20px] top-1.5 w-2 h-2 rounded-full bg-primary border-2 border-wht" />
-                          <span className="text-xs text-mut block">{act.date}</span>
-                          <span className="font-semibold text-blk text-xs inline-block mt-0.5">{act.title}</span>
-                          {act.content && <p className="text-xs text-mid mt-0.5 italic">{act.content}</p>}
+                          <div className="absolute -left-[21px] top-1 w-2.5 h-2.5 rounded-full bg-slate-950 ring-4 ring-white" />
+                          <span className="text-[11px] text-slate-400 font-mono block">{act.date}</span>
+                          <span className="font-bold text-slate-900 text-xs inline-block mt-0.5">{act.title}</span>
+                          {act.content && <p className="text-xs text-slate-600 mt-0.5 italic">{act.content}</p>}
                         </div>
                       ))}
                     </div>
@@ -1065,28 +1097,28 @@ const LeadsCRM: React.FC = () => {
 
                 {/* Tasks TAB */}
                 {activeWorkspaceTab === 'tasks' && (
-                  <div className="flex flex-col gap-4 animate-fadeIn">
+                  <div className="space-y-4 animate-fadeIn">
                     {/* Add Task input */}
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        placeholder="Add checklist task (e.g. Schedule call)..."
-                        className="border border-bdr rounded px-3 py-2 text-sm outline-none focus:border-primary flex-1 placeholder:text-mut/50 bg-wht"
+                        placeholder="Add checklist task (e.g. Schedule call with manager)..."
+                        className="border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-slate-900 flex-1 placeholder:text-slate-400 bg-white text-slate-900 min-h-[40px]"
                         value={taskInput}
                         onChange={(e) => setTaskInput(e.target.value)}
                       />
                       <button
                         onClick={triggerAddTask}
                         disabled={isAddingTask}
-                        className="bg-primary text-wht rounded px-4 py-2 text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        className="bg-slate-950 text-white rounded-lg px-4 py-2 text-xs font-medium cursor-pointer disabled:opacity-60 flex items-center gap-1.5 shadow-xs min-h-[40px]"
                       >
-                        {isAddingTask && <Loader2 size={13} className="animate-spin text-wht" />}
-                        {isAddingTask ? 'Adding...' : 'Add task'}
+                        {isAddingTask && <Loader2 size={13} className="animate-spin text-white" />}
+                        {isAddingTask ? 'Adding...' : 'Add Task'}
                       </button>
                     </div>
 
                     {/* Tasks Checklist */}
-                    <div className="flex flex-col gap-2 mt-2 border border-bdrl rounded p-2 bg-sur/30">
+                    <div className="space-y-1.5 border border-slate-200 rounded-xl p-2 bg-slate-50">
                       {(selectedLead.tasks || []).length > 0 ? (
                         (selectedLead.tasks || []).map((t) => {
                           const isToggling = togglingTaskId === t.id;
@@ -1094,25 +1126,25 @@ const LeadsCRM: React.FC = () => {
                             <div
                               key={t.id}
                               onClick={() => !isToggling && handleToggleTask(t.id, t.done)}
-                              className={`flex items-center gap-3 p-2 hover:bg-sur/50 rounded cursor-pointer select-none transition-opacity ${
+                              className={`flex items-center gap-3 p-2.5 bg-white border border-slate-100 rounded-lg hover:border-slate-300 cursor-pointer select-none transition-all shadow-xs ${
                                 isToggling ? 'opacity-70 cursor-wait' : ''
                               }`}
                             >
                               {isToggling ? (
-                                <Loader2 size={16} className="text-primary animate-spin shrink-0" />
+                                <Loader2 size={16} className="text-slate-950 animate-spin shrink-0" />
                               ) : t.done ? (
-                                <CheckSquare size={16} className="text-primary shrink-0" />
+                                <CheckSquare size={16} className="text-emerald-600 shrink-0" />
                               ) : (
-                                <Square size={16} className="text-mut shrink-0" />
+                                <Square size={16} className="text-slate-400 shrink-0" />
                               )}
-                              <span className={`text-sm ${t.done ? 'line-through text-mut' : 'text-blk font-medium'}`}>
+                              <span className={`text-xs ${t.done ? 'line-through text-slate-400' : 'text-slate-900 font-semibold'}`}>
                                 {t.title}
                               </span>
                             </div>
                           );
                         })
                       ) : (
-                        <div className="text-center py-6 text-mut text-xs">No tasks created yet.</div>
+                        <div className="text-center py-6 text-slate-400 text-xs">No pending tasks created.</div>
                       )}
                     </div>
                   </div>
@@ -1120,25 +1152,25 @@ const LeadsCRM: React.FC = () => {
 
                 {/* Reminders TAB */}
                 {activeWorkspaceTab === 'reminders' && (
-                  <div className="flex flex-col gap-4 animate-fadeIn">
-                    <div className="border border-bdr rounded p-4 bg-sur/10 flex flex-col gap-3">
-                      <span className="text-xs font-semibold text-mid leading-none">Schedule follow-up calendar reminder</span>
+                  <div className="space-y-4 animate-fadeIn">
+                    <div className="border border-slate-200 rounded-xl p-4 bg-slate-50 space-y-3">
+                      <span className="text-xs font-bold text-slate-900 leading-none block">Schedule Follow-up Reminder</span>
                       <div className="grid grid-cols-2 gap-3">
                         <div className="flex flex-col gap-1 col-span-2">
-                          <label className="text-xs font-medium text-mut">Reminder title</label>
+                          <label className="text-xs font-semibold text-slate-600">Reminder Title</label>
                           <input
                             type="text"
-                            placeholder="e.g. Follow up on bulk discount approval"
-                            className="border border-bdr rounded px-2.5 py-1.5 text-sm outline-none focus:border-primary bg-wht"
+                            placeholder="e.g. Follow up on commercial bulk discount quote"
+                            className="border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-slate-900 bg-white text-slate-900 min-h-[38px]"
                             value={reminderTitle}
                             onChange={(e) => setReminderTitle(e.target.value)}
                           />
                         </div>
                         <div className="flex flex-col gap-1">
-                          <label className="text-xs font-medium text-mut">Target schedule date</label>
+                          <label className="text-xs font-semibold text-slate-600">Target Date</label>
                           <input
                             type="date"
-                            className="border border-bdr rounded px-2.5 py-1.5 text-sm outline-none focus:border-primary bg-wht"
+                            className="border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-slate-900 bg-white text-slate-900 min-h-[38px]"
                             value={reminderDate}
                             onChange={(e) => setReminderDate(e.target.value)}
                           />
@@ -1147,7 +1179,7 @@ const LeadsCRM: React.FC = () => {
                       <button
                         onClick={triggerAddReminder}
                         disabled={isAddingReminder}
-                        className="bg-primary text-wht rounded px-4 py-2 text-xs font-semibold hover:bg-primary-hover self-start cursor-pointer flex items-center gap-1.5 disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="bg-slate-950 text-white rounded-lg px-4 py-2 text-xs font-medium hover:bg-slate-800 self-start cursor-pointer flex items-center gap-1.5 disabled:opacity-60 shadow-xs min-h-[38px]"
                       >
                         {isAddingReminder ? (
                           <>
@@ -1155,22 +1187,24 @@ const LeadsCRM: React.FC = () => {
                             <span>Scheduling...</span>
                           </>
                         ) : (
-                          <span>Set reminder</span>
+                          <span>Set Reminder</span>
                         )}
                       </button>
                     </div>
 
                     {/* Reminders list */}
-                    <div className="flex flex-col gap-2 mt-2">
+                    <div className="space-y-2">
                       {(selectedLead.reminders || []).length > 0 ? (
                         (selectedLead.reminders || []).map((rem) => (
-                           <div className="p-3 border border-bdrl rounded bg-sur/30 flex justify-between items-center" key={rem.id}>
-                            <span className="text-sm font-semibold text-blk">{rem.title}</span>
-                            <span className="text-xs text-primary flex items-center gap-1"><Clock size={11} /> {rem.date}</span>
+                          <div className="p-3 border border-slate-200 rounded-xl bg-white shadow-xs flex justify-between items-center" key={rem.id}>
+                            <span className="text-xs font-bold text-slate-900">{rem.title}</span>
+                            <span className="text-[11px] text-slate-500 font-mono flex items-center gap-1 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                              <Clock size={11} /> {rem.date}
+                            </span>
                           </div>
                         ))
                       ) : (
-                        <div className="text-center py-6 text-mut text-xs">No active follow-up reminders scheduled.</div>
+                        <div className="text-center py-6 text-slate-400 text-xs">No active reminders scheduled.</div>
                       )}
                     </div>
                   </div>
@@ -1178,13 +1212,13 @@ const LeadsCRM: React.FC = () => {
 
                 {/* Comments TAB */}
                 {activeWorkspaceTab === 'comments' && (
-                  <div className="flex flex-col gap-4 animate-fadeIn">
+                  <div className="space-y-4 animate-fadeIn">
                     {/* Add comment input */}
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        placeholder="Type internal staff comment (e.g. CEO approved discount)..."
-                        className="border border-bdr rounded px-3 py-2 text-sm outline-none focus:border-primary flex-1 placeholder:text-mut/50 bg-wht disabled:opacity-60"
+                        placeholder="Type internal collaboration note..."
+                        className="border border-slate-200 rounded-lg px-3 py-2 text-xs outline-none focus:border-slate-900 flex-1 placeholder:text-slate-400 bg-white text-slate-900 min-h-[40px] disabled:opacity-60"
                         value={commentInput}
                         onChange={(e) => setCommentInput(e.target.value)}
                         disabled={isAddingComment}
@@ -1198,37 +1232,35 @@ const LeadsCRM: React.FC = () => {
                       <button
                         onClick={triggerAddComment}
                         disabled={isAddingComment || !commentInput.trim()}
-                        className="bg-primary text-wht rounded px-4 py-2 text-sm font-semibold cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed flex items-center gap-1.5"
+                        className="bg-slate-950 text-white rounded-lg px-4 py-2 text-xs font-medium cursor-pointer disabled:opacity-60 flex items-center gap-1.5 shadow-xs min-h-[40px]"
                       >
-                        {isAddingComment && <Loader2 size={13} className="animate-spin text-wht" />}
-                        <span>{isAddingComment ? 'Commenting...' : 'Comment'}</span>
+                        {isAddingComment && <Loader2 size={13} className="animate-spin text-white" />}
+                        <span>{isAddingComment ? 'Saving...' : 'Post'}</span>
                       </button>
                     </div>
 
                     {/* Internal Comments List */}
-                    <div className="flex flex-col gap-3 mt-2">
+                    <div className="space-y-2.5">
                       {(selectedLead.comments || []).length > 0 ? (
                         (selectedLead.comments || []).map((c) => (
-                          <div className="p-3 border border-bdrl rounded bg-sur/20 hover:bg-sur/40" key={c.id}>
+                          <div className="p-3 border border-slate-200 rounded-xl bg-white shadow-xs" key={c.id}>
                             <div className="flex justify-between items-center mb-1">
-                              <span className="font-semibold text-blk text-xs flex items-center gap-1">
-                                <User size={11} className="text-primary" /> {c.author}
+                              <span className="font-bold text-slate-900 text-xs flex items-center gap-1.5">
+                                <User size={12} className="text-slate-500" /> {c.author}
                               </span>
-                              <span className="text-xs text-mut">{c.date}</span>
+                              <span className="text-[11px] text-slate-400 font-mono">{c.date}</span>
                             </div>
-                            <p className="text-xs text-mid italic leading-normal">"{c.body}"</p>
+                            <p className="text-xs text-slate-700 leading-relaxed">"{c.body}"</p>
                           </div>
                         ))
                       ) : (
-                        <div className="text-center py-6 text-mut text-xs">No discussion comments yet.</div>
+                        <div className="text-center py-6 text-slate-400 text-xs">No team comments recorded.</div>
                       )}
                     </div>
                   </div>
                 )}
               </div>
             </div>
-
-
           </div>
         </div>,
         document.body
@@ -1237,86 +1269,89 @@ const LeadsCRM: React.FC = () => {
       {/* Create Lead Modal Dialog */}
       {newLeadModalOpen && createPortal(
         <div 
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-blk/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 p-4 backdrop-blur-xs overflow-y-auto animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setNewLeadModalOpen(false);
             }
           }}
         >
-          <div className="bg-wht rounded-xl border border-bdr shadow-premium-lg w-full max-w-[600px] p-6 sm:p-8 relative my-auto animate-slideUp">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xl w-full max-w-[600px] p-6 sm:p-8 relative my-auto animate-slideUp">
             <button
               onClick={() => setNewLeadModalOpen(false)}
-              className="absolute top-5 right-5 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+              className="absolute top-5 right-5 text-slate-400 hover:text-slate-950 transition-colors cursor-pointer border-none bg-transparent"
             >
               <X size={18} />
             </button>
 
-            <h3 className="font-display text-lg font-semibold text-blk mb-5 pb-3 border-b border-bdrl">Create customer lead</h3>
+            <div className="border-b border-slate-100 pb-3 mb-5">
+              <h2 className="text-sm font-bold text-slate-900 tracking-tight">Create Customer Lead</h2>
+              <p className="text-xs text-slate-500 mt-0.5">Register a manual prospect or incoming business query</p>
+            </div>
 
-            <form onSubmit={handleCreateLeadSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+            <form onSubmit={handleCreateLeadSubmit} className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-xs font-medium text-mut">Subject Enquiry / Title *</label>
+                <label className="font-semibold text-slate-700">Inquiry Subject *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Bulk discount quote for 5L Laundry Concentrate"
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none w-full"
+                  className="border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 rounded-lg px-3.5 py-2.5 outline-none w-full text-xs text-slate-900 min-h-[42px]"
                   value={nlSubject}
                   onChange={(e) => setNlSubject(e.target.value)}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-mut">Client Contact Name *</label>
+                <label className="font-semibold text-slate-700">Client Name *</label>
                 <input
                   type="text"
                   required
                   placeholder="e.g. Amit Patil"
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none w-full"
+                  className="border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 rounded-lg px-3.5 py-2.5 outline-none w-full text-xs text-slate-900 min-h-[42px]"
                   value={nlName}
                   onChange={(e) => setNlName(e.target.value)}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-mut">Email Address *</label>
+                <label className="font-semibold text-slate-700">Email Address *</label>
                 <input
                   type="email"
                   required
                   placeholder="e.g. amit@techsolutions.com"
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none w-full font-mono"
+                  className="border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 rounded-lg px-3.5 py-2.5 outline-none w-full font-mono text-xs text-slate-900 min-h-[42px]"
                   value={nlEmail}
                   onChange={(e) => setNlEmail(e.target.value)}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-mut">Phone Number</label>
+                <label className="font-semibold text-slate-700">Phone Number</label>
                 <input
                   type="tel"
                   placeholder="e.g. 98112 34567"
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none w-full font-mono"
+                  className="border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 rounded-lg px-3.5 py-2.5 outline-none w-full font-mono text-xs text-slate-900 min-h-[42px]"
                   value={nlPhone}
                   onChange={(e) => setNlPhone(e.target.value)}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-mut">Company Name</label>
+                <label className="font-semibold text-slate-700">Organization Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Tech Solutions Pvt Ltd"
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none w-full"
+                  className="border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 rounded-lg px-3.5 py-2.5 outline-none w-full text-xs text-slate-900 min-h-[42px]"
                   value={nlCompany}
                   onChange={(e) => setNlCompany(e.target.value)}
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-mut">Lead Category *</label>
+                <label className="font-semibold text-slate-700">Category *</label>
                 <select
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none bg-wht cursor-pointer"
+                  className="border border-slate-200 focus:border-slate-900 rounded-lg px-3.5 py-2.5 outline-none bg-white cursor-pointer text-xs text-slate-900 min-h-[42px]"
                   value={nlService}
                   onChange={(e) => setNlService(e.target.value)}
                 >
@@ -1327,9 +1362,9 @@ const LeadsCRM: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-mut">Lead Source</label>
+                <label className="font-semibold text-slate-700">Lead Channel</label>
                 <select
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none bg-wht cursor-pointer"
+                  className="border border-slate-200 focus:border-slate-900 rounded-lg px-3.5 py-2.5 outline-none bg-white cursor-pointer text-xs text-slate-900 min-h-[42px]"
                   value={nlSource}
                   onChange={(e) => setNlSource(e.target.value)}
                 >
@@ -1341,9 +1376,9 @@ const LeadsCRM: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-mut">Priority Status *</label>
+                <label className="font-semibold text-slate-700">Priority Level *</label>
                 <select
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none bg-wht cursor-pointer"
+                  className="border border-slate-200 focus:border-slate-900 rounded-lg px-3.5 py-2.5 outline-none bg-white cursor-pointer text-xs text-slate-900 min-h-[42px]"
                   value={nlPriority}
                   onChange={(e) => setNlPriority(e.target.value as any)}
                 >
@@ -1354,22 +1389,22 @@ const LeadsCRM: React.FC = () => {
               </div>
 
               <div className="flex flex-col gap-1.5 sm:col-span-2">
-                <label className="text-[0.72rem] font-semibold text-mut">Enquiry details / Message</label>
+                <label className="font-semibold text-slate-700">Inquiry Specifications</label>
                 <textarea
                   rows={3}
-                  placeholder="Details of client inquiry requirements..."
-                  className="border border-bdr focus:border-primary rounded px-3 py-2 outline-none w-full resize-none placeholder:text-mut/50"
+                  placeholder="Details of client requirements..."
+                  className="border border-slate-200 focus:border-slate-900 focus:ring-1 focus:ring-slate-900 rounded-lg px-3.5 py-2.5 outline-none w-full resize-none placeholder:text-slate-400 text-xs text-slate-900"
                   value={nlMessage}
                   onChange={(e) => setNlMessage(e.target.value)}
                 />
               </div>
 
-              <div className="sm:col-span-2 pt-4 border-t border-bdrl mt-2 flex gap-3">
+              <div className="sm:col-span-2 pt-4 border-t border-slate-200 mt-2 flex gap-3">
                 <button
                   type="submit"
-                  className="bg-primary text-wht rounded py-2 px-5 text-sm font-semibold hover:bg-primary-hover cursor-pointer"
+                  className="bg-slate-950 text-white rounded-lg py-2.5 px-6 text-xs font-semibold hover:bg-slate-800 cursor-pointer shadow-xs min-h-[42px]"
                 >
-                  Create lead
+                  Create Lead
                 </button>
               </div>
             </form>
@@ -1381,36 +1416,36 @@ const LeadsCRM: React.FC = () => {
       {/* Step 1: Change Priority Selection Modal */}
       {isPriorityModalOpen && priorityEditLead && createPortal(
         <div 
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-blk/60 backdrop-blur-xs p-4 overflow-y-auto animate-fadeIn"
+          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setIsPriorityModalOpen(false);
             }
           }}
         >
-          <div className="bg-wht rounded-xl border border-bdr shadow-premium-lg w-full max-w-[420px] p-6 relative animate-slideUp my-auto">
+          <div className="bg-white rounded-xl border border-slate-200 shadow-2xl w-full max-w-[420px] p-6 relative animate-slideUp my-auto">
             <button
               onClick={() => setIsPriorityModalOpen(false)}
-              className="absolute top-4 right-4 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-950 transition-colors cursor-pointer border-none bg-transparent"
             >
               <X size={18} />
             </button>
 
-            <div className="flex items-center gap-2.5 mb-4 border-b border-bdrl pb-3">
-              <div className="w-9 h-9 rounded-lg bg-primary-soft text-primary flex items-center justify-center font-bold">
-                <Pencil size={18} />
+            <div className="flex items-center gap-3 mb-4 border-b border-slate-100 pb-3">
+              <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center font-bold shrink-0">
+                <Pencil size={16} />
               </div>
               <div>
-                <h3 className="font-display text-base font-bold text-blk">Change Lead Priority</h3>
-                <p className="text-xs text-mut truncate max-w-[260px]">{priorityEditLead.subject}</p>
+                <h3 className="text-sm font-bold text-slate-900">Change Lead Priority</h3>
+                <p className="text-xs text-slate-500 truncate max-w-[260px]">{priorityEditLead.subject}</p>
               </div>
             </div>
 
-            <div className="flex flex-col gap-4 text-xs mb-6">
+            <div className="space-y-4 text-xs mb-6">
               <div className="flex flex-col gap-1.5">
-                <label className="font-medium text-mut">Select Priority Level</label>
+                <label className="font-semibold text-slate-700">Select Priority Level</label>
                 <select
-                  className="border border-bdr focus:border-primary rounded-lg px-3 py-2 text-sm text-blk font-semibold bg-wht outline-none cursor-pointer"
+                  className="border border-slate-200 focus:border-slate-900 rounded-lg px-3 py-2 text-xs text-slate-900 font-semibold bg-white outline-none cursor-pointer min-h-[40px]"
                   value={selectedPriority}
                   onChange={(e) => setSelectedPriority(e.target.value as Lead['priority'])}
                 >
@@ -1424,7 +1459,7 @@ const LeadsCRM: React.FC = () => {
             <div className="flex gap-2 justify-end">
               <button
                 onClick={() => setIsPriorityModalOpen(false)}
-                className="px-4 py-2 rounded-lg border border-bdr text-xs font-semibold text-mid hover:bg-sur transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer min-h-[38px]"
               >
                 Cancel
               </button>
@@ -1433,9 +1468,9 @@ const LeadsCRM: React.FC = () => {
                   setIsPriorityModalOpen(false);
                   setIsConfirmPriorityModalOpen(true);
                 }}
-                className="px-4 py-2 rounded-lg bg-primary text-wht hover:bg-primary-hover text-xs font-semibold shadow-premium-sm transition-colors cursor-pointer"
+                className="px-4 py-2 rounded-lg bg-slate-950 text-white hover:bg-slate-800 text-xs font-medium shadow-xs transition-colors cursor-pointer min-h-[38px]"
               >
-                Save
+                Proceed
               </button>
             </div>
           </div>
@@ -1446,7 +1481,7 @@ const LeadsCRM: React.FC = () => {
       {/* Step 2: Confirm Priority Change Modal */}
       {isConfirmPriorityModalOpen && priorityEditLead && createPortal(
         <div 
-          className="fixed inset-0 z-[10000] flex items-center justify-center bg-blk/60 backdrop-blur-xs p-4 overflow-y-auto animate-fadeIn"
+          className="fixed inset-0 z-[10000] flex items-center justify-center bg-slate-950/60 backdrop-blur-xs p-4 overflow-y-auto animate-fadeIn"
           onClick={(e) => {
             if (e.target === e.currentTarget) {
               setIsConfirmPriorityModalOpen(false);
@@ -1454,27 +1489,27 @@ const LeadsCRM: React.FC = () => {
             }
           }}
         >
-          <div className="bg-wht rounded-2xl border border-bdr shadow-premium-xl w-full max-w-[400px] p-6 text-center relative animate-slideUp my-auto">
+          <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-[400px] p-6 text-center relative animate-slideUp my-auto">
             <button
               onClick={() => {
                 setIsConfirmPriorityModalOpen(false);
                 setIsPriorityModalOpen(true);
               }}
-              className="absolute top-4 right-4 text-mut hover:text-blk transition-colors cursor-pointer border-none bg-transparent"
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-950 transition-colors cursor-pointer border-none bg-transparent"
             >
               <X size={18} />
             </button>
 
-            <div className="w-12 h-12 bg-primary-soft border border-primary-light/40 text-primary rounded-full flex items-center justify-center mx-auto mb-4">
-              <Pencil size={22} />
+            <div className="w-12 h-12 bg-slate-100 border border-slate-200 text-slate-900 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Pencil size={20} />
             </div>
 
-            <h3 className="font-display text-lg font-bold text-blk mb-2">
+            <h3 className="text-base font-bold text-slate-950 mb-2">
               Confirm Priority Update
             </h3>
 
-            <p className="text-xs text-mut leading-relaxed mb-6">
-              Are you sure you want to update priority for <strong className="text-blk">"{priorityEditLead.subject}"</strong> to <span className="font-bold text-primary">{selectedPriority} Priority</span>?
+            <p className="text-xs text-slate-600 leading-relaxed mb-6">
+              Update priority for <strong className="text-slate-900">"{priorityEditLead.subject}"</strong> to <span className="font-bold text-slate-950">{selectedPriority} Priority</span>?
             </p>
 
             <div className="flex gap-3">
@@ -1483,7 +1518,7 @@ const LeadsCRM: React.FC = () => {
                   setIsConfirmPriorityModalOpen(false);
                   setIsPriorityModalOpen(true);
                 }}
-                className="flex-1 py-2.5 px-4 rounded-lg border border-bdr text-xs font-semibold text-mid hover:bg-sur transition-colors cursor-pointer"
+                className="flex-1 py-2 px-4 rounded-lg border border-slate-200 text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors cursor-pointer min-h-[40px]"
               >
                 Cancel
               </button>
@@ -1498,9 +1533,9 @@ const LeadsCRM: React.FC = () => {
                   }
                   setPriorityEditLead(null);
                 }}
-                className="flex-1 py-2.5 px-4 rounded-lg bg-primary text-wht hover:bg-primary-hover text-xs font-semibold shadow-premium-sm transition-colors cursor-pointer"
+                className="flex-1 py-2 px-4 rounded-lg bg-slate-950 text-white hover:bg-slate-800 text-xs font-semibold shadow-xs transition-colors cursor-pointer min-h-[40px]"
               >
-                OK
+                Confirm Update
               </button>
             </div>
           </div>

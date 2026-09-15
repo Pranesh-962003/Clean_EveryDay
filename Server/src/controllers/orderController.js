@@ -5,7 +5,7 @@ import { Cart } from "../models/Cart.js";
 import { Order } from "../models/Order.js";
 import { Product } from "../models/Product.js";
 import { User } from "../models/User.js";
-import { placeCODOrderService, cancelOrderService } from "../services/orderService.js";
+import { placeCODOrderService, cancelOrderService, returnOrderService } from "../services/orderService.js";
 import { emitToAdmin, emitToUser, emitToAll } from "../socket/index.js";
 
 
@@ -256,6 +256,71 @@ export const cancelOrder = async (req, res) => {
 };
 
 
+// Return The order
+export const returnOrder = async (req, res) => {
+
+    try {
+        console.log("Return Order Request Body: ", req.body);
+
+        const order = await returnOrderService(req);
+
+        // Real-time synchronization via Socket.io to Admin and Customer
+        const customerId = order.customer?._id || order.customer;
+        emitToAdmin("order:returned", { order });
+        emitToAdmin("order:statusUpdated", { order, status: "Returned" });
+        emitToAll("order:statusUpdated", { order, status: "Returned" });
+
+        if (customerId) {
+            emitToUser(customerId, "order:returned", { order });
+            emitToUser(customerId, "order:statusUpdated", { order, status: "Returned" });
+            if (typeof order.customer === "object" && order.customer?.uid) {
+                emitToUser(order.customer.uid, "order:returned", { order });
+                emitToUser(order.customer.uid, "order:statusUpdated", { order, status: "Returned" });
+            }
+        }
+        if (req.user?.uid) {
+            emitToUser(req.user.uid, "order:statusUpdated", { order, status: "Returned" });
+        }
+        if (Array.isArray(order.items)) {
+            for (const item of order.items) {
+                const pId = item.product?._id || item.product;
+                if (pId) {
+                    Product.findById(pId).then((p) => {
+                        if (p) {
+                            emitToAll("product:updated", { product: p });
+                            emitToAll("inventory:updated", { productId: p._id, stock: p.stock });
+                        }
+                    }).catch(() => {});
+                }
+            }
+        }
+
+        return res.status(200).json({
+
+            success: true,
+
+            message: "Order returned successfully.",
+
+            order
+
+        });
+
+    } catch (error) {
+
+        return res.status(400).json({
+
+            success: false,
+
+            message: error.message
+
+        });
+
+    }
+
+};
+
+
+
 export const updateOrderStatus = async (req, res) => {
     try {
 
@@ -368,7 +433,8 @@ export const updateOrderStatus = async (req, res) => {
 
         if (
             order.status === "Delivered" &&
-            status !== "Refunded"
+            status !== "Refunded" &&
+            status !== "Returned"
         ) {
             return res.status(400).json({
                 success: false,

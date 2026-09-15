@@ -40,27 +40,39 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
       : [];
   
   // Computations
-  const subtotal = items.reduce((sum: number, item: any) => sum + (item.product?.price || 0) * item.quantity, 0);
-  const taxes = typeof order.taxes === 'number'
+  const getItemUnitPrice = (item: any) => {
+    return item.product?.price || item.unitPrice || item.sellingPrice || item.retailPrice || (item.totalPrice && item.quantity ? Math.round(item.totalPrice / item.quantity) : 0);
+  };
+  const computedItemSubtotal = items.reduce((sum: number, item: any) => sum + getItemUnitPrice(item) * (item.quantity || 1), 0);
+  const subtotal = (typeof order.subtotal === 'number' && order.subtotal > 0) ? order.subtotal : computedItemSubtotal;
+  const discount = typeof order.discount === 'number' ? order.discount : 0;
+  const taxes = typeof order.taxes === 'number' && order.taxes > 0
     ? order.taxes
     : (typeof order.taxes === 'object' && order.taxes !== null && 'amount' in (order.taxes as any)
         ? (order.taxes as any).amount
         : Math.round(subtotal * 0.18));
-  const discount = typeof order.discount === 'number' ? order.discount : 0;
-  const grandTotal = order.total || (subtotal + taxes - discount);
+  
+  const derivedShipping = (order.total && order.total > (subtotal - discount + taxes))
+    ? Math.max(0, order.total - (subtotal - discount + taxes))
+    : 0;
+  const shippingCharge = typeof order.shippingCharge === 'number' && order.shippingCharge > 0
+    ? order.shippingCharge
+    : (typeof (order as any).delivery?.charge === 'number' && (order as any).delivery.charge > 0
+        ? (order as any).delivery.charge
+        : derivedShipping);
+
+  const grandTotal = order.total || (subtotal - discount + taxes + shippingCharge);
 
   const handlePrint = () => {
     window.print();
   };
 
   const handleEmailInvoice = () => {
-    showToast(`Invoice successfully emailed to ${order.customerEmail || 'customer@cleaneveryday.in'}`);
+    showToast(`Invoice successfully emailed to ${order.customerEmail || 'customer@ecommerce.com'}`);
   };
 
-  // Mock download trigger
   const handleDownloadPDF = () => {
     showToast('A4 PDF generated. Download will begin shortly...');
-    // We can also trigger browser print to let user Save as PDF natively
     setTimeout(() => {
       window.print();
     }, 800);
@@ -68,7 +80,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
 
   return (
     <div 
-      className="fixed inset-0 z-[99999] flex items-start justify-center bg-blk/70 p-4 md:p-8 pt-24 md:pt-28 backdrop-blur-xs overflow-y-auto invoice-modal-overlay"
+      className="fixed inset-0 z-[99999] flex items-start justify-center bg-slate-950/75 p-4 md:p-8 pt-20 md:pt-24 backdrop-blur-xs overflow-y-auto invoice-modal-overlay"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
@@ -76,7 +88,7 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
       }}
     >
       {/* Printable Area Wrapper */}
-      <div className="bg-wht rounded-md border border-bdr shadow-premium-lg w-full max-w-[840px] relative p-6 sm:p-10 invoice-modal-container flex flex-col justify-between my-auto animate-fadeIn">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-[840px] relative p-6 sm:p-10 invoice-modal-container flex flex-col justify-between my-auto animate-slideUp">
         
         {/* Print specific CSS stylesheet inject */}
         <style dangerouslySetInnerHTML={{ __html: `
@@ -94,7 +106,6 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
               -webkit-print-color-adjust: exact;
               print-color-adjust: exact;
             }
-            /* Hide the main app viewport elements */
             .app-wrapper > :not(.invoice-modal-overlay),
             header,
             footer,
@@ -139,34 +150,36 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
         ` }} />
 
         {/* Modal Controls (Hidden during print) */}
-        <div className="flex justify-between items-center border-b border-bdrl pb-3 mb-6 print-actions-bar select-none">
+        <div className="flex justify-between items-center border-b border-slate-100 pb-4 mb-6 print-actions-bar select-none">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold text-primary bg-primary-soft px-2.5 py-0.5 rounded border border-primary-light">Invoice preview</span>
-            <span className="text-xs font-semibold text-blk">{order.id}</span>
+            <span className="text-xs font-semibold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+              Tax Invoice
+            </span>
+            <span className="text-xs font-mono font-semibold text-slate-600">{order.id}</span>
           </div>
           
           <div className="flex items-center gap-2">
             <button
               onClick={handlePrint}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-bdr hover:border-primary text-mid hover:text-primary bg-wht rounded cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50 bg-white rounded-lg cursor-pointer transition-colors shadow-xs"
             >
               <Printer size={13} /> Print
             </button>
             <button
               onClick={handleDownloadPDF}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-bdr hover:border-primary text-mid hover:text-primary bg-wht rounded cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50 bg-white rounded-lg cursor-pointer transition-colors shadow-xs"
             >
               <Download size={13} /> PDF
             </button>
             <button
               onClick={handleEmailInvoice}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-bdr hover:border-primary text-mid hover:text-primary bg-wht rounded cursor-pointer"
+              className="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 border border-slate-200 hover:border-slate-300 text-slate-700 hover:bg-slate-50 bg-white rounded-lg cursor-pointer transition-colors shadow-xs"
             >
               <Mail size={13} /> Email
             </button>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-full hover:bg-sur text-mut hover:text-blk cursor-pointer"
+              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-700 cursor-pointer ml-1"
               title="Close invoice"
             >
               <X size={16} />
@@ -174,144 +187,173 @@ const InvoiceModal: React.FC<InvoiceModalProps> = ({ order, isOpen, onClose }) =
           </div>
         </div>
 
-        {/* INVOICE SHEET SHEET - PIXEL PERFECT A4 FORMAT */}
-        <div className="invoice-print-area bg-wht p-8 border border-bdrl rounded shadow-sm text-sm leading-relaxed text-blk">
+        {/* INVOICE SHEET - A4 PROPORTIONS */}
+        <div className="invoice-print-area bg-white p-8 border border-slate-200 rounded-xl shadow-xs text-xs leading-relaxed text-slate-800 font-sans">
           {/* Header row */}
-          <div className="flex justify-between items-start border-b border-bdrl pb-6 mb-6">
+          <div className="flex justify-between items-start border-b border-slate-200 pb-6 mb-6">
             <div>
-              <div className="flex items-center gap-2 mb-2 select-none">
-                <div className="w-8 h-8 rounded bg-primary flex items-center justify-center font-bold text-wht text-xs">CE</div>
-                <span className="font-display font-semibold text-lg text-blk">Clean Everyday</span>
+              <div className="flex items-center gap-2.5 mb-2.5 select-none">
+                <div className="w-8 h-8 rounded-lg bg-slate-900 flex items-center justify-center font-bold text-white text-xs shadow-xs">
+                  E
+                </div>
+                <span className="font-bold text-lg text-slate-900 tracking-tight">Ecommerce</span>
               </div>
-              <p className="text-xs text-mut leading-normal">
-                Clean Everyday India Private Limited<br />
+              <p className="text-[11px] text-slate-500 leading-normal font-sans">
+                Ecommerce India Private Limited<br />
                 Plot No. 12, Whitefield Industrial Area,<br />
                 Bengaluru, Karnataka - 560066<br />
-                GSTIN: 29AAFCC1920D1Z5<br />
-                support@cleaneveryday.in | +91 80 4321 0987
+                <span className="font-mono">GSTIN: 29AAFCC1920D1Z5</span><br />
+                support@ecommerce.com | +91 80 4321 0987
               </p>
             </div>
             <div className="text-right">
-              <h1 className="font-display text-2xl font-semibold text-blk mb-3">Tax invoice</h1>
-              <div className="text-xs text-mid flex flex-col gap-1">
-                <div>Invoice no: <span className="font-semibold text-blk">{invoiceNumber}</span></div>
-                <div>Invoice date: <span className="text-blk">{invoiceDate}</span></div>
-                <div>Order ref ID: <span className="font-semibold text-blk">{order.id}</span></div>
-                <div>Payment mode: <span className="text-blk font-semibold uppercase">{order.paymentMethod}</span></div>
+              <h1 className="text-xl font-bold text-slate-900 tracking-tight mb-2 uppercase">Tax Invoice</h1>
+              <div className="text-[11px] text-slate-500 space-y-1">
+                <div>Invoice No: <span className="font-mono font-bold text-slate-900">{invoiceNumber}</span></div>
+                <div>Invoice Date: <span className="text-slate-800">{invoiceDate}</span></div>
+                <div>Order Ref: <span className="font-mono font-semibold text-slate-900">{order.id}</span></div>
+                <div>Payment Mode: <span className="font-semibold text-slate-900 uppercase">{order.paymentMethod}</span></div>
               </div>
             </div>
           </div>
 
           {/* Addresses Row */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b border-bdrl pb-6 mb-6">
-            <div className="bg-sur/40 border border-bdrl p-4 rounded-sm">
-              <span className="text-xs font-semibold text-mut block mb-2">Billed to (customer details):</span>
-              <p className="text-sm font-semibold text-blk">{order.billingAddress?.name || order.address?.name}</p>
-              <p className="text-xs text-mid mt-1 leading-normal">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 border-b border-slate-200 pb-6 mb-6">
+            <div className="bg-slate-50/80 border border-slate-200/80 p-4 rounded-lg">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                Billed To (Customer Details)
+              </span>
+              <p className="text-xs font-bold text-slate-900">{order.billingAddress?.name || order.address?.name}</p>
+              <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
                 {order.billingAddress?.street || order.address?.street}<br />
                 {order.billingAddress?.city || order.address?.city}, {order.billingAddress?.state || order.address?.state} - {order.billingAddress?.pincode || order.address?.pincode}<br />
                 Phone: {order.billingAddress?.phone || order.address?.phone}<br />
-                Email: {order.customerEmail || 'customer@cleaneveryday.in'}
+                Email: {order.customerEmail || 'customer@ecommerce.com'}
               </p>
             </div>
 
-            <div className="bg-sur/40 border border-bdrl p-4 rounded-sm">
-              <span className="text-xs font-semibold text-mut block mb-2">Shipped destination:</span>
-              <p className="text-sm font-semibold text-blk">{order.address?.name}</p>
-              <p className="text-xs text-mid mt-1 leading-normal">
+            <div className="bg-slate-50/80 border border-slate-200/80 p-4 rounded-lg">
+              <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block mb-1.5">
+                Shipped Destination
+              </span>
+              <p className="text-xs font-bold text-slate-900">{order.address?.name}</p>
+              <p className="text-[11px] text-slate-600 mt-1 leading-relaxed">
                 {order.address?.street}<br />
                 {order.address?.city}, {order.address?.state} - {order.address?.pincode}<br />
                 Phone: {order.address?.phone}<br />
-                Shipping courier: {order.courierCompany || 'Standard Courier'}
+                Shipping Courier: {order.courierCompany || 'Standard Logistics'}
               </p>
             </div>
           </div>
 
           {/* Products Table */}
-          <div className="mb-6">
+          <div className="mb-6 overflow-hidden rounded-lg border border-slate-200">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="bg-sur border-y border-bdrl text-xs text-mut font-semibold select-none">
-                  <th className="py-3 px-4">Item details</th>
-                  <th className="py-3 px-4 w-[100px]">SKU</th>
-                  <th className="py-3 px-4 w-[70px] text-center">Qty</th>
-                  <th className="py-3 px-4 w-[90px] text-right">Unit price</th>
-                  <th className="py-3 px-4 w-[90px] text-right">Discount</th>
-                  <th className="py-3 px-4 w-[90px] text-right">Taxes (GST)</th>
-                  <th className="py-3 px-4 w-[90px] text-right">Total (INR)</th>
+                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] text-slate-500 font-semibold uppercase tracking-wider select-none">
+                  <th className="py-2.5 px-3.5">Item Description</th>
+                  <th className="py-2.5 px-3.5 w-[110px]">SKU</th>
+                  <th className="py-2.5 px-3.5 w-[60px] text-center">Qty</th>
+                  <th className="py-2.5 px-3.5 w-[85px] text-right">Unit Price</th>
+                  <th className="py-2.5 px-3.5 w-[80px] text-right">Discount</th>
+                  <th className="py-2.5 px-3.5 w-[85px] text-right">GST (18%)</th>
+                  <th className="py-2.5 px-3.5 w-[95px] text-right">Total (INR)</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-bdrl text-xs">
+              <tbody className="divide-y divide-slate-100 text-[11px]">
                 {items.map((item: any, idx: number) => {
-                  const unitPrice = item.product?.price || 0;
+                  const unitPrice = getItemUnitPrice(item);
                   const qty = item.quantity || 1;
-                  const discAmt = Math.round(unitPrice * qty * ((item.product?.discount || 0) / 100));
-                  const taxAmt = Math.round((unitPrice * qty - discAmt) * 0.18);
+                  const itemDiscountPct = item.product?.discount || item.discount || 0;
+                  let discAmt = Math.round(unitPrice * qty * (itemDiscountPct / 100));
+                  if (discAmt === 0 && discount > 0 && subtotal > 0) {
+                    discAmt = Math.round((unitPrice * qty / subtotal) * discount);
+                  }
+                  const taxAmt = Math.round(unitPrice * qty * 0.18);
                   const rowTotal = unitPrice * qty - discAmt + taxAmt;
 
                   return (
-                    <tr key={idx} className="hover:bg-sur/10">
-                      <td className="py-3 px-4 font-semibold text-blk">
-                        {item.product?.name || 'HomeCare Product'}
+                    <tr key={idx} className="hover:bg-slate-50/50">
+                      <td className="py-2.5 px-3.5 font-medium text-slate-900">
+                        {item.product?.name || item.title || 'HomeCare Formulation'}
                       </td>
-                      <td className="py-3 px-4 text-mid">{item.product?.sku || 'CE-SKU-001'}</td>
-                      <td className="py-3 px-4 text-center text-blk">{qty}</td>
-                      <td className="py-3 px-4 text-right text-mid">₹{unitPrice}</td>
-                      <td className="py-3 px-4 text-right text-red">-₹{discAmt}</td>
-                      <td className="py-3 px-4 text-right text-mid">₹{taxAmt}</td>
-                      <td className="py-3 px-4 text-right font-semibold text-blk">₹{rowTotal}</td>
+                      <td className="py-2.5 px-3.5 font-mono text-slate-500">{item.product?.sku || item.sku || 'CE-SKU-001'}</td>
+                      <td className="py-2.5 px-3.5 text-center text-slate-900 font-medium">{qty}</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-700">₹{unitPrice}</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono text-rose-600">-₹{discAmt}</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono text-slate-700">₹{taxAmt}</td>
+                      <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-900">₹{rowTotal}</td>
                     </tr>
                   );
                 })}
+
+                {/* Shipping & Delivery Row */}
+                <tr className="bg-slate-50/50 font-medium">
+                  <td className="py-2.5 px-3.5 text-slate-800">
+                    Logistics & Fulfilment ({shippingCharge > 0 ? (order.shippingMethod && order.shippingMethod.toUpperCase() !== 'FREE' ? order.shippingMethod : 'Standard Courier') : 'Free Delivery'})
+                  </td>
+                  <td className="py-2.5 px-3.5 font-mono text-slate-500">SHP-LOG-01</td>
+                  <td className="py-2.5 px-3.5 text-center text-slate-900">1</td>
+                  <td className="py-2.5 px-3.5 text-right font-mono text-slate-700">₹{shippingCharge}</td>
+                  <td className="py-2.5 px-3.5 text-right font-mono text-slate-700">-₹0</td>
+                  <td className="py-2.5 px-3.5 text-right font-mono text-slate-700">₹0</td>
+                  <td className="py-2.5 px-3.5 text-right font-mono font-bold text-slate-900">
+                    {shippingCharge > 0 ? `₹${shippingCharge}` : 'Free'}
+                  </td>
+                </tr>
               </tbody>
             </table>
           </div>
 
           {/* Pricing Summary Columns */}
-          <div className="grid grid-cols-1 sm:grid-cols-[1.2fr_1fr] gap-6 items-start border-t border-bdrl pt-4">
-            {/* Left side: T&C / QR Removed */}
-            <div className="text-xs text-mut leading-normal flex flex-col gap-2">
-              <div>
-                <strong className="text-mid block mb-1">Terms & conditions:</strong>
-                1. Goods once sold cannot be returned or exchanged without valid defect verification.<br />
-                2. Interest at 18% per annum will be charged if payment is delayed beyond terms.<br />
-                3. All disputes are subject to Bengaluru judicial jurisdiction only.
-              </div>
+          <div className="grid grid-cols-1 sm:grid-cols-[1.2fr_1fr] gap-6 items-start border-t border-slate-200 pt-4">
+            {/* Left side: T&C */}
+            <div className="text-[11px] text-slate-500 leading-relaxed space-y-1.5">
+              <strong className="text-slate-800 block text-xs">Terms & Conditions:</strong>
+              <p>1. Goods once dispatched cannot be returned without valid defect verification.</p>
+              <p>2. Interest at 18% per annum is applicable if invoice settlement is delayed beyond agreed terms.</p>
+              <p>3. All legal disputes are subject exclusively to Bengaluru judicial jurisdiction.</p>
             </div>
 
-            {/* Right side: Maths details */}
-            <div className="flex flex-col gap-2.5 text-xs bg-sur/40 border border-bdrl p-4 rounded-sm">
-              <div className="flex justify-between text-mut">
-                <span>Subtotal:</span>
-                <span className="text-blk font-semibold">₹{subtotal}</span>
+            {/* Right side: Calculations */}
+            <div className="space-y-2 text-xs bg-slate-50/80 border border-slate-200 p-4 rounded-lg">
+              <div className="flex justify-between text-slate-600">
+                <span>Subtotal</span>
+                <span className="font-mono font-semibold text-slate-900">₹{subtotal}</span>
               </div>
-              <div className="flex justify-between text-red">
-                <span>Discount deduction:</span>
-                <span className="font-semibold">-₹{discount}</span>
+              {discount > 0 && (
+                <div className="flex justify-between text-rose-600">
+                  <span>Discount Applied</span>
+                  <span className="font-mono font-semibold">-₹{discount}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-slate-600">
+                <span>Taxes (GST 18%)</span>
+                <span className="font-mono font-semibold text-slate-900">₹{taxes}</span>
               </div>
-              <div className="flex justify-between text-mut">
-                <span>Taxes (GST 18%):</span>
-                <span className="text-blk font-semibold">₹{taxes}</span>
+              <div className="flex justify-between text-slate-600 border-b border-slate-200 pb-2">
+                <span>Shipping & Handling</span>
+                <span className="font-mono font-semibold text-slate-900">
+                  {shippingCharge > 0 ? `₹${shippingCharge}` : 'Free'}
+                </span>
               </div>
-              <div className="flex justify-between text-mut border-b border-bdrl pb-2.5">
-                <span>Shipping & delivery:</span>
-                <span className="text-primary font-semibold">Free</span>
+              <div className="flex justify-between text-sm font-bold text-slate-900 pt-1">
+                <span>Grand Total</span>
+                <span className="font-mono text-base text-slate-950">₹{grandTotal}</span>
               </div>
-              <div className="flex justify-between text-sm font-semibold text-blk pt-1">
-                <span>Grand total:</span>
-                <span className="text-primary text-base font-semibold">₹{grandTotal}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs font-semibold mt-1 bg-primary-soft/50 border border-primary-light/40 px-3 py-1.5 rounded">
-                <span className="text-mid">Payment status:</span>
-                <span className="text-primary flex items-center gap-0.5"><CheckCircle size={10} /> {order.paymentStatus}</span>
+              <div className="flex justify-between items-center text-[11px] font-semibold mt-2 bg-white border border-slate-200 px-3 py-1.5 rounded">
+                <span className="text-slate-600">Settlement Status</span>
+                <span className="text-emerald-700 flex items-center gap-1">
+                  <CheckCircle size={12} /> {order.paymentStatus}
+                </span>
               </div>
             </div>
           </div>
 
           {/* Footer thank you */}
-          <div className="text-center border-t border-bdrl pt-5 mt-10 text-xs text-mut">
-            <span className="block font-semibold text-mid mb-0.5">Thank you for choosing Clean Everyday!</span>
-            For customer care, contact support@cleaneveryday.in or call toll-free 1800 123 4567.
+          <div className="text-center border-t border-slate-200 pt-5 mt-8 text-[11px] text-slate-400">
+            <span className="block font-semibold text-slate-600 mb-0.5">Thank you for shopping with Ecommerce.</span>
+            For customer support queries, write to support@ecommerce.com or call toll-free 1800 123 4567.
           </div>
         </div>
       </div>

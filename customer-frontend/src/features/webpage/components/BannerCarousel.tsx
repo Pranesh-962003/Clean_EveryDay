@@ -102,7 +102,7 @@ const BannerCarousel: React.FC = () => {
 
               {/* Fallback gradient if the respective screen image was removed */}
               <div
-                className={`absolute inset-0 bg-gradient-to-br from-[hsl(150,60%,6%)] via-[hsl(150,45%,15%)] to-[hsl(150,30%,24%)] ${
+                className={`absolute inset-0 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-800 ${
                   desktopSrc && mobileSrc
                     ? 'hidden'
                     : desktopSrc && !mobileSrc
@@ -112,30 +112,31 @@ const BannerCarousel: React.FC = () => {
                     : 'block'
                 }`}
               >
-                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,hsla(150,80%,40%,0.08),transparent_50%)] pointer-events-none" />
+                <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_20%,rgba(255,255,255,0.06),transparent_50%)] pointer-events-none" />
               </div>
 
               {/* Text overlays (Renders over both image and gradient background) */}
               <div className="absolute inset-0 flex items-center justify-start text-left p-8 sm:p-20 z-10">
-                <div className={`max-w-[620px] transition-all duration-700 ease-out transform ${
+                <div className={`max-w-[640px] transition-all duration-700 ease-out transform ${
                   isActive ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'
                 }`}>
                   {banner.label && (
-                    <span className="font-mono text-[0.6rem] md:text-[0.74rem] font-semibold tracking-[0.25em] uppercase text-accent mb-3.5 flex items-center gap-2">
-                      <Sparkles size={11} className="animate-pulse" />
-                      {banner.label}
-                    </span>
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-white/25 bg-black/40 text-slate-100 text-xs font-semibold backdrop-blur-md mb-4 shadow-sm">
+                      <Sparkles size={13} className="text-amber-400" />
+                      <span className="tracking-wide">{banner.label}</span>
+                    </div>
                   )}
-                  <h2 className="font-display text-[1.8rem] sm:text-[3.2rem] font-bold text-wht tracking-wide leading-tight mb-4 drop-shadow-sm">
-                    {banner.title || 'Organic Clean Solutions'}
+                  <h2 className="text-2xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight leading-[1.12] mb-4 drop-shadow-md">
+                    {banner.title || 'Premium Online Catalog'}
                   </h2>
-                  <p className="text-[0.82rem] sm:text-[0.96rem] text-mut/80 max-w-[480px] leading-relaxed mb-6">
-                    {banner.subtitle || 'Clean living, organic ingredients, safe spaces'}
+                  <p className="text-sm sm:text-base text-slate-200 max-w-[500px] leading-relaxed mb-6 font-normal drop-shadow-sm">
+                    {banner.subtitle || 'Discover premium essentials curated for daily life'}
                   </p>
                   {banner.ctaText && (
                     <button
+                      type="button"
                       onClick={() => setCurPage(banner.ctaLink || 'products')}
-                      className="bg-primary text-wht border border-transparent px-6 py-3 rounded font-mono text-[0.72rem] uppercase tracking-widest font-semibold cursor-pointer hover:bg-primary-hover transition-colors"
+                      className="inline-flex items-center justify-center px-6 py-3.5 rounded-xl bg-white text-slate-950 font-bold text-xs sm:text-sm hover:bg-slate-100 active:scale-[0.98] transition-all cursor-pointer shadow-lg hover:shadow-xl min-h-[44px]"
                     >
                       {banner.ctaText}
                     </button>
@@ -147,34 +148,37 @@ const BannerCarousel: React.FC = () => {
         })}
       </div>
 
-      {/* Nav Arrows (slim circles) - Only show if more than 1 active banner */}
+      {/* Nav Arrows (44px touch target) - Only show if more than 1 active banner */}
       {activeBanners.length > 1 && (
         <>
           <button
-            className="absolute top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full border border-white/10 bg-blk/15 text-wht/60 backdrop-blur-[2px] flex items-center justify-center transition-all duration-200 hover:text-primary hover:border-primary hover:bg-wht cursor-pointer left-4"
+            type="button"
+            className="absolute top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full border border-white/30 bg-black/50 text-white flex items-center justify-center transition-all duration-200 hover:bg-white hover:text-slate-950 active:scale-[0.95] cursor-pointer left-4 shadow-md backdrop-blur-sm"
             onClick={handlePrev}
             aria-label="Previous slide"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={20} strokeWidth={2.2} />
           </button>
           <button
-            className="absolute top-1/2 -translate-y-1/2 z-10 w-9 h-9 rounded-full border border-white/10 bg-blk/15 text-wht/60 backdrop-blur-[2px] flex items-center justify-center transition-all duration-200 hover:text-primary hover:border-primary hover:bg-wht cursor-pointer right-4"
+            type="button"
+            className="absolute top-1/2 -translate-y-1/2 z-10 w-11 h-11 rounded-full border border-white/30 bg-black/50 text-white flex items-center justify-center transition-all duration-200 hover:bg-white hover:text-slate-950 active:scale-[0.95] cursor-pointer right-4 shadow-md backdrop-blur-sm"
             onClick={handleNext}
             aria-label="Next slide"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={20} strokeWidth={2.2} />
           </button>
         </>
       )}
 
-      {/* Luxury Minimalist Line Indicators - Only show if more than 1 active banner */}
+      {/* Line Indicators - Only show if more than 1 active banner */}
       {activeBanners.length > 1 && (
         <div className="absolute bottom-5 left-8 flex gap-2 z-10">
           {activeBanners.map((_, index) => (
             <button
+              type="button"
               key={index}
-              className={`h-[2px] w-6 bg-white/20 cursor-pointer transition-all duration-500 ease-out ${
-                index === curIndex ? 'bg-primary w-12' : ''
+              className={`h-1.5 rounded-full cursor-pointer transition-all duration-300 ${
+                index === curIndex ? 'bg-white w-9 shadow-sm' : 'bg-white/40 w-4 hover:bg-white/70'
               }`}
               onClick={() => handleDotClick(index)}
               aria-label={`Slide ${index + 1}`}

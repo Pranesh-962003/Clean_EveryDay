@@ -320,290 +320,414 @@ const DashboardOverview: React.FC<DashboardOverviewProps> = ({ onTabChange }) =>
       }));
 
   return (
-    <div className="animate-fadeIn">
-      {/* Title block */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-8">
+    <div className="space-y-8 animate-fadeIn">
+      {/* Top Banner / Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-200">
         <div>
-          <h2 className="font-display text-3xl font-bold text-blk tracking-tight">Enterprise overview</h2>
-          <p className="text-[0.78rem] text-mut mt-0.5">Live store conversions and inquiry dashboard metrics.</p>
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Executive Overview</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-300"></span>
+            <span className="text-xs text-slate-400">Store Performance & Inquiries</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950 font-display">
+            Operational Command Center
+          </h1>
         </div>
-        <div className="text-[0.72rem] font-mono bg-wht border border-bdr rounded-md px-3 py-1.5 text-mid w-fit flex items-center gap-1.5">
-          <span>Server status:</span>
-          <span className={`font-bold transition-colors duration-300 ${isSocketConnected ? 'text-primary' : 'text-amber-500'}`}>
-            {isSocketConnected ? 'Online' : 'Reconnecting...'}
-          </span>
+        
+        <div className="flex items-center gap-3">
+          <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 bg-white shadow-xs text-xs font-mono text-slate-600">
+            <span className="relative flex h-2 w-2">
+              {isSocketConnected && (
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+              )}
+              <span className={`relative inline-flex rounded-full h-2 w-2 ${isSocketConnected ? 'bg-emerald-500' : 'bg-amber-500'}`}></span>
+            </span>
+            <span className="text-slate-500 font-sans text-xs">Socket:</span>
+            <span className={`font-semibold ${isSocketConnected ? 'text-slate-900' : 'text-amber-600'}`}>
+              {isSocketConnected ? 'Live Sync' : 'Reconnecting...'}
+            </span>
+          </div>
+          <button
+            onClick={() => onTabChange('add')}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-slate-950 text-white hover:bg-slate-800 text-xs font-medium tracking-wide shadow-xs transition-colors min-h-[38px] cursor-pointer"
+          >
+            <PlusCircle size={15} />
+            <span>Create Product</span>
+          </button>
         </div>
       </div>
 
-      {/* Metrics Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+      {/* KPI Cards Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Gross Revenue */}
-        <div className="bg-wht border border-bdrl rounded-xl p-5 shadow-premium-sm flex flex-col justify-between hover:shadow-premium-md transition-shadow">
-          <div className="flex justify-between items-start">
+        <div className="group bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:border-slate-300 hover:shadow-sm transition-all">
+          <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs text-mut font-medium">Gross revenue</span>
-              <h3 className="font-display text-[1.5rem] font-semibold text-blk mt-1">₹{totalRevenue.toLocaleString('en-IN')}</h3>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Gross Revenue</p>
+              <h3 className="text-2xl font-bold text-slate-950 mt-1.5 tracking-tight font-display">
+                ₹{totalRevenue.toLocaleString('en-IN')}
+              </h3>
             </div>
-            <div className="w-8 h-8 rounded bg-primary-soft flex items-center justify-center text-primary"><IndianRupee size={15} /></div>
+            <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-700">
+              <IndianRupee size={16} />
+            </div>
           </div>
-          <div className={`flex items-center gap-1 text-[0.74rem] font-medium mt-4 ${isGrowthPositive ? 'text-primary' : 'text-red'}`}>
-            <TrendingUp size={12} className={isGrowthPositive ? '' : 'rotate-180'} />
-            <span>{growthText} vs last week</span>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className={`inline-flex items-center gap-1 font-semibold ${isGrowthPositive ? 'text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded' : 'text-rose-700 bg-rose-50 px-2 py-0.5 rounded'}`}>
+              <TrendingUp size={12} className={isGrowthPositive ? '' : 'rotate-180'} />
+              {growthText}
+            </span>
+            <span className="text-slate-400">vs. last 7 days</span>
           </div>
         </div>
 
         {/* Total Orders */}
-        <div className="bg-wht border border-bdrl rounded-xl p-5 shadow-premium-sm flex flex-col justify-between hover:shadow-premium-md transition-shadow">
-          <div className="flex justify-between items-start">
+        <div className="group bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:border-slate-300 hover:shadow-sm transition-all">
+          <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs text-mut font-medium">Total orders</span>
-              <h3 className="font-display text-[1.5rem] font-semibold text-blk mt-1">{totalOrders}</h3>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Orders Volume</p>
+              <h3 className="text-2xl font-bold text-slate-950 mt-1.5 tracking-tight font-display">
+                {totalOrders}
+              </h3>
             </div>
-            <div className="w-8 h-8 rounded bg-primary-soft flex items-center justify-center text-primary"><ShoppingBag size={15} /></div>
+            <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-700">
+              <ShoppingBag size={16} />
+            </div>
           </div>
-          <div className="flex items-center justify-between text-[0.74rem] text-mut mt-4 font-medium">
-            <span>Delivered: {deliveredOrders}</span>
-            <span className="text-accent">Pending: {pendingOrders}</span>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-600 font-medium">
+              <strong className="text-slate-900 font-semibold">{deliveredOrders}</strong> delivered
+            </span>
+            <span className="inline-flex items-center gap-1 text-amber-700 font-medium bg-amber-50 px-2 py-0.5 rounded">
+              {pendingOrders} active
+            </span>
           </div>
         </div>
 
         {/* Low Stock Alerts */}
-        <div className="bg-wht border border-bdrl rounded-xl p-5 shadow-premium-sm flex flex-col justify-between hover:shadow-premium-md transition-shadow">
-          <div className="flex justify-between items-start">
+        <div className="group bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:border-slate-300 hover:shadow-sm transition-all">
+          <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs text-mut font-medium">Low stock alerts</span>
-              <h3 className={`font-display text-[1.5rem] font-semibold mt-1 ${lowStockCount > 0 ? 'text-red' : 'text-blk'}`}>{lowStockCount}</h3>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Inventory Health</p>
+              <h3 className={`text-2xl font-bold mt-1.5 tracking-tight font-display ${lowStockCount > 0 ? 'text-rose-600' : 'text-slate-950'}`}>
+                {lowStockCount}
+              </h3>
             </div>
-            <div className={`w-8 h-8 rounded flex items-center justify-center ${lowStockCount > 0 ? 'bg-red-bg text-red' : 'bg-primary-soft text-primary'}`}>
-              <AlertTriangle size={15} />
+            <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${
+              lowStockCount > 0 
+                ? 'bg-rose-50 border-rose-200 text-rose-600' 
+                : 'bg-slate-100 border-slate-200/80 text-slate-700'
+            }`}>
+              <AlertTriangle size={16} />
             </div>
           </div>
-          <span className="text-[0.72rem] text-mut block mt-4 font-medium truncate">
-            {lowStockCount > 0 ? 'Urgent restocking needed' : 'All stock levels healthy'}
-          </span>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className={`font-medium ${lowStockCount > 0 ? 'text-rose-600' : 'text-slate-500'}`}>
+              {lowStockCount > 0 ? 'Urgent replenishment' : 'All SKUs optimal'}
+            </span>
+            <button onClick={() => onTabChange('products')} className="text-slate-700 hover:text-slate-950 font-semibold inline-flex items-center gap-0.5">
+              Check <ArrowRight size={11} />
+            </button>
+          </div>
         </div>
 
-        {/* Leads */}
-        <div className="bg-wht border border-bdrl rounded-xl p-5 shadow-premium-sm flex flex-col justify-between hover:shadow-premium-md transition-shadow">
-          <div className="flex justify-between items-start">
+        {/* Active CRM Leads */}
+        <div className="group bg-white rounded-xl border border-slate-200 p-5 shadow-xs hover:border-slate-300 hover:shadow-sm transition-all">
+          <div className="flex items-start justify-between">
             <div>
-              <span className="text-xs text-mut font-medium">Active leads</span>
-              <h3 className="font-display text-[1.5rem] font-semibold text-blk mt-1">{totalLeads}</h3>
+              <p className="text-xs font-medium text-slate-500 uppercase tracking-wider">Active Pipeline</p>
+              <h3 className="text-2xl font-bold text-slate-950 mt-1.5 tracking-tight font-display">
+                {totalLeads}
+              </h3>
             </div>
-            <div className="w-8 h-8 rounded bg-primary-soft flex items-center justify-center text-primary"><Inbox size={15} /></div>
-          </div>
-          <span className="text-[0.74rem] text-mut mt-4 font-medium">
-            From web contacts and custom quotes
-          </span>
-        </div>
-      </div>
-
-      {/* Metrics Row 2 */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 mb-8">
-        <div className="bg-wht border border-bdrl rounded-xl p-4 shadow-premium-sm flex items-center justify-between hover:shadow-premium-md transition-shadow">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded bg-primary-soft flex items-center justify-center text-primary"><ShoppingBag size={16} /></div>
-            <div>
-              <span className="text-xs text-mut font-medium block leading-none mb-1">Products</span>
-              <span className="text-lg font-semibold text-blk leading-none">{totalProducts}</span>
+            <div className="w-9 h-9 rounded-lg bg-slate-100 border border-slate-200/80 flex items-center justify-center text-slate-700">
+              <Inbox size={16} />
             </div>
           </div>
-          <button onClick={() => onTabChange('products')} className="text-xs text-primary hover:text-primary-hover flex items-center gap-0.5 font-semibold">
-            View <ArrowRight size={12} />
-          </button>
-        </div>
-
-        <div className="bg-wht border border-bdrl rounded-xl p-4 shadow-premium-sm flex items-center justify-between hover:shadow-premium-md transition-shadow">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded bg-primary-soft flex items-center justify-center text-primary"><MessageSquare size={16} /></div>
-            <div>
-              <span className="text-xs text-mut font-medium block leading-none mb-1">Reviews</span>
-              <span className="text-lg font-semibold text-blk leading-none">{totalReviews}</span>
-            </div>
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs">
+            <span className="text-slate-500 truncate">Web queries & quotes</span>
+            <button onClick={() => onTabChange('leads')} className="text-slate-700 hover:text-slate-950 font-semibold inline-flex items-center gap-0.5">
+              Pipeline <ArrowRight size={11} />
+            </button>
           </div>
-          <button onClick={() => onTabChange('reviews')} className="text-xs text-primary hover:text-primary-hover flex items-center gap-0.5 font-semibold">
-            Mod ({pendingReviews}) <ArrowRight size={12} />
-          </button>
-        </div>
-
-        <div className="bg-wht border border-bdrl rounded-xl p-4 shadow-premium-sm flex items-center justify-between hover:shadow-premium-md transition-shadow">
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded bg-primary-soft flex items-center justify-center text-primary"><Users size={16} /></div>
-            <div>
-              <span className="text-xs text-mut font-medium block leading-none mb-1">Staff access</span>
-              <span className="text-lg font-semibold text-blk leading-none">Admin</span>
-            </div>
-          </div>
-          <button onClick={() => onTabChange('users')} className="text-xs text-primary hover:text-primary-hover flex items-center gap-0.5 font-semibold">
-            Manage <ArrowRight size={12} />
-          </button>
         </div>
       </div>
 
-      {/* Main Workspace Split layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-6 mb-8">
-        
-        {/* Left Side: Recent Lists (Orders & Leads) */}
-        <div className="flex flex-col gap-6">
-          {/* Recent Orders */}
-          <div className="bg-wht border border-bdrl rounded-xl p-6 shadow-premium-sm">
-            <div className="flex justify-between items-center border-b border-bdrl pb-3 mb-4">
-              <h4 className="text-xs font-semibold text-mut">Recent orders placed</h4>
-              <button onClick={() => onTabChange('orders')} className="text-xs text-primary font-semibold hover:underline">View registry</button>
+      {/* Secondary Metrics Bar */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200/70 flex items-center justify-center text-slate-700">
+              <ShoppingBag size={18} />
             </div>
-            <div className="flex flex-col divide-y divide-bdrl max-h-[300px] overflow-y-auto pr-1">
+            <div>
+              <span className="text-xs font-medium text-slate-500 block leading-tight">Live Products</span>
+              <span className="text-lg font-bold text-slate-950 leading-none mt-1 block">{totalProducts} SKUs</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => onTabChange('products')}
+            className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1"
+          >
+            Catalog <ArrowRight size={12} />
+          </button>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200/70 flex items-center justify-center text-slate-700">
+              <MessageSquare size={18} />
+            </div>
+            <div>
+              <span className="text-xs font-medium text-slate-500 block leading-tight">Customer Reviews</span>
+              <span className="text-lg font-bold text-slate-950 leading-none mt-1 block">{totalReviews} Ratings</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => onTabChange('reviews')}
+            className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1"
+          >
+            Moderation ({pendingReviews}) <ArrowRight size={12} />
+          </button>
+        </div>
+
+        <div className="bg-white rounded-xl border border-slate-200 p-4 shadow-xs flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-lg bg-slate-100 border border-slate-200/70 flex items-center justify-center text-slate-700">
+              <Users size={18} />
+            </div>
+            <div>
+              <span className="text-xs font-medium text-slate-500 block leading-tight">Staff & Permissions</span>
+              <span className="text-lg font-bold text-slate-950 leading-none mt-1 block">Role Admin</span>
+            </div>
+          </div>
+          <button 
+            onClick={() => onTabChange('users')}
+            className="px-3 py-1.5 text-xs font-semibold text-slate-700 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors flex items-center gap-1"
+          >
+            Directory <ArrowRight size={12} />
+          </button>
+        </div>
+      </div>
+
+      {/* Main Split Grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr] gap-6">
+        {/* Left Column: Recent Orders & Leads */}
+        <div className="space-y-6">
+          {/* Recent Orders Card */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Recent Orders</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Latest transactions processed across all channels</p>
+              </div>
+              <button 
+                onClick={() => onTabChange('orders')}
+                className="text-xs font-semibold text-slate-700 hover:text-slate-950 inline-flex items-center gap-1"
+              >
+                View all <ArrowRight size={12} />
+              </button>
+            </div>
+
+            <div className="divide-y divide-slate-100">
               {recentOrdersList.length > 0 ? (
-                recentOrdersList.map((order: any, idx: number) => (
-                  <div className="flex items-center justify-between py-3 first:pt-0" key={order.id || idx}>
-                    <div>
-                      <span className="font-semibold text-xs">{order.id}</span>
-                      <span className="text-xs text-mut block">{order.name} • {order.date}</span>
+                recentOrdersList.map((order: any, idx: number) => {
+                  const isDelivered = order.status === 'Delivered';
+                  const isCancelled = order.status === 'Cancelled' || order.status === 'Returned' || order.status === 'Refunded';
+                  return (
+                    <div key={order.id || idx} className="p-4 flex items-center justify-between hover:bg-slate-50/75 transition-colors">
+                      <div className="min-w-0 pr-4">
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-semibold text-slate-900">{order.id}</span>
+                          <span className="text-slate-300">•</span>
+                          <span className="text-xs font-medium text-slate-700 truncate">{order.name}</span>
+                        </div>
+                        <span className="text-xs text-slate-400 mt-0.5 block">{order.date}</span>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <span className="text-xs font-bold text-slate-950 font-price">₹{order.total.toLocaleString('en-IN')}</span>
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                          isDelivered
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : isCancelled
+                            ? 'bg-rose-50 text-rose-800 border-rose-200'
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}>
+                          {order.status}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-xs font-semibold text-blk">₹{order.total}</span>
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                        order.status === 'Delivered'
-                          ? 'bg-primary-soft text-primary'
-                          : order.status === 'Cancelled' || order.status === 'Returned'
-                          ? 'bg-red-bg text-red'
-                          : 'bg-yellow-50 text-amber-700'
-                      }`}>{order.status}</span>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
-                <div className="text-center py-12 text-[0.8rem] text-mut">No orders completed yet.</div>
+                <div className="p-8 text-center text-xs text-slate-500">
+                  No orders recorded yet.
+                </div>
               )}
             </div>
           </div>
 
-          {/* Recent Leads */}
-          <div className="bg-wht border border-bdrl rounded-xl p-6 shadow-premium-sm">
-            <div className="flex justify-between items-center border-b border-bdrl pb-3 mb-4">
-              <h4 className="text-xs font-semibold text-mut">Recent leads and inquiries</h4>
-              <button onClick={() => onTabChange('leads')} className="text-xs text-primary font-semibold hover:underline">View CRM pipeline</button>
+          {/* Recent Leads Card */}
+          <div className="bg-white rounded-xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-slate-900 tracking-tight">Recent Inquiries & Quotes</h2>
+                <p className="text-xs text-slate-500 mt-0.5">Prospects converted from storefront lead forms</p>
+              </div>
+              <button 
+                onClick={() => onTabChange('leads')}
+                className="text-xs font-semibold text-slate-700 hover:text-slate-950 inline-flex items-center gap-1"
+              >
+                View pipeline <ArrowRight size={12} />
+              </button>
             </div>
-            <div className="flex flex-col divide-y divide-bdrl max-h-[300px] overflow-y-auto pr-1">
+
+            <div className="divide-y divide-slate-100">
               {recentLeadsList.length > 0 ? (
-                recentLeadsList.map((lead: any, idx: number) => (
-                  <div className="flex items-center justify-between py-3 first:pt-0" key={lead.id || idx}>
-                    <div>
-                      <span className="text-xs font-semibold text-blk block">{lead.subject}</span>
-                      <span className="text-xs text-mut block">{lead.name} • {lead.email}</span>
+                recentLeadsList.map((lead: any, idx: number) => {
+                  const isWon = lead.status === 'Won';
+                  const isNew = lead.status === 'New';
+                  return (
+                    <div key={lead.id || idx} className="p-4 flex items-center justify-between hover:bg-slate-50/75 transition-colors">
+                      <div className="min-w-0 pr-4">
+                        <span className="text-xs font-semibold text-slate-900 block truncate">{lead.subject}</span>
+                        <span className="text-xs text-slate-500 mt-0.5 block truncate">{lead.name} {lead.email ? `• ${lead.email}` : ''}</span>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        <span className="hidden sm:inline-block text-[11px] font-medium bg-slate-100 border border-slate-200 text-slate-600 px-2 py-0.5 rounded">
+                          {lead.service}
+                        </span>
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-semibold border ${
+                          isWon 
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200' 
+                            : isNew 
+                            ? 'bg-rose-50 text-rose-800 border-rose-200' 
+                            : 'bg-amber-50 text-amber-800 border-amber-200'
+                        }`}>
+                          {lead.status}
+                        </span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs bg-sur border border-bdrl px-2 py-0.5 rounded text-mid">{lead.service}</span>
-                      <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full ${
-                        lead.status === 'New'
-                          ? 'bg-red-bg text-red'
-                          : lead.status === 'Won'
-                          ? 'bg-primary-soft text-primary'
-                          : 'bg-yellow-50 text-amber-700'
-                      }`}>{lead.status}</span>
-                    </div>
-                  </div>
-                ))
+                  );
+                })
               ) : (
-                <div className="text-center py-12 text-[0.8rem] text-mut">No leads found.</div>
+                <div className="p-8 text-center text-xs text-slate-500">
+                  No incoming leads logged.
+                </div>
               )}
             </div>
           </div>
         </div>
- 
-        {/* Right Side: Quick Actions & Recent Customers */}
-        <div className="flex flex-col gap-6">
-          {/* Quick Actions */}
-          <div className="bg-wht border border-bdrl rounded-xl p-6 shadow-premium-sm">
-            <h4 className="text-xs font-semibold text-mut border-b border-bdrl pb-3 mb-4">Quick CRM operations</h4>
-            <div className="flex flex-col gap-2.5">
+
+        {/* Right Column: Quick Operations & Recent Customers */}
+        <div className="space-y-6">
+          {/* Quick Operations Card */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+            <h2 className="text-sm font-bold text-slate-900 tracking-tight mb-1">Administrative Shortcuts</h2>
+            <p className="text-xs text-slate-500 mb-4 pb-3 border-b border-slate-100">Direct operational routines and bulk data exports</p>
+            
+            <div className="space-y-2.5">
               <button 
                 onClick={() => onTabChange('add')}
-                className="flex items-center justify-between w-full p-3 rounded-md border border-bdr bg-sur hover:bg-primary-soft hover:border-primary/30 transition-all group text-left cursor-pointer"
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all text-left group min-h-[44px] cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-primary-soft text-primary flex items-center justify-center"><PlusCircle size={15} /></div>
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                    <PlusCircle size={15} />
+                  </div>
                   <div>
-                    <span className="text-sm font-semibold text-blk block group-hover:text-primary-hover transition-colors">Add new product</span>
-                    <span className="text-xs text-mut block">Enter details to catalogue</span>
+                    <span className="text-xs font-semibold text-slate-900 block group-hover:text-black">Add New Product</span>
+                    <span className="text-[11px] text-slate-500 block">Create item with pricing, images & specs</span>
                   </div>
                 </div>
-                <ArrowRight size={14} className="text-mut group-hover:translate-x-1 transition-transform" />
+                <ArrowRight size={14} className="text-slate-400 group-hover:text-slate-900 group-hover:translate-x-0.5 transition-all" />
               </button>
 
               <button 
                 onClick={() => onTabChange('users')}
-                className="flex items-center justify-between w-full p-3 rounded-md border border-bdr bg-sur hover:bg-primary-soft hover:border-primary/30 transition-all group text-left cursor-pointer"
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all text-left group min-h-[44px] cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-primary-soft text-primary flex items-center justify-center"><UserPlus size={15} /></div>
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                    <UserPlus size={15} />
+                  </div>
                   <div>
-                    <span className="text-sm font-semibold text-blk block group-hover:text-primary-hover transition-colors">Invite staff member</span>
-                    <span className="text-xs text-mut block">Set roles and permissions</span>
+                    <span className="text-xs font-semibold text-slate-900 block group-hover:text-black">Manage Staff</span>
+                    <span className="text-[11px] text-slate-500 block">Invite managers or assign privileges</span>
                   </div>
                 </div>
-                <ArrowRight size={14} className="text-mut group-hover:translate-x-1 transition-transform" />
+                <ArrowRight size={14} className="text-slate-400 group-hover:text-slate-900 group-hover:translate-x-0.5 transition-all" />
               </button>
 
               <button 
                 onClick={() => exportCSV(products, 'products_catalog.csv')}
-                className="flex items-center justify-between w-full p-3 rounded-md border border-bdr bg-sur hover:bg-primary-soft hover:border-primary/30 transition-all group text-left cursor-pointer"
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all text-left group min-h-[44px] cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-primary-soft text-primary flex items-center justify-center"><FileDown size={15} /></div>
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                    <FileDown size={15} />
+                  </div>
                   <div>
-                    <span className="text-sm font-semibold text-blk block group-hover:text-primary-hover transition-colors">Export catalogue</span>
-                    <span className="text-xs text-mut block">Download inventory details</span>
+                    <span className="text-xs font-semibold text-slate-900 block group-hover:text-black">Export Products CSV</span>
+                    <span className="text-[11px] text-slate-500 block">Download active stock & pricing registry</span>
                   </div>
                 </div>
-                <ArrowRight size={14} className="text-mut group-hover:translate-x-1 transition-transform" />
+                <ArrowRight size={14} className="text-slate-400 group-hover:text-slate-900 group-hover:translate-x-0.5 transition-all" />
               </button>
 
               <button 
                 onClick={() => exportCSV(leads, 'leads_crm.csv')}
-                className="flex items-center justify-between w-full p-3 rounded-md border border-bdr bg-sur hover:bg-primary-soft hover:border-primary/30 transition-all group text-left cursor-pointer"
+                className="w-full flex items-center justify-between p-3 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 hover:border-slate-300 transition-all text-left group min-h-[44px] cursor-pointer"
               >
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded bg-primary-soft text-primary flex items-center justify-center"><FileDown size={15} /></div>
+                  <div className="w-8 h-8 rounded-lg bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                    <FileDown size={15} />
+                  </div>
                   <div>
-                    <span className="text-sm font-semibold text-blk block group-hover:text-primary-hover transition-colors">Export CRM leads</span>
-                    <span className="text-xs text-mut block">Backup customer inquiries</span>
+                    <span className="text-xs font-semibold text-slate-900 block group-hover:text-black">Export Leads CSV</span>
+                    <span className="text-[11px] text-slate-500 block">Archive CRM prospect history</span>
                   </div>
                 </div>
-                <ArrowRight size={14} className="text-mut group-hover:translate-x-1 transition-transform" />
+                <ArrowRight size={14} className="text-slate-400 group-hover:text-slate-900 group-hover:translate-x-0.5 transition-all" />
               </button>
             </div>
           </div>
 
-          {/* Recent Customers */}
-          <div className="bg-wht border border-bdrl rounded-xl p-6 shadow-premium-sm">
-            <h4 className="text-xs font-semibold text-mut border-b border-bdrl pb-3 mb-4">Recent customers</h4>
-            <div className="flex flex-col divide-y divide-bdrl max-h-[220px] overflow-y-auto pr-1">
+          {/* Recent Customers Card */}
+          <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-xs">
+            <h2 className="text-sm font-bold text-slate-900 tracking-tight mb-1">Recent Customers</h2>
+            <p className="text-xs text-slate-500 mb-4 pb-3 border-b border-slate-100">Direct buyers from store checkout</p>
+            
+            <div className="divide-y divide-slate-100">
               {recentCustomersList.length > 0 ? (
                 recentCustomersList.map((cust: any, idx: number) => {
                   const name = cust.name || 'Customer';
                   const initials = name.split(' ').map((w: string) => w[0]).join('').toUpperCase().substring(0, 2) || 'C';
                   return (
-                    <div className="flex items-center justify-between py-2.5 first:pt-0" key={idx}>
-                      <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full bg-primary-soft border border-primary-light/50 flex items-center justify-center font-semibold text-xs text-primary shrink-0">
+                    <div key={idx} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-8 h-8 rounded-full bg-slate-900 text-white font-semibold text-xs flex items-center justify-center shrink-0">
                           {initials}
                         </div>
-                        <div>
-                          <span className="text-sm font-semibold text-blk block">{name}</span>
-                          <span className="text-xs text-mut block">{cust.email || 'No email'}</span>
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold text-slate-900 block truncate">{name}</span>
+                          <span className="text-[11px] text-slate-400 block truncate">{cust.email || 'No email'}</span>
                         </div>
                       </div>
-                      <span className="text-xs text-mut">{cust.city}</span>
+                      <span className="text-[11px] font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shrink-0">
+                        {cust.city}
+                      </span>
                     </div>
                   );
                 })
               ) : (
-                <div className="text-center py-6 text-[0.8rem] text-mut">No orders created yet.</div>
+                <div className="py-6 text-center text-xs text-slate-500">
+                  No customer records available.
+                </div>
               )}
             </div>
           </div>
         </div>
-
       </div>
     </div>
   );

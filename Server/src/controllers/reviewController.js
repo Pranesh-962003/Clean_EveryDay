@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
 import { Review } from "../models/Review.js";
+import { Story } from "../models/Story.js";
 import { Product } from "../models/Product.js";
 import { User } from "../models/User.js";
 import { Order } from "../models/Order.js";
 import { getMyReviewsService, deleteReviewService } from "../services/reviewService.js";
 import { emitToAdmin, emitToAll } from "../socket/index.js";
+import cloudinary from "../config/cloudinary.js";
 
 // Submit Review
 export const submitReview = async (req, res) => {
@@ -15,7 +17,10 @@ export const submitReview = async (req, res) => {
         const {
             productId,
             rating,
-            comment
+            comment,
+            image,
+            images,
+            img
         } = req.body;
 
         // =====================================
@@ -78,19 +83,19 @@ export const submitReview = async (req, res) => {
         }
 
         // =====================================
-        // Prevent Duplicate Review
+        // Limit Reviews (Max 5 per product per customer)
         // =====================================
 
-        const existingReview = await Review.findOne({
+        const existingReviewCount = await Review.countDocuments({
             user: user._id,
             product: product._id,
             isDeleted: false
         });
 
-        if (existingReview) {
+        if (existingReviewCount >= 5) {
             return res.status(409).json({
                 success: false,
-                message: "You have already reviewed this product."
+                message: "You have reached the maximum limit of 5 reviews for this product."
             });
         }
 
@@ -106,50 +111,75 @@ export const submitReview = async (req, res) => {
         });
 
         // =====================================
+        // Handle Review Image Attachment
+        // =====================================
+
+        let reviewImage = image || img || (Array.isArray(images) && images.length > 0 ? images[0] : "");
+        if (reviewImage && typeof reviewImage === "string" && reviewImage.startsWith("data:image")) {
+            try {
+                const uploadRes = await cloudinary.uploader.upload(reviewImage, {
+                    folder: "reviews",
+                    resource_type: "image"
+                });
+                if (uploadRes && uploadRes.secure_url) {
+                    reviewImage = uploadRes.secure_url;
+                }
+            } catch (uploadErr) {
+                console.warn("Cloudinary review image upload note (saving directly):", uploadErr.message);
+            }
+        }
+        const reviewImages = Array.isArray(images) && images.length > 0 ? images : (reviewImage ? [reviewImage] : []);
+
+        // =====================================
         // Create Review
         // =====================================
 
         const review = await Review.create({
-
             user: user._id,
-
             product: product._id,
-
             order: purchasedOrder ? purchasedOrder._id : null,
-
             authorName:
                 user.name || `${user.firstName || ''} ${user.lastName || ''}`.trim() || "Customer",
-
             profileImage:
                 user.photoURL || user.avatar || "",
-
             rating: Number(rating),
-
             comment,
-
-            status: "Pending",
-
+            image: reviewImage || "",
+            images: reviewImages,
+            status: "Approved",
             isVerifiedPurchase: !!purchasedOrder
+        });
 
+        // Recalculate Product Rating immediately
+        const approvedReviews = await Review.find({
+            product: product._id,
+            status: "Approved",
+            isDeleted: false
+        });
+
+        const totalReviews = approvedReviews.length;
+        const totalRating = approvedReviews.reduce((sum, item) => sum + item.rating, 0);
+        const averageRating = totalReviews === 0 ? 0 : Number((totalRating / totalReviews).toFixed(1));
+
+        await Product.findByIdAndUpdate(product._id, {
+            averageRating,
+            totalReviews
         });
 
         // Real-time synchronization
         emitToAdmin("review:created", { review });
         emitToAll("review:created", { review });
         emitToAll("review:statusUpdated", { review, status: review.status });
+        emitToAll("product:updated", { productId: product._id, averageRating, totalReviews });
 
         // =====================================
         // Response
         // =====================================
 
         return res.status(201).json({
-
             success: true,
-
-            message: "Review submitted successfully. Waiting for admin approval.",
-
+            message: "Review submitted successfully!",
             review
-
         });
 
     } catch (error) {
@@ -207,7 +237,7 @@ export const getProductReviews = async (req, res) => {
         })
             .sort({ createdAt: -1 })
             .select(
-                "authorName profileImage rating comment isVerifiedPurchase likes dislikes createdAt"
+                "authorName profileImage rating comment image images isVerifiedPurchase likes dislikes createdAt"
             );
 
         // =====================================
@@ -223,6 +253,12 @@ export const getProductReviews = async (req, res) => {
             rating: review.rating,
 
             review: review.comment,
+
+            comment: review.comment,
+
+            image: review.image || (Array.isArray(review.images) && review.images.length > 0 ? review.images[0] : ""),
+
+            images: Array.isArray(review.images) && review.images.length > 0 ? review.images : (review.image ? [review.image] : []),
 
             verifiedPurchase: review.isVerifiedPurchase,
 
@@ -278,166 +314,106 @@ export const getProductReviews = async (req, res) => {
 
 export const getAllReviews = async (req, res) => {
     try {
+        const { page = 1, limit = 1000, status, search = "" } = req.query;
 
-        const {
-            page = 1,
-            limit = 10,
-            status,
-            search = ""
-        } = req.query;
-
-        // =====================================
-        // Filter
-        // =====================================
-
-        const filter = {
-            isDeleted: false
-        };
-
-        if (status) {
+        const filter = { isDeleted: false };
+        if (status && status !== "All") {
             filter.status = status;
         }
 
-        // =====================================
-        // Fetch Reviews
-        // =====================================
+        // Fetch Stories for admin moderation (product reviews are auto-approved and do not require admin moderation)
+        const stories = await Story.find(filter).sort({ createdAt: -1 });
 
-        const reviews = await Review.find(filter)
-            .populate("product", "title sku")
-            .populate("user", "name email")
-            .sort({ createdAt: -1 });
-
-        // =====================================
-        // Search
-        // =====================================
-
-        let filteredReviews = reviews;
-
-        if (search) {
-
-            const keyword = search.toLowerCase();
-
-            filteredReviews = reviews.filter(review =>
-
-                review.authorName?.toLowerCase().includes(keyword) ||
-
-                review.product?.title?.toLowerCase().includes(keyword) ||
-
-                review.comment?.toLowerCase().includes(keyword)
-
-            );
-
-        }
-
-        // =====================================
-        // Pagination
-        // =====================================
-
-        const currentPage = Number(page);
-
-        const pageSize = Number(limit);
-
-        const startIndex = (currentPage - 1) * pageSize;
-
-        const paginatedReviews = filteredReviews.slice(
-            startIndex,
-            startIndex + pageSize
-        );
-
-        // =====================================
-        // Response Data
-        // =====================================
-
-        const data = paginatedReviews.map(review => ({
-
-            _id: review._id,
-
+        // Map stories to review format expected by admin moderation interface
+        const mappedStories = stories.map(story => ({
+            _id: story._id,
             customer: {
-
-                name: review.authorName,
-
-                profileImage: review.profileImage
-
+                name: story.author || "Customer One",
+                profileImage: ""
             },
-
             product: {
-
-                id: review.product?._id,
-
-                name: review.product?.title || ""
-
+                id: story._id,
+                name: story.role || "Botanical Solutions Experience"
             },
-
-            rating: review.rating,
-
-            review: review.comment,
-
-            status: review.status,
-
-            date: review.createdAt
-
+            authorName: story.author,
+            role: story.role,
+            rating: story.rating,
+            review: story.body,
+            comment: story.body,
+            image: story.image || story.img || (Array.isArray(story.images) && story.images.length > 0 ? story.images[0] : ""),
+            images: story.images || (story.image ? [story.image] : []),
+            status: story.status || (story.approved ? "Approved" : "Pending"),
+            approved: story.approved !== false,
+            date: story.createdAt || story.date,
+            adminReply: story.adminReply || "",
+            reply: story.adminReply || ""
         }));
 
-        // =====================================
-        // Response
-        // =====================================
+        let data = [...mappedStories];
+
+        if (search) {
+            const keyword = search.toLowerCase();
+            data = data.filter(item =>
+                item.customer.name.toLowerCase().includes(keyword) ||
+                item.review.toLowerCase().includes(keyword) ||
+                item.product.name.toLowerCase().includes(keyword)
+            );
+        }
+
+        const currentPage = Number(page);
+        const pageSize = Number(limit);
+        const startIndex = (currentPage - 1) * pageSize;
+        const paginatedReviews = data.slice(startIndex, startIndex + pageSize);
 
         return res.status(200).json({
-
             success: true,
-
             currentPage,
-
-            totalPages: Math.ceil(
-                filteredReviews.length / pageSize
-            ),
-
-            totalReviews: filteredReviews.length,
-
-            reviews: data
-
+            totalPages: Math.ceil(data.length / pageSize) || 1,
+            totalReviews: data.length,
+            reviews: paginatedReviews
         });
-
     } catch (error) {
-
         console.error(error);
-
         return res.status(500).json({
-
             success: false,
-
             message: "Failed to fetch reviews.",
-
             error: error.message
-
         });
-
     }
 };
 
-
 export const updateReviewStatus = async (req, res) => {
     try {
-
         const { id } = req.params;
-
         const { status } = req.body;
-
-        // =====================================
-        // Validate Status
-        // =====================================
 
         if (!["Approved", "Hidden", "Rejected", "Pending"].includes(status)) {
             return res.status(400).json({
                 success: false,
-                message: "Invalid review status."
+                message: "Invalid status."
             });
         }
 
-        // =====================================
-        // Find Review
-        // =====================================
+        // Check if ID belongs to a Story
+        const story = await Story.findOne({ _id: id, isDeleted: false });
+        if (story) {
+            story.status = status;
+            story.approved = status === "Approved";
+            await story.save();
 
+            emitToAdmin("story:updated", { story, status });
+            emitToAll("story:updated", { story, status });
+            emitToAll("story:statusUpdated", { story, status });
+            emitToAll("review:statusUpdated", { review: story, status });
+
+            return res.status(200).json({
+                success: true,
+                message: status === "Approved" ? "Story approved successfully." : `Story status updated to ${status}.`,
+                story
+            });
+        }
+
+        // Fallback to Product Review
         const review = await Review.findOne({
             _id: id,
             isDeleted: false
@@ -446,22 +422,14 @@ export const updateReviewStatus = async (req, res) => {
         if (!review) {
             return res.status(404).json({
                 success: false,
-                message: "Review not found."
+                message: "Review/Story not found."
             });
         }
 
-        // =====================================
-        // Update Status
-        // =====================================
-
         review.status = status;
-
         await review.save();
 
-        // =====================================
         // Recalculate Product Rating
-        // =====================================
-
         const approvedReviews = await Review.find({
             product: review.product,
             status: "Approved",
@@ -469,84 +437,54 @@ export const updateReviewStatus = async (req, res) => {
         });
 
         const totalReviews = approvedReviews.length;
+        const totalRating = approvedReviews.reduce((sum, item) => sum + item.rating, 0);
+        const averageRating = totalReviews === 0 ? 0 : Number((totalRating / totalReviews).toFixed(1));
 
-        const totalRating = approvedReviews.reduce(
-            (sum, item) => sum + item.rating,
-            0
-        );
+        await Product.findByIdAndUpdate(review.product, {
+            averageRating,
+            totalReviews
+        });
 
-        const averageRating =
-            totalReviews === 0
-                ? 0
-                : Number(
-                    (
-                        totalRating /
-                        totalReviews
-                    ).toFixed(1)
-                );
-
-        // =====================================
-        // Update Product
-        // =====================================
-
-        await Product.findByIdAndUpdate(
-            review.product,
-            {
-                averageRating,
-                totalReviews
-            }
-        );
-
-        // Real-time synchronization
         emitToAdmin("review:updated", { review, status });
         emitToAll("review:statusUpdated", { review, status });
         emitToAll("product:updated", { productId: review.product, averageRating, totalReviews });
 
-        // =====================================
-        // Response
-        // =====================================
-
         return res.status(200).json({
-
             success: true,
-
-            message:
-                status === "Approved"
-                    ? "Review approved successfully."
-                    : "Review hidden successfully."
-
+            message: status === "Approved" ? "Review approved successfully." : "Review status updated."
         });
 
     } catch (error) {
-
         console.error(error);
-
         return res.status(500).json({
-
             success: false,
-
             message: "Failed to update review.",
-
             error: error.message
-
         });
-
     }
 };
 
-// =====================================
-// Delete Review
-// =====================================
-
 export const deleteReview = async (req, res) => {
     try {
-
         const { id } = req.params;
 
-        // =====================================
-        // Find Review
-        // =====================================
+        // Check if ID belongs to a Story
+        const story = await Story.findOne({ _id: id, isDeleted: false });
+        if (story) {
+            story.isDeleted = true;
+            await story.save();
 
+            emitToAdmin("story:deleted", { id: story._id, _id: story._id });
+            emitToAll("story:deleted", { id: story._id, _id: story._id });
+            emitToAll("review:deleted", { id: story._id, _id: story._id });
+
+            return res.status(200).json({
+                success: true,
+                message: "Story deleted successfully."
+            });
+        }
+
+        // Fallback to Product Review
         const review = await Review.findOne({
             _id: id,
             isDeleted: false
@@ -555,21 +493,12 @@ export const deleteReview = async (req, res) => {
         if (!review) {
             return res.status(404).json({
                 success: false,
-                message: "Review not found."
+                message: "Review/Story not found."
             });
         }
 
-        // =====================================
-        // Soft Delete
-        // =====================================
-
         review.isDeleted = true;
-
         await review.save();
-
-        // =====================================
-        // Recalculate Product Rating
-        // =====================================
 
         const approvedReviews = await Review.find({
             product: review.product,
@@ -578,93 +507,70 @@ export const deleteReview = async (req, res) => {
         });
 
         const totalReviews = approvedReviews.length;
+        const totalRating = approvedReviews.reduce((sum, item) => sum + item.rating, 0);
+        const averageRating = totalReviews === 0 ? 0 : Number((totalRating / totalReviews).toFixed(1));
 
-        const totalRating = approvedReviews.reduce(
-            (sum, item) => sum + item.rating,
-            0
-        );
+        await Product.findByIdAndUpdate(review.product, {
+            averageRating,
+            totalReviews
+        });
 
-        const averageRating =
-            totalReviews === 0
-                ? 0
-                : Number(
-                    (
-                        totalRating /
-                        totalReviews
-                    ).toFixed(1)
-                );
-
-        await Product.findByIdAndUpdate(
-            review.product,
-            {
-                averageRating,
-                totalReviews
-            }
-        );
-
-        // Real-time synchronization
         emitToAdmin("review:deleted", { id: review._id, _id: review._id, productId: review.product });
         emitToAll("review:deleted", { id: review._id, _id: review._id, productId: review.product });
         emitToAll("product:updated", { productId: review.product, averageRating, totalReviews });
 
-        // =====================================
-        // Response
-        // =====================================
-
         return res.status(200).json({
-
             success: true,
-
             message: "Review deleted successfully."
-
         });
 
     } catch (error) {
-
         console.error(error);
-
         return res.status(500).json({
-
             success: false,
-
             message: "Failed to delete review.",
-
             error: error.message
-
         });
-
     }
 };
 
 
 export const getMyReviews = async (req, res) => {
     try {
-        const reviews = await getMyReviewsService(req);
+        const result = await getMyReviewsService(req);
+
+        if (Array.isArray(result)) {
+            return res.status(200).json({
+                success: true,
+                reviews: result,
+                stories: []
+            });
+        }
 
         return res.status(200).json({
             success: true,
-            reviews
+            reviews: result.reviews || [],
+            stories: result.stories || []
         });
 
     } catch (error) {
-
         return res.status(500).json({
             success: false,
             message: error.message
         });
-
     }
 };
 
 export const userDeleteReview = async (req, res) => {
-
     try {
-
         const review = await deleteReviewService(req);
 
-        // Real-time synchronization
+        // Real-time synchronization for stories and product reviews
+        emitToAdmin("story:deleted", { id: review._id, _id: review._id });
+        emitToAll("story:deleted", { id: review._id, _id: review._id });
         emitToAdmin("review:deleted", { id: review._id, _id: review._id, productId: review.product });
         emitToAll("review:deleted", { id: review._id, _id: review._id, productId: review.product });
+
         if (review.product) {
             Product.findById(review.product).then((p) => {
                 if (p) {
@@ -674,15 +580,10 @@ export const userDeleteReview = async (req, res) => {
         }
 
         return res.status(200).json({
-
             success: true,
-
-            message: "Review deleted successfully.",
-
+            message: "Deleted successfully.",
             review
-
         });
-
     } catch (error) {
 
         return res.status(400).json({
@@ -695,4 +596,69 @@ export const userDeleteReview = async (req, res) => {
 
     }
 
+};
+
+export const replyToReview = async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { responseStatement, reply } = req.body;
+        const replyText = (responseStatement || reply || "").trim();
+
+        if (!replyText) {
+            return res.status(400).json({
+                success: false,
+                message: "Reply message is required."
+            });
+        }
+
+        // Check if ID belongs to a Story
+        const story = await Story.findOne({ _id: id, isDeleted: false });
+        if (story) {
+            story.adminReply = replyText;
+            story.repliedAt = new Date();
+            await story.save();
+
+            emitToAdmin("story:updated", { story });
+            emitToAll("story:updated", { story });
+            emitToAll("story:replied", { story });
+            emitToAll("review:replied", { story, review: story });
+
+            return res.status(200).json({
+                success: true,
+                message: "Reply statement saved successfully.",
+                story
+            });
+        }
+
+        // Fallback to Product Review
+        const review = await Review.findOne({ _id: id, isDeleted: false });
+        if (!review) {
+            return res.status(404).json({
+                success: false,
+                message: "Review/Story not found."
+            });
+        }
+
+        review.adminReply = replyText;
+        review.repliedAt = new Date();
+        await review.save();
+
+        emitToAdmin("review:updated", { review });
+        emitToAll("review:updated", { review });
+        emitToAll("review:replied", { review });
+
+        return res.status(200).json({
+            success: true,
+            message: "Reply statement saved successfully.",
+            review
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            success: false,
+            message: "Failed to save reply statement.",
+            error: error.message
+        });
+    }
 };

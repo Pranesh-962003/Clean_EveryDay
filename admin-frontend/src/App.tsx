@@ -1,7 +1,5 @@
 import React, { useEffect, useRef, useCallback } from 'react';
 import { AppProvider, useApp } from './core/context/AppContext';
-import Navigation from './features/webpage/components/Navigation';
-import AuthModal from './components/shared/AuthModal';
 import Toast from './components/shared/Toast';
 import AdminPanel from './features/crm/pages/AdminPanel';
 import ProtectedRoute from './components/shared/ProtectedRoute';
@@ -86,19 +84,13 @@ const HomeCareApp: React.FC = () => {
   };
 
   return (
-    <div className="app-wrapper">
-      {/* Sticky header navbar */}
-      <Navigation />
-
-      {/* Main viewport */}
-      <main className="main-viewport-content">
+    <div className="h-screen flex bg-slate-50 text-slate-900 selection:bg-slate-900 selection:text-white font-sans antialiased overflow-hidden w-full">
+      {/* Main Admin Shell with Full-Height Sidebar */}
+      <div className="flex-1 flex overflow-hidden w-full h-full">
         {renderActivePage()}
-      </main>
+      </div>
 
-      {/* Footer is omitted in admin panel dashboard */}
-
-      {/* Global Modals & Alerts */}
-      <AuthModal />
+      {/* Global Alerts & Modals */}
       <Toast />
       {invoiceOrder && (
         <InvoiceModal

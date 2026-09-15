@@ -265,10 +265,14 @@ const leadSchema = new mongoose.Schema(
             type: String,
             enum: [
                 "General Support",
+                "Order & Delivery Inquiry",
+                "Returns & Refunds",
+                "Bulk & Corporate Orders",
                 "Floor Care",
                 "Dish Care",
                 "Laundry Care",
-                "Partner Enquiries"
+                "Partner Enquiries",
+                "Other"
             ],
             default: "General Support",
             index: true

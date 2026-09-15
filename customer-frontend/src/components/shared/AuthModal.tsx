@@ -63,7 +63,7 @@ const AuthModal: React.FC = () => {
   useEffect(() => {
     if (authModalOpen) {
       if (!isRegister && !isForgotPassword) {
-        setEmail('customer@cleaneveryday.in');
+        setEmail('customer@ecommerce.com');
         setPassword('customer123');
       } else {
         setEmail('');
@@ -366,16 +366,16 @@ const AuthModal: React.FC = () => {
               <div className="w-9 h-9 border border-wht/20 rounded-tr-[50%] rounded-tl-[50%] rounded-bl-[50%] rounded-br-[6px] flex items-center justify-center bg-wht/10">
                 <Sparkles className="text-accent-light" size={18} />
               </div>
-              <span className="font-display font-bold text-lg tracking-wide">
-                Clean <span className="text-accent-light font-normal italic font-display">Everyday</span>
+              <span className="font-display text-xl font-bold tracking-tight text-wht">
+                Ecommerce
               </span>
             </div>
 
             <h3 className="font-display text-2xl font-bold mb-4 leading-snug tracking-tight">
-              {isRegister ? "Join Our Green Journey" : "Formulated for Nature & Home"}
+              {isRegister ? "Join Our Community" : "Curated for Modern Living"}
             </h3>
             <p className="text-xs text-primary-light leading-relaxed mb-6">
-              Experience the premium standard in eco-friendly formulation. Plant-based solutions that protect your loved ones while looking outstanding in your home.
+              Experience the standard in curated essentials. Premium quality products designed for intentional living and everyday reliability.
             </p>
           </div>
 
@@ -384,22 +384,22 @@ const AuthModal: React.FC = () => {
             <div className="flex items-start gap-3">
               <CheckCircle className="text-accent-light mt-0.5 shrink-0" size={15} />
               <div className="text-[0.74rem]">
-                <p className="font-bold text-wht">100% Plant-Based Actives</p>
-                <p className="text-primary-light">Zero toxic residues, safe for toddlers and pets.</p>
+                <p className="font-bold text-wht">100% Genuine Products</p>
+                <p className="text-primary-light">Quality tested inventory directly from verified suppliers.</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <CheckCircle className="text-accent-light mt-0.5 shrink-0" size={15} />
               <div className="text-[0.74rem]">
-                <p className="font-bold text-wht">Premium Botanical Oils</p>
-                <p className="text-primary-light">Eucalyptus, Mint, and Citrus natural scent profiles.</p>
+                <p className="font-bold text-wht">Secure Encrypted Transactions</p>
+                <p className="text-primary-light">PCI-DSS compliant payment protection on every order.</p>
               </div>
             </div>
             <div className="flex items-start gap-3">
               <CheckCircle className="text-accent-light mt-0.5 shrink-0" size={15} />
               <div className="text-[0.74rem]">
-                <p className="font-bold text-wht">Eco-Refills & Recyclable</p>
-                <p className="text-primary-light">Designed responsibly to lower plastic load.</p>
+                <p className="font-bold text-wht">Express Nationwide Delivery</p>
+                <p className="text-primary-light">Fast, tracked dispatch right to your doorstep.</p>
               </div>
             </div>
           </div>
@@ -819,7 +819,7 @@ const AuthModal: React.FC = () => {
                 {/* Toggle Signin/Signup link */}
                 <div className="text-center mt-3 select-none">
                   <span className="text-xs text-mut mr-1">
-                    {isRegister ? "Already have a customer account?" : "New to Clean Everyday?"}
+                    {isRegister ? "Already have a customer account?" : "New to Ecommerce?"}
                   </span>
                   <button
                     type="button"

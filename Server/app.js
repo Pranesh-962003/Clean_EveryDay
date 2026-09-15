@@ -6,7 +6,7 @@ import cors from "cors";
 import helmet from "helmet";
 import compression from "compression";
 import cookieParser from "cookie-parser";
-import mongoSanitize from "express-mongo-sanitize";
+import mongoSanitize from "@exortek/express-mongo-sanitize";
 import xss from "xss-clean";
 import hpp from "hpp";
 import rateLimit from "express-rate-limit";
@@ -25,8 +25,22 @@ import leadRouter from "./src/routes/leadRoutes.js";
 import storyRouter from "./src/routes/storyRoutes.js";
 import { startReminderScheduler } from "./src/utils/reminderScheduler.js";
 
-
-
+// Express 5 req.query compatibility fix:
+// Express 5 defines req.query with only a getter on express.request.
+// Add a setter so sanitization and query-modifying middlewares work seamlessly without throwing TypeError.
+const queryDescriptor = Object.getOwnPropertyDescriptor(express.request, "query");
+if (queryDescriptor && !queryDescriptor.set) {
+  Object.defineProperty(express.request, "query", {
+    configurable: true,
+    enumerable: true,
+    get() {
+      return this._query !== undefined ? this._query : (this._query = queryDescriptor.get.call(this));
+    },
+    set(val) {
+      this._query = val;
+    },
+  });
+}
 
 const app = express();
 
@@ -107,15 +121,18 @@ app.use(
   })
 );
 
-app.use(mongoSanitize());
-app.use(xss());
-app.use(hpp());
-
 // =========================
-// Body Parser
+// Body Parser (must run before sanitizers so req.body is parsed)
 // =========================
 app.use(express.json({ limit: "100mb" }));
 app.use(express.urlencoded({ extended: true, limit: "100mb" }));
+
+// =========================
+// Sanitization Middleware
+// =========================
+app.use(mongoSanitize());
+app.use(xss());
+app.use(hpp());
 
 // =========================
 // Other Middleware

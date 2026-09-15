@@ -7,18 +7,17 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, requireAdmin = false }) => {
-  const { curUser, openAuthModal, setCurPage, showToast } = useApp();
+  const { curUser, setCurPage, showToast } = useApp();
 
   useEffect(() => {
     if (!curUser) {
       showToast('Authentication required. Please sign in.');
-      openAuthModal('login');
-      setCurPage('home');
+      setCurPage('login');
     } else if (requireAdmin && !curUser.isAdmin) {
       showToast('Access Denied: Administrative privileges required.');
       setCurPage('home');
     }
-  }, [curUser, requireAdmin, openAuthModal, setCurPage, showToast]);
+  }, [curUser, requireAdmin, setCurPage, showToast]);
 
   if (!curUser || (requireAdmin && !curUser.isAdmin)) {
     return null; // Redirection is handled by the useEffect above
