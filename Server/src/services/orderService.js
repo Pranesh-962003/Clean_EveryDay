@@ -194,8 +194,8 @@ export const createOrder = async ({
 
         image:
             item.product.images?.length > 0
-                ? item.product.images[0].url
-                : "",
+                ? (typeof item.product.images[0] === 'string' ? item.product.images[0] : (item.product.images[0]?.url || item.product.images[0]?.secure_url || ""))
+                : (item.product.imgs?.length > 0 ? item.product.imgs[0] : (item.product.img || item.product.image || "")),
 
         quantity: item.quantity,
 

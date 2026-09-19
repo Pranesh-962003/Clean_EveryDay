@@ -372,7 +372,7 @@ export const getOrderRegistry = async (req, res) => {
             )
             .populate(
                 "items.product",
-                "title sku sellingPrice retailPrice price"
+                "title sku sellingPrice retailPrice price images img imgs image"
             )
             .sort({
                 createdAt: -1
@@ -386,118 +386,97 @@ export const getOrderRegistry = async (req, res) => {
             const billingPin = order.billingAddress?.postalCode || order.billingAddress?.pincode || order.shippingAddress?.postalCode || order.shippingAddress?.pincode || custAddr.postalCode || custAddr.pincode || "";
 
             return {
-
             id: order.orderNumber,
-
             _id: order._id,
-
             date: order.createdAt,
-
             total: order.grandTotal,
-
             customerEmail:
                 order.customer?.email || "",
-
             paymentStatus:
                 order.payment.status,
-
             status:
                 order.status,
-
             shippingAddress: order.shippingAddress,
-
             billingAddressRaw: order.billingAddress,
-
             address: {
-
                 name:
                     order.shippingAddress?.fullName || "",
-
                 phone:
                     order.shippingAddress?.phoneNumber || order.shippingAddress?.phone || order.customer?.phoneNumber || "",
-
                 city:
                     order.shippingAddress?.city || "",
-
                 street:
                     order.shippingAddress?.addressLine1 || "",
-
                 addressLine1:
                     order.shippingAddress?.addressLine1 || "",
-
                 addressLine2:
                     order.shippingAddress?.addressLine2 || "",
-
                 state:
                     order.shippingAddress?.state || "",
-
                 pincode: shippingPin
-
             },
-
             billingAddress: {
-
                 name:
                     order.billingAddress?.fullName || order.shippingAddress?.fullName || "",
-
                 phone:
                     order.billingAddress?.phoneNumber || order.billingAddress?.phone || order.shippingAddress?.phoneNumber || order.shippingAddress?.phone || order.customer?.phoneNumber || "",
-
                 city:
                     order.billingAddress?.city || order.shippingAddress?.city || "",
-
                 state:
                     order.billingAddress?.state || order.shippingAddress?.state || "",
-
                 street:
                     order.billingAddress?.addressLine1 || order.shippingAddress?.addressLine1 || "",
-
                 addressLine1:
                     order.billingAddress?.addressLine1 || order.shippingAddress?.addressLine1 || "",
-
                 addressLine2:
                     order.billingAddress?.addressLine2 || order.shippingAddress?.addressLine2 || "",
-
                 pincode: billingPin
-
             },
-
             paymentMethod:
                 order.payment?.method || "COD",
-
             shippingMethod:
                 order.delivery?.title || "Standard Delivery",
-
             shippingCharge:
                 order.delivery?.charge || 0,
-
             subtotal:
                 order.subtotal || 0,
-
             taxes:
                 typeof order.tax === 'number' ? order.tax : (order.tax?.amount || 0),
-
             discount:
                 order.discount || 0,
-
             courierCompany:
                 order.shipping?.courier || "",
-
             trackingId:
                 order.shipping?.trackingId || "",
-
             trackingUrl:
                 order.shipping?.trackingUrl || "",
-
             estimatedDelivery:
                 order.shipping?.estimatedDelivery || null,
-
             adminNotes:
                 order.adminNotes,
-
             items:
                 order.items.map(item => {
                     const priceVal = item.unitPrice || item.sellingPrice || item.retailPrice || (item.totalPrice && item.quantity ? Math.round(item.totalPrice / item.quantity) : 0) || item.product?.sellingPrice || item.product?.retailPrice || item.product?.price || 0;
+                    
+                    let prodImgs = [];
+                    if (item.image) prodImgs.push(item.image);
+                    if (item.product) {
+                        if (Array.isArray(item.product.images)) {
+                            item.product.images.forEach(imgObj => {
+                                if (typeof imgObj === 'string' && imgObj) prodImgs.push(imgObj);
+                                else if (imgObj?.url) prodImgs.push(imgObj.url);
+                                else if (imgObj?.secure_url) prodImgs.push(imgObj.secure_url);
+                            });
+                        }
+                        if (Array.isArray(item.product.imgs)) {
+                            item.product.imgs.forEach(imgStr => { if (imgStr) prodImgs.push(imgStr); });
+                        }
+                        if (item.product.img) prodImgs.push(item.product.img);
+                        if (item.product.image) prodImgs.push(item.product.image);
+                    }
+                    prodImgs = Array.from(new Set(prodImgs)).filter(Boolean);
+                    const mainImage = item.image || prodImgs[0] || "";
+
                     return {
                         quantity:
                             item.quantity,
@@ -509,13 +488,15 @@ export const getOrderRegistry = async (req, res) => {
                             item.retailPrice || priceVal,
                         totalPrice:
                             item.totalPrice || (priceVal * item.quantity),
+                        image: mainImage,
                         product: {
-                            name:
-                                item.title || item.product?.title || "Product",
-                            sku:
-                                item.sku || item.product?.sku || "N/A",
-                            price:
-                                priceVal
+                            id: item.product?._id || item.product?.id || item._id,
+                            name: item.title || item.product?.title || item.product?.name || "Product",
+                            sku: item.sku || item.product?.sku || "N/A",
+                            price: priceVal,
+                            imgs: prodImgs.length > 0 ? prodImgs : (mainImage ? [mainImage] : []),
+                            img: mainImage,
+                            image: mainImage
                         }
                     };
                 }),

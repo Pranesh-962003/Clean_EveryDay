@@ -8,6 +8,7 @@ import {
   Image as ImageIcon,
   Users,
   LogOut,
+  Loader2,
   FileText,
   Inbox,
   X,
@@ -39,6 +40,20 @@ const AdminPanel: React.FC = () => {
   
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logoutUser();
+      setIsMobileSidebarOpen(false);
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
+      setIsLoggingOut(false);
+    }
+  };
   
   // Command Palette States
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
@@ -326,14 +341,19 @@ const AdminPanel: React.FC = () => {
         <div className={`pt-3 mt-3 border-t border-slate-800/80 flex flex-col gap-1.5 ${isSidebarCollapsed ? 'items-center px-1' : 'px-3'}`}>
           <button 
             type="button"
-            className={`flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 rounded-xl transition-colors cursor-pointer w-full min-h-[38px] border-none outline-none ${
+            disabled={isLoggingOut}
+            className={`flex items-center gap-2.5 px-3 py-2 text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-950/30 rounded-xl transition-colors cursor-pointer w-full min-h-[38px] border-none outline-none disabled:opacity-50 disabled:cursor-not-allowed ${
               isSidebarCollapsed ? 'justify-center px-0' : ''
             }`}
-            onClick={() => { logoutUser(); setIsMobileSidebarOpen(false); }}
-            title={isSidebarCollapsed ? 'Sign Out' : undefined}
+            onClick={handleLogout}
+            title={isSidebarCollapsed ? (isLoggingOut ? 'Signing Out...' : 'Sign Out') : undefined}
           >
-            <LogOut size={15} />
-            {!isSidebarCollapsed && <span>Sign Out</span>}
+            {isLoggingOut ? (
+              <Loader2 size={15} className="animate-spin text-rose-400 shrink-0" />
+            ) : (
+              <LogOut size={15} className="shrink-0" />
+            )}
+            {!isSidebarCollapsed && <span>{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>}
           </button>
         </div>
       </aside>

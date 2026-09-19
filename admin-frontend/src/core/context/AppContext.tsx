@@ -31,7 +31,7 @@ interface AppContextType {
   closeAuthModal: () => void;
   loginUser: (email: string, pass: string) => { success: boolean; message: string };
   registerUser: (name: string, email: string, pass: string) => { success: boolean; message: string };
-  logoutUser: () => void;
+  logoutUser: () => Promise<void>;
   addProduct: (product: Omit<Product, 'id' | 'rating' | 'reviewCount'>) => Promise<boolean>;
   updateProductImages: (id: number, updatedImgs: string[]) => void;
   deleteProduct: (id: number | string) => Promise<boolean>;

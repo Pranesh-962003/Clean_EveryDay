@@ -24,6 +24,20 @@ const Navigation: React.FC<NavigationProps> = ({ onMenuClick }) => {
   } = useApp();
 
   const [isUserDropdownOpen, setIsUserDropdownOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logoutUser();
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
+      setIsLoggingOut(false);
+      setIsUserDropdownOpen(false);
+    }
+  };
 
   const getUserInitials = (name: string) => {
     return name
@@ -160,14 +174,16 @@ const Navigation: React.FC<NavigationProps> = ({ onMenuClick }) => {
 
                     <button
                       type="button"
-                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 flex items-center gap-2.5 cursor-pointer transition-colors"
-                      onClick={() => {
-                        setIsUserDropdownOpen(false);
-                        logoutUser();
-                      }}
+                      disabled={isLoggingOut}
+                      className="w-full text-left px-4 py-2.5 text-xs font-semibold text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 flex items-center gap-2.5 cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={handleLogout}
                     >
-                      <LogOut size={14} />
-                      <span>Sign Out</span>
+                      {isLoggingOut ? (
+                        <Loader2 size={14} className="animate-spin text-rose-400 shrink-0" />
+                      ) : (
+                        <LogOut size={14} className="shrink-0" />
+                      )}
+                      <span>{isLoggingOut ? 'Signing Out...' : 'Sign Out'}</span>
                     </button>
                   </div>
                 </>

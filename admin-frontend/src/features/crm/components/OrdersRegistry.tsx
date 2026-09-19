@@ -50,12 +50,62 @@ const STORAGE_ORDERS_KEY = 'ce_admin_orders_registry_cache';
 const OrdersRegistry: React.FC = () => {
   const {
     orders,
+    products,
     updateOrderStatus,
     updateOrderDetails,
     addOrderTimelineEvent,
     showToast,
     setInvoiceOrder
   } = useApp();
+
+  const getProductImgs = useCallback((item: any): string[] => {
+    if (!item) return [];
+    const prod = item.product || item;
+    let imgs: string[] = [];
+
+    if (Array.isArray(prod.imgs)) {
+      prod.imgs.forEach((img: any) => { if (typeof img === 'string' && img) imgs.push(img); });
+    }
+    if (Array.isArray(prod.images)) {
+      prod.images.forEach((imgObj: any) => {
+        if (typeof imgObj === 'string' && imgObj) imgs.push(imgObj);
+        else if (imgObj?.url) imgs.push(imgObj.url);
+        else if (imgObj?.secure_url) imgs.push(imgObj.secure_url);
+      });
+    }
+    if (prod.img) imgs.push(prod.img);
+    if (prod.image) imgs.push(prod.image);
+    if (item.image) imgs.push(item.image);
+    if (item.img) imgs.push(item.img);
+
+    imgs = Array.from(new Set(imgs)).filter(Boolean);
+
+    if (imgs.length === 0 && products && Array.isArray(products)) {
+      const prodName = prod.name || item.title || item.name || '';
+      const prodSku = prod.sku || item.sku || '';
+      const prodId = prod.id || prod._id || item.productId || item.id || '';
+
+      const catalogMatch = products.find(p =>
+        (prodId && (String(p.id) === String(prodId) || String(p._id) === String(prodId))) ||
+        (prodSku && p.sku && p.sku.toLowerCase() === prodSku.toLowerCase()) ||
+        (prodName && p.name && p.name.toLowerCase() === prodName.toLowerCase())
+      );
+
+      if (catalogMatch) {
+        if (Array.isArray(catalogMatch.imgs) && catalogMatch.imgs.length > 0) {
+          imgs.push(...catalogMatch.imgs);
+        }
+        if (Array.isArray(catalogMatch.images) && catalogMatch.images.length > 0) {
+          catalogMatch.images.forEach((imgObj: any) => {
+            if (typeof imgObj === 'string' && imgObj) imgs.push(imgObj);
+            else if (imgObj?.url) imgs.push(imgObj.url);
+          });
+        }
+      }
+    }
+
+    return Array.from(new Set(imgs)).filter(Boolean);
+  }, [products]);
 
   // Instant SWR cache initialization for low network & fast load
   const [apiOrders, setApiOrders] = useState<Order[] | null>(() => {
@@ -140,14 +190,18 @@ const OrdersRegistry: React.FC = () => {
           adminNotes: o.adminNotes || '',
           items: (o.items || []).map((item: any, idx: number) => {
             const priceVal = item.product?.price || item.unitPrice || item.sellingPrice || item.retailPrice || (item.totalPrice && item.quantity ? Math.round(item.totalPrice / item.quantity) : 0);
+            const resolvedImgs = getProductImgs(item);
             return {
               product: {
-                id: item.product?.id || idx + 1,
+                id: item.product?.id || item.product?._id || idx + 1,
                 name: item.product?.name || item.title || 'Product',
                 sku: item.product?.sku || item.sku || 'N/A',
                 price: priceVal,
-                imgs: item.image ? [item.image] : []
+                imgs: resolvedImgs,
+                img: resolvedImgs[0] || '',
+                image: resolvedImgs[0] || ''
               },
+              image: item.image || resolvedImgs[0] || '',
               unitPrice: priceVal,
               sellingPrice: item.sellingPrice || priceVal,
               retailPrice: item.retailPrice || priceVal,
@@ -471,13 +525,7 @@ const OrdersRegistry: React.FC = () => {
 
     const selectedItem = items[selectedItemIdx] || items[0] || {};
     const selectedProd = selectedItem.product || selectedItem || {};
-    const rawImgs: string[] = Array.isArray(selectedProd.imgs) && selectedProd.imgs.length > 0
-      ? selectedProd.imgs
-      : selectedProd.img
-      ? [selectedProd.img]
-      : selectedItem.img
-      ? [selectedItem.img]
-      : [];
+    const rawImgs: string[] = getProductImgs(selectedItem);
     const activeImg = rawImgs[selectedImgIdx] || rawImgs[0] || '';
 
     return (
@@ -625,7 +673,8 @@ const OrdersRegistry: React.FC = () => {
                         {items.map((it: any, itIdx: number) => {
                           if (itIdx === selectedItemIdx) return null;
                           const itProd = it.product || it || {};
-                          const itImg = itProd.imgs?.[0] || itProd.img || it.img;
+                          const itImgs = getProductImgs(it);
+                          const itImg = itImgs[0] || '';
                           return (
                             <button
                               key={`item-${itIdx}`}

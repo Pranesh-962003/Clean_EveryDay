@@ -54,6 +54,7 @@ const Profile: React.FC = () => {
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
   const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
   const [isLogoutModalOpen, setIsLogoutModalOpen] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const [defaultConfirmAddressId, setDefaultConfirmAddressId] = useState<string | null>(null);
   const [isUpdatingDefault, setIsUpdatingDefault] = useState(false);
   const [isSavingAddress, setIsSavingAddress] = useState(false);
@@ -782,10 +783,18 @@ const Profile: React.FC = () => {
     }
   };
 
-  const handleLogoutConfirm = () => {
-    logoutUser();
-    setIsLogoutModalOpen(false);
-    setCurPage('home');
+  const handleLogoutConfirm = async () => {
+    if (isLoggingOut) return;
+    setIsLoggingOut(true);
+    try {
+      await logoutUser();
+      setIsLogoutModalOpen(false);
+      setCurPage('home');
+    } catch (err) {
+      console.error('Logout failed:', err);
+    } finally {
+      setIsLoggingOut(false);
+    }
   };
 
   // Find product thumbnail matching review
@@ -1641,16 +1650,25 @@ const Profile: React.FC = () => {
               
               <div className="flex gap-3 justify-center">
                 <button
+                  disabled={isLoggingOut}
                   onClick={() => setIsLogoutModalOpen(false)}
-                  className="min-h-[44px] px-6 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs tracking-wider uppercase hover:bg-slate-50 hover:text-slate-950 active:scale-[0.98] transition-all cursor-pointer"
+                  className="min-h-[44px] px-6 py-2.5 rounded-xl border border-slate-300 bg-white text-slate-700 font-semibold text-xs tracking-wider uppercase hover:bg-slate-50 hover:text-slate-950 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancel
                 </button>
                 <button
+                  disabled={isLoggingOut}
                   onClick={handleLogoutConfirm}
-                  className="min-h-[44px] px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs tracking-wider uppercase active:scale-[0.98] transition-all cursor-pointer shadow-sm border-none"
+                  className="min-h-[44px] px-6 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-semibold text-xs tracking-wider uppercase active:scale-[0.98] transition-all cursor-pointer shadow-sm border-none flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  Logout
+                  {isLoggingOut ? (
+                    <>
+                      <Loader2 size={16} className="animate-spin" />
+                      <span>Logging Out...</span>
+                    </>
+                  ) : (
+                    <span>Logout</span>
+                  )}
                 </button>
               </div>
             </div>

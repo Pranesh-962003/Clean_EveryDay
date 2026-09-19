@@ -92,9 +92,10 @@ const BannersManagement: React.FC = () => {
 
   const [previewDevice, setPreviewDevice] = useState<'desktop' | 'mobile'>('desktop');
 
-  // Convert files to preview & track raw File for multipart publish
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, slotIndex: number, type: 'desktop' | 'mobile') => {
-    const file = e.target.files?.[0];
+  const [isDesktopDragging, setIsDesktopDragging] = useState<boolean>(false);
+  const [isMobileDragging, setIsMobileDragging] = useState<boolean>(false);
+
+  const processFile = (file: File | undefined, slotIndex: number, type: 'desktop' | 'mobile') => {
     if (!file) return;
 
     if (type === 'desktop') {
@@ -127,6 +128,38 @@ const BannersManagement: React.FC = () => {
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  // Convert files to preview & track raw File for multipart publish
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, slotIndex: number, type: 'desktop' | 'mobile') => {
+    const file = e.target.files?.[0];
+    processFile(file, slotIndex, type);
+  };
+
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>, type: 'desktop' | 'mobile') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'desktop') setIsDesktopDragging(true);
+    else setIsMobileDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent<HTMLDivElement>, type: 'desktop' | 'mobile') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'desktop') setIsDesktopDragging(false);
+    else setIsMobileDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent<HTMLDivElement>, slotIndex: number, type: 'desktop' | 'mobile') => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (type === 'desktop') setIsDesktopDragging(false);
+    else setIsMobileDragging(false);
+
+    const file = e.dataTransfer.files?.[0];
+    if (file && file.type.startsWith('image/')) {
+      processFile(file, slotIndex, type);
+    }
   };
 
   const handleClearImage = (slotIndex: number, type: 'desktop' | 'mobile') => {
@@ -439,7 +472,14 @@ const BannersManagement: React.FC = () => {
                   <span className="font-semibold text-slate-700">Desktop Slide Banner</span>
                   <span className="text-[10px] font-mono text-slate-400">16:5 ratio (~1920x600)</span>
                 </div>
-                <div className="w-full aspect-[16/6] bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl overflow-hidden flex items-center justify-center relative group/img">
+                <div
+                  onDragOver={(e) => handleDragOver(e, 'desktop')}
+                  onDragLeave={(e) => handleDragLeave(e, 'desktop')}
+                  onDrop={(e) => handleDrop(e, activeSlot, 'desktop')}
+                  className={`w-full aspect-[16/6] bg-slate-50 border-2 border-dashed rounded-xl overflow-hidden flex items-center justify-center relative group/img transition-all ${
+                    isDesktopDragging ? 'border-slate-900 bg-slate-100 ring-2 ring-slate-900/10' : 'border-slate-200'
+                  }`}
+                >
                   {stagedBanners[activeSlot].img ? (
                     <>
                       <img src={stagedBanners[activeSlot].img as string} alt="" className="w-full h-full object-cover" />
@@ -455,9 +495,11 @@ const BannersManagement: React.FC = () => {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-slate-400 p-4 text-center">
-                      <UploadCloud size={24} className="mb-1 text-slate-300" />
-                      <span className="text-xs font-semibold text-slate-600">No desktop graphic</span>
-                      <span className="text-[10px] text-slate-400">Click below to upload</span>
+                      <UploadCloud size={24} className={`mb-1 transition-colors ${isDesktopDragging ? 'text-slate-900' : 'text-slate-300'}`} />
+                      <span className="text-xs font-semibold text-slate-600">
+                        {isDesktopDragging ? 'Drop desktop graphic here' : 'No desktop graphic'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">Drag & drop or click below to upload</span>
                     </div>
                   )}
                 </div>
@@ -473,7 +515,14 @@ const BannersManagement: React.FC = () => {
                   <span className="font-semibold text-slate-700">Mobile Slide Banner</span>
                   <span className="text-[10px] font-mono text-slate-400">4:3 ratio (~800x600)</span>
                 </div>
-                <div className="w-full aspect-[16/6] bg-slate-50 border-2 border-dashed border-slate-200 rounded-xl overflow-hidden flex items-center justify-center relative group/mimg">
+                <div
+                  onDragOver={(e) => handleDragOver(e, 'mobile')}
+                  onDragLeave={(e) => handleDragLeave(e, 'mobile')}
+                  onDrop={(e) => handleDrop(e, activeSlot, 'mobile')}
+                  className={`w-full aspect-[16/6] bg-slate-50 border-2 border-dashed rounded-xl overflow-hidden flex items-center justify-center relative group/mimg transition-all ${
+                    isMobileDragging ? 'border-slate-900 bg-slate-100 ring-2 ring-slate-900/10' : 'border-slate-200'
+                  }`}
+                >
                   {stagedBanners[activeSlot].mobileImg ? (
                     <>
                       <img src={stagedBanners[activeSlot].mobileImg as string} alt="" className="w-full h-full object-cover" />
@@ -489,9 +538,11 @@ const BannersManagement: React.FC = () => {
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center text-slate-400 p-4 text-center">
-                      <Smartphone size={24} className="mb-1 text-slate-300" />
-                      <span className="text-xs font-semibold text-slate-600">No mobile graphic</span>
-                      <span className="text-[10px] text-slate-400">Click below to upload</span>
+                      <Smartphone size={24} className={`mb-1 transition-colors ${isMobileDragging ? 'text-slate-900' : 'text-slate-300'}`} />
+                      <span className="text-xs font-semibold text-slate-600">
+                        {isMobileDragging ? 'Drop mobile graphic here' : 'No mobile graphic'}
+                      </span>
+                      <span className="text-[10px] text-slate-400">Drag & drop or click below to upload</span>
                     </div>
                   )}
                 </div>
