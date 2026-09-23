@@ -875,36 +875,45 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (response.data && response.data.success) {
         const backendProd = response.data.product;
-        const nextId = products.length > 0 ? Math.max(...products.map((pr) => pr.id)) + 1 : 1;
-        const newProduct: Product = {
-          id: nextId,
-          _id: backendProd._id,
-          name: backendProd.title,
-          cat: backendProd.category,
-          desc: backendProd.description,
-          tags: backendProd.tags || [],
-          badge: backendProd.badge === 'None' ? null : backendProd.badge,
-          imgs: backendProd.images ? backendProd.images.map((im: any) => im.url) : [],
-          images: backendProd.images || [],
-          price: backendProd.sellingPrice || backendProd.retailPrice,
-          originalPrice: backendProd.retailPrice,
-          sku: backendProd.sku,
-          brand: backendProd.brand,
-          discount: backendProd.discountPercentage,
-          stock: backendProd.stock,
-          status: backendProd.isActive ? 'Active' : 'Draft',
-          createdDate: backendProd.createdAt ? backendProd.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
-          specs: {
-            Size: backendProd.specifications?.containerSize || '',
-            Usage: backendProd.specifications?.usageInstructions || '',
-            pH: backendProd.specifications?.phLevel || '',
-            Suitable: backendProd.specifications?.suitableSurfaces || ''
-          },
-          rating: backendProd.averageRating || 0,
-          reviewCount: backendProd.totalReviews || 0
-        };
+        setProducts((prev) => {
+          const existingItem = prev.find(
+            (item) => item._id === backendProd._id || (item.sku && item.sku === backendProd.sku)
+          );
+          const mappedProduct: Product = {
+            id: existingItem ? existingItem.id : (prev.length > 0 ? Math.max(...prev.map((pr) => pr.id)) + 1 : 1),
+            _id: backendProd._id,
+            name: backendProd.title,
+            cat: backendProd.category,
+            desc: backendProd.description,
+            tags: backendProd.tags || [],
+            badge: backendProd.badge === 'None' ? null : backendProd.badge,
+            imgs: backendProd.images ? backendProd.images.map((im: any) => im.url) : [],
+            images: backendProd.images || [],
+            price: backendProd.sellingPrice || backendProd.retailPrice,
+            originalPrice: backendProd.retailPrice,
+            sku: backendProd.sku,
+            brand: backendProd.brand,
+            discount: backendProd.discountPercentage,
+            stock: backendProd.stock,
+            status: backendProd.isActive ? 'Active' : 'Draft',
+            createdDate: backendProd.createdAt ? backendProd.createdAt.split('T')[0] : new Date().toISOString().split('T')[0],
+            specs: {
+              Size: backendProd.specifications?.containerSize || '',
+              Usage: backendProd.specifications?.usageInstructions || '',
+              pH: backendProd.specifications?.phLevel || '',
+              Suitable: backendProd.specifications?.suitableSurfaces || ''
+            },
+            rating: backendProd.averageRating || 0,
+            reviewCount: backendProd.totalReviews || 0
+          };
 
-        setProducts((prev) => [...prev, newProduct]);
+          if (existingItem) {
+            return prev.map((item) =>
+              item._id === backendProd._id || (item.sku && item.sku === backendProd.sku) ? mappedProduct : item
+            );
+          }
+          return [mappedProduct, ...prev];
+        });
         showToast(`Product "${p.name}" has been added.`);
         return true;
       } else {

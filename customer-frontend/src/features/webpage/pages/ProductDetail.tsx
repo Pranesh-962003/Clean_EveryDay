@@ -1341,7 +1341,7 @@ const ProductDetail: React.FC = () => {
                 View all in {product.cat} <ChevronRight size={14} />
               </button>
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-5">
               {suggested.map((p) => (
                 <div
                   key={p.id}
