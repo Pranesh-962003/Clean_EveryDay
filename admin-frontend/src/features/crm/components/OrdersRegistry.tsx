@@ -140,14 +140,19 @@ const OrdersRegistry: React.FC = () => {
       setIsLoading(true);
     }
     try {
-      const firebaseUser = auth.currentUser;
       let token = '';
-      if (firebaseUser) {
-        token = await firebaseUser.getIdToken();
+      if (auth.currentUser) {
+        token = await auth.currentUser.getIdToken();
+      } else {
+        await auth.authStateReady();
+        if (auth.currentUser) {
+          token = await auth.currentUser.getIdToken();
+        }
       }
       const backendUrl = import.meta.env.VITE_BACKEND_URI || 'http://localhost:5002/api';
       const response = await axios.get(`${backendUrl}/auth/admin/orders`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
+        params: { limit: 1000 },
         withCredentials: true,
         timeout: 10000
       });

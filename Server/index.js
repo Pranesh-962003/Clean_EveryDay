@@ -14,5 +14,5 @@ if (!process.env.VERCEL) {
   });
 }
 
-export default httpServer;
+export default app;
 

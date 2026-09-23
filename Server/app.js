@@ -165,11 +165,14 @@ try {
 // Routes (Supported with and without /api prefix for Vercel rewrites)
 // =========================
 
-app.use("/api/auth", authRouter);
-app.use("/auth", authRouter);
-
+// Admin Routes (mounted first to prevent prefix collision with /api/auth)
 app.use("/api/auth/admin", adminRouter);
 app.use("/auth/admin", adminRouter);
+app.use("/api/admin", adminRouter);
+app.use("/admin", adminRouter);
+
+app.use("/api/auth", authRouter);
+app.use("/auth", authRouter);
 
 app.use("/api/users", userRouter);
 app.use("/users", userRouter);
@@ -191,9 +194,12 @@ app.use("/reviews", reviewRouter);
 
 app.use("/api/leads", leadRouter);
 app.use("/leads", leadRouter);
+app.use("/api/admin/leads", leadRouter);
+app.use("/admin/leads", leadRouter);
 
 app.use("/api/stories", storyRouter);
 app.use("/stories", storyRouter);
+
 // console.log(Cloudinary.api);
 
 // =========================
