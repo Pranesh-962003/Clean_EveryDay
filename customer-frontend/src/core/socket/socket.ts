@@ -10,45 +10,60 @@ export const getSocketUrl = (): string => {
   return envUrl.replace(/\/api\/?$/i, "").replace(/\/+$/, "");
 };
 
+const createDummySocket = (): Socket => {
+  const dummy: any = {
+    connected: false,
+    id: undefined,
+    auth: {},
+    on: () => dummy,
+    once: () => dummy,
+    off: () => dummy,
+    emit: () => dummy,
+    connect: () => dummy,
+    disconnect: () => dummy,
+    removeAllListeners: () => dummy,
+  };
+  return dummy as Socket;
+};
+
 /**
  * Initialize or get singleton Socket.IO client instance
  * @param token Optional Firebase ID token
  */
 export const getSocket = (token?: string | null): Socket => {
-  if (!socketInstance) {
-    const url = getSocketUrl();
-    const isVercelServerless = url.includes("vercel.app") && !import.meta.env.VITE_SOCKET_URL;
+  const url = getSocketUrl();
+  const isVercelServerless = url.includes("vercel.app") && !import.meta.env.VITE_SOCKET_URL;
 
+  if (isVercelServerless) {
+    if (!socketInstance) {
+      socketInstance = createDummySocket();
+    }
+    return socketInstance;
+  }
+
+  if (!socketInstance) {
     socketInstance = io(url, {
       path: "/socket.io/",
       auth: {
         token: token || undefined,
       },
-      transports: isVercelServerless ? ["websocket"] : ["polling", "websocket"],
-      reconnection: !isVercelServerless,
-      reconnectionAttempts: isVercelServerless ? 2 : Infinity,
+      transports: ["polling", "websocket"],
+      reconnection: true,
+      reconnectionAttempts: Infinity,
       reconnectionDelay: 2000,
       reconnectionDelayMax: 5000,
       timeout: 10000,
-      autoConnect: !isVercelServerless,
+      autoConnect: true,
     });
 
-    if (!isVercelServerless) {
-      socketInstance.connect();
-    }
-
     socketInstance.on("connect", () => {
-      // Quiet background log
       if (import.meta.env.DEV) {
         console.log("[Socket.IO] Connected successfully (id:", socketInstance?.id, ")");
       }
     });
 
     socketInstance.on("connect_error", (err) => {
-      if (isVercelServerless && socketInstance) {
-        // Disconnect immediately on Vercel to prevent continuous polling 400 spam
-        socketInstance.disconnect();
-      } else if (import.meta.env.DEV) {
+      if (import.meta.env.DEV) {
         console.warn("[Socket.IO] Connection error:", err.message);
       }
     });
@@ -73,6 +88,10 @@ export const getSocket = (token?: string | null): Socket => {
  * @param token Firebase ID token
  */
 export const updateSocketAuth = (token: string | null): void => {
+  const url = getSocketUrl();
+  const isVercelServerless = url.includes("vercel.app") && !import.meta.env.VITE_SOCKET_URL;
+  if (isVercelServerless) return;
+
   if (!socketInstance) {
     if (token) getSocket(token);
     return;
